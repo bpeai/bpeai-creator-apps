@@ -1,0 +1,20 @@
+{
+  "id": "agitator_duty_impeller_matcher",
+  "slug": "mixing-agitator-matcher",
+  "label": "Agitator Duty & Impeller Matcher",
+  "description": "Evaluate life-science mixing systems using DIR workflow. Recommends agitator type, impeller duty, and preliminary basis of design with vendor references.",
+  "equipment_system": "mixing",
+  "equipment_subtypes": ["agitator", "impeller"],
+  "author": {
+    "creator_id": "bpeai",
+    "display_name": "BPEAI"
+  },
+  "app_kind": "first_party",
+  "output_schema_version": "equipment_selector_v1",
+  "required_inputs": ["system_name"],
+  "route": "/engineering/equipment-intelligence/mixing-agitator-matcher",
+  "runtime": "server",
+  "min_tier": "INDIVIDUAL",
+  "status": "published",
+  "python_entrypoint": "mixing_agitator_matcher.agent"
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bpeai.com/schemas/creator-app-manifest/v1",
+  "title": "CreatorAppManifest",
+  "type": "object",
+  "required": [
+    "id",
+    "slug",
+    "label",
+    "equipment_system",
+    "author",
+    "app_kind",
+    "output_schema_version",
+    "route",
+    "runtime",
+    "status"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "slug": { "type": "string", "minLength": 1 },
+    "label": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "equipment_system": {
+      "type": "string",
+      "enum": [
+        "mixing",
+        "heat_transfer",
+        "cell_culture",
+        "chromatography",
+        "fluid_transfer",
+        "filtration",
+        "valves_fittings"
+      ]
+    },
+    "equipment_subtypes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "author": {
+      "type": "object",
+      "required": ["creator_id", "display_name"],
+      "properties": {
+        "creator_id": { "type": "string" },
+        "display_name": { "type": "string" }
+      }
+    },
+    "app_kind": { "type": "string", "enum": ["first_party", "creator"] },
+    "output_schema_version": { "type": "string", "const": "equipment_selector_v1" },
+    "required_inputs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "route": { "type": "string" },
+    "runtime": { "type": "string", "enum": ["server"] },
+    "min_tier": {
+      "type": "string",
+      "enum": ["FREE", "INDIVIDUAL", "TEAM", "PROFESSIONAL", "VENDOR", "ADMIN"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "published", "deprecated"]
+    },
+    "python_entrypoint": { "type": "string" }
+  }
+}
