@@ -5,6 +5,8 @@ Templates and source for BPEAI Equipment Intelligence creator apps
 
 **Confidential** — for authorized BPEAI creators only. All rights reserved.
 
+**Full playbook:** [CREATOR_PLAYBOOK.md](./CREATOR_PLAYBOOK.md) (same guide as in the website docs).
+
 ## What this repo is for
 
 - Third-party SMEs build selector apps here (Python).
@@ -18,31 +20,31 @@ py/
   apps/
     _template/                         ← copy this to start
     examples/mixing_agitator_matcher/  ← read-only reference
-    <your_slug>/                       ← your app (via PR)
+    <your_id>/                         ← your app (via PR; snake_case folder = app id)
 ```
 
 ## Playbook (code → test → PR)
 
-1. **Access** — BPEAI grants `creatorAccess`. Sign in at https://bpiplatform.bpeai.com
-2. **Copy the template**
+1. **Access** — BPEAI grants `creatorAccess` (you get an email). Sign in at https://bpiplatform.bpeai.com (apex, not `www`).
+2. **Clone once**, then for each app copy the template:
 
-   ```text
-   py/apps/_template/  →  py/apps/<your_slug>/
+   ```powershell
+   Copy-Item -Recurse py\apps\_template py\apps\heat_exchanger_selector
    ```
 
-3. Rename the agent class and set `app_id` to match your manifest `id`.
+3. Rename the agent class and set `app_id` to match manifest `id` (unique).
 4. Edit `manifest.json` (slug, label, description, equipment system, …).
 5. Implement `run(inputs)` — return validated `equipment_selector_v1` JSON.
 6. **Local test**
 
    ```bash
-   cd py/apps/<your_slug>
+   cd py/apps/<your_id>
    echo '{"system_name":"Media Prep Vessel","application":"biopharma"}' | python agent.py
    ```
 
-7. Push your branch and **open a PR** into this repo (or notify BPEAI).
+7. Push your branch and **open a PR** into this repo.
 8. On **bpiplatform.bpeai.com**:
-   - **New app** → set Python module `apps.<your_slug>.agent` and agent class name
+   - **New app** → set Python module `apps.<your_id>.agent` and agent class name (slug shown later on Settings)
    - After BPEAI merges & deploys → **Test** → **Submit for review**
 
 Full contract: [bpiplatform.bpeai.com/sdk](https://bpiplatform.bpeai.com/sdk) and `py/libs/bpeai_creator_sdk/README.md`.

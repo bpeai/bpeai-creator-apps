@@ -16,5 +16,5 @@
   "runtime": "server",
   "min_tier": "INDIVIDUAL",
   "status": "draft",
-  "python_entrypoint": "my_selector_app.agent"
+  "python_entrypoint": "apps.my_selector_app.agent"
 }
