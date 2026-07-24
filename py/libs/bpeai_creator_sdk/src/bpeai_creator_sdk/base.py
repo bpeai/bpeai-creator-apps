@@ -13,6 +13,15 @@ from .output import EquipmentSelectorOutput, validate_output
 StatusCallback = Callable[[str], None]
 
 
+def default_creator_model() -> str:
+    """Resolve the OpenAI model used for creator LLM calls."""
+    return (
+        os.getenv("OPENAI_CREATOR_MODEL")
+        or os.getenv("OPENAI_MODEL")
+        or "gpt-4o"
+    ).strip()
+
+
 class CreatorAppBase(ABC):
     """Base class for BPEAI creator apps."""
 
@@ -21,12 +30,16 @@ class CreatorAppBase(ABC):
     def __init__(self, status_callback: Optional[StatusCallback] = None) -> None:
         self._status = status_callback or (lambda _msg: None)
         self._usage: Dict[str, int] = {"tokens_in": 0, "tokens_out": 0, "serper_calls": 0}
+        self._last_model: str = default_creator_model()
 
     def status(self, message: str) -> None:
         self._status(message)
 
     def usage_stats(self) -> Dict[str, int]:
         return dict(self._usage)
+
+    def last_model(self) -> str:
+        return self._last_model
 
     @abstractmethod
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -42,15 +55,12 @@ class CreatorAppBase(ABC):
         return OpenAI(api_key=api_key)
 
     def _default_model(self) -> str:
-        return (
-            os.getenv("OPENAI_CREATOR_MODEL")
-            or os.getenv("OPENAI_MODEL")
-            or "gpt-4o"
-        ).strip()
+        return default_creator_model()
 
     def call_openai_json(self, *, system: str, user: str, model: str | None = None) -> Dict[str, Any]:
         client = self._openai_client()
         chosen = (model or self._default_model()).strip()
+        self._last_model = chosen
         response = client.responses.create(
             model=chosen,
             input=[
@@ -58,7 +68,7 @@ class CreatorAppBase(ABC):
                 {"role": "user", "content": user},
             ],
             text={"format": {"type": "json_object"}},
-            max_output_tokens=int(os.getenv("OPENAI_CREATOR_MAX_OUTPUT_TOKENS", "8000")),
+            max_output_tokens=int(os.getenv("OPENAI_CREATOR_MAX_OUTPUT_TOKENS", "16000")),
         )
         usage = getattr(response, "usage", None)
         if usage is not None:

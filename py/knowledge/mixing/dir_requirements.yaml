@@ -1,0 +1,106 @@
+# DIR questionnaires by scenario.
+# DIR code = hyphen-separated 1-based option indexes, one per requirement in order.
+# Example media_preparation code: 2-1-2-3-1-1
+
+scenarios:
+  media_preparation:
+    label: Media / buffer preparation
+    common_codes:
+      - code: "2-1-2-3-1-1"
+        caption: "250–1,000 L stainless CIP/SIP vessel for typical dry powder media dissolution."
+      - code: "3-1-3-3-3-4"
+        caption: "1,000–5,000 L stainless CIP/SIP with difficult powder wetting and inline powder induction."
+      - code: "2-3-2-4-1-1"
+        caption: "250–1,000 L single-use media prep mixer for dry powder media dissolution."
+    requirements:
+      - index: 1
+        label: Working volume
+        options:
+          - { index: 1, text: "50–250 L" }
+          - { index: 2, text: "250–1,000 L" }
+          - { index: 3, text: "1,000–5,000 L" }
+          - { index: 4, text: "5,000–15,000 L" }
+          - { index: 5, text: "> 15,000 L" }
+      - index: 2
+        label: Vessel format
+        options:
+          - { index: 1, text: "Stainless fixed CIP/SIP vessel" }
+          - { index: 2, text: "Stainless portable vessel" }
+          - { index: 3, text: "Single-use mixer / bag system" }
+          - { index: 4, text: "Hybrid stainless + single-use fluid path" }
+          - { index: 5, text: "Inline / batch-loop preparation" }
+      - index: 3
+        label: Media type / solids challenge
+        options:
+          - { index: 1, text: "Mostly liquid concentrates, low solids" }
+          - { index: 2, text: "Dry powder media, readily soluble" }
+          - { index: 3, text: "Difficult wetting or floating solids" }
+          - { index: 4, text: "High-salt / high-osmolality media" }
+          - { index: 5, text: "Shear/foam-sensitive components" }
+          - { index: 6, text: "Slurry-like or poorly soluble components" }
+      - index: 4
+        label: Sterility / bioburden control
+        options:
+          - { index: 1, text: "Non-sterile prep followed by filtration" }
+          - { index: 2, text: "Low-bioburden closed processing" }
+          - { index: 3, text: "CIP/SIP hygienic stainless system" }
+          - { index: 4, text: "Single-use closed system" }
+          - { index: 5, text: "Aseptic additions / sterile hold" }
+      - index: 5
+        label: Primary mixing objective
+        options:
+          - { index: 1, text: "Dissolve dry media powder" }
+          - { index: 2, text: "Blend liquid concentrates" }
+          - { index: 3, text: "Wet and disperse powders rapidly" }
+          - { index: 4, text: "Maintain homogeneity during transfer" }
+          - { index: 5, text: "Minimize foam and air entrainment" }
+          - { index: 6, text: "Fast batch turnaround" }
+      - index: 6
+        label: Powder addition method
+        options:
+          - { index: 1, text: "Manual top-charge" }
+          - { index: 2, text: "Bag dump / charging port" }
+          - { index: 3, text: "Powder transfer system" }
+          - { index: 4, text: "Inline powder induction / eductor" }
+          - { index: 5, text: "Pre-slurry or concentrate addition" }
+          - { index: 6, text: "Not applicable, liquid-only" }
+
+  chromatography_resin_slurry:
+    label: Chromatography resin slurry
+    common_codes:
+      - code: "2-1-1-1-1"
+        caption: "250–1,000 L stainless slurry tank; standard resin; uniform suspension."
+      - code: "2-1-2-2-2"
+        caption: "250–1,000 L stainless; high-density resin; continuous low-shear suspension."
+    requirements:
+      - index: 1
+        label: Working volume
+        options:
+          - { index: 1, text: "50–250 L" }
+          - { index: 2, text: "250–1,000 L" }
+          - { index: 3, text: "1,000–5,000 L" }
+          - { index: 4, text: "> 5,000 L" }
+      - index: 2
+        label: Vessel format
+        options:
+          - { index: 1, text: "Stainless fixed CIP/SIP slurry tank" }
+          - { index: 2, text: "Single-use slurry preparation" }
+          - { index: 3, text: "Portable stainless vessel" }
+      - index: 3
+        label: Resin / solids challenge
+        options:
+          - { index: 1, text: "Standard chromatography resin slurry" }
+          - { index: 2, text: "High-density resin, settling risk" }
+          - { index: 3, text: "Shear-sensitive resin" }
+      - index: 4
+        label: Primary mixing objective
+        options:
+          - { index: 1, text: "Maintain uniform resin suspension" }
+          - { index: 2, text: "Minimize resin damage / fines" }
+          - { index: 3, text: "Rapid homogenization before transfer" }
+      - index: 5
+        label: Hold / transfer requirement
+        options:
+          - { index: 1, text: "Batch hold with intermittent mixing" }
+          - { index: 2, text: "Continuous low-shear suspension" }
+          - { index: 3, text: "Transfer to column packing skid" }

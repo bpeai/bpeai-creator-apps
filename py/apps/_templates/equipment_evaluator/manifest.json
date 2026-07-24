@@ -1,0 +1,21 @@
+{
+  "id": "equipment_evaluator",
+  "slug": "equipment-evaluator",
+  "label": "Equipment Evaluator (template)",
+  "description": "DIR → design option evaluation template backed by an SME knowledge pack.",
+  "equipment_system": "mixing",
+  "equipment_subtypes": ["agitator", "inline_mixer"],
+  "author": {
+    "creator_id": "your_profile_id",
+    "display_name": "Your Name"
+  },
+  "app_kind": "creator",
+  "output_schema_version": "equipment_selector_v1",
+  "required_inputs": ["system_name"],
+  "route": "/engineering/equipment-intelligence/equipment-evaluator",
+  "runtime": "server",
+  "min_tier": "INDIVIDUAL",
+  "status": "draft",
+  "python_entrypoint": "apps._templates.equipment_evaluator.agent",
+  "knowledge_pack": "mixing"
+}

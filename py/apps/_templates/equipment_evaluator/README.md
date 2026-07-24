@@ -1,0 +1,55 @@
+# Equipment evaluator template
+
+Canonical starter for **design option evaluation** EI apps (DIR → recommendation).
+
+Quality bar: match or exceed the **Life Science Mixing Systems Expert** custom GPT
+(structured DIR workflow, deep option evaluation, markdown report, optional 7-slide PPTX).
+
+SME content comes from a **knowledge pack** under `py/knowledge/<system>/` (default: `mixing`).
+
+## Quick start
+
+```powershell
+Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\mixing_system_expert
+```
+
+Then rename class / `app_id` / manifest fields, keep `knowledge_pack: mixing` (or point at another pack).
+
+## Local test
+
+```powershell
+python py\tools\local_chat.py --app equipment_evaluator
+# > Media prep vessel, biopharma
+# > 2-1-2-3-1-1
+# > pptx
+```
+
+Artifacts (markdown + PDF + optional PPTX) write under `./artifacts/` (gitignored).
+
+## Phases
+
+| Phase | Trigger | Result |
+|-------|---------|--------|
+| DIR | no `dir_code`, or `phase=dir` | Questionnaire + captioned common codes from pack YAML |
+| Evaluate | valid `dir_code` | GPT-parity `equipment_selector_v1` + sectioned `datasheet_markdown` (+ `.md` / `.pdf`) |
+| PPTX | `pptx` / `y` in local chat, or `deliverable=pptx` | 7-slide deck with auto-fit fonts |
+
+## Portal vs local formats
+
+- Hub / portal: `datasheet_markdown` → S3 `.md` only
+- Local: also writes styled PDF; PPTX is local authoring unless product adds binary upload
+
+## Reference PPTX management
+
+Public-repo `references/*.pptx` are **style stubs**. Replace private decks:
+
+```powershell
+python py\tools\manage_pptx_reference.py --pack mixing list
+python py\tools\manage_pptx_reference.py --pack mixing replace --src path\to\deck.pptx --name media_preparation_vessel_mixing_evaluation.pptx
+```
+
+## Reference
+
+- Design: `docs/EI_APP_TEMPLATE_DESIGN.md`
+- Playbook: `CREATOR_PLAYBOOK.md`
+- Mixing pack: `py/knowledge/mixing/`

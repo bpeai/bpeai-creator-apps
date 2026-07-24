@@ -1,6 +1,6 @@
 # SME Creator Playbook (code → test → install → manage)
 
-Updated 2026-07-15
+Updated 2026-07-24
 
 ## Hosts
 
@@ -39,6 +39,8 @@ If they lack access → `/platform/forbidden`.
 
 Work in the dedicated GitHub repo: **[bpeai/bpeai-creator-apps](https://github.com/bpeai/bpeai-creator-apps)** (not the website deploy repo).
 
+**Platform note (templates):** EI apps use a **template family** (by deliverable) + **SME knowledge pack** (YAML by equipment system) + **shared SDK**. Start from `py/apps/_templates/equipment_evaluator`. See [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md).
+
 ### 1.1 Clone once, add apps over time
 
 ```powershell
@@ -46,55 +48,96 @@ git clone https://github.com/bpeai/bpeai-creator-apps.git
 cd bpeai-creator-apps
 ```
 
-Keep one local clone. For each new selector:
+Keep one local clone. For each new evaluator app:
 
 ```powershell
-Copy-Item -Recurse py\apps\_template py\apps\heat_exchanger_selector
+Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\heat_exchanger_evaluator
 ```
 
 (Use your snake_case **id** as the folder name.)
+
+### 1.2 Intended tree (upload / PR clarity)
+
+```text
+py/apps/_templates/equipment_evaluator/   # copy source — do not edit in place for your app
+py/apps/<your_id>/                        # your app (open a PR that adds this)
+py/knowledge/<system>/                    # shared SME pack (rarely forked; prefer pack PRs)
+py/libs/bpeai_creator_sdk/                # do not fork; BPEAI mirrors into website deploy
+```
+
+**Size guidance:** keep packs YAML-first; reference PPTX under `references/` are small **style stubs** (swap private decks with `manage_pptx_reference.py`). Never commit `.env` or generated `artifacts/` (PDF/MD/PPTX).
+
+App folder contents:
 
 ```text
 py/apps/<your_id>/
   __init__.py
   agent.py          # class name = portal "Agent class"
-  manifest.json     # id / slug / label / …
+  manifest.json     # id / slug / label / equipment_system / knowledge_pack …
   README.md         # optional
 ```
 
-Reference (read-only): `py/apps/examples/mixing_agitator_matcher/`
+**Do not copy** `py/apps/examples/mixing_agitator_matcher/` — that example is **legacy** (in-code DIR, not pack-backed).
 
-### 1.2 Recommended order
+### 1.3 Recommended order
 
-1. **Code first** — copy template, rename class / `app_id`, implement `run`, local test.
+1. **Code first** — copy template, rename class / `app_id` / `knowledge_pack_id`, local test.
 2. **Then portal** — **New app** with matching slug, Python module, Agent class.
-3. **Then PR** — BPEAI merges into website `py/apps/` and rebuilds.
+3. **Then PR** — BPEAI merges into website `py/apps/` (+ mirrors SDK/packs as needed) and rebuilds.
 
 You *can* create the portal draft first, but module/class must still match the code you ship.
 
-### 1.3 IDs that must match
+### 1.4 IDs that must match
 
 | Concept | Example | Notes |
 |---------|---------|--------|
-| Folder | `py/apps/heat_exchanger_selector/` | snake_case |
-| `app_id` in `agent.py` | `heat_exchanger_selector` | Unique |
+| Folder | `py/apps/heat_exchanger_evaluator/` | snake_case |
+| `app_id` in `agent.py` | `heat_exchanger_evaluator` | Unique |
 | Manifest `id` | same | Unique |
-| Portal **Slug** | `heat-exchanger-selector` | URL segment; shown read-only on Settings after create |
-| Portal **Python module** | `apps.heat_exchanger_selector.agent` | Runtime import path |
-| Portal **Agent class** | `HeatExchangerSelectorAgent` | Exact class name in `agent.py` |
+| Portal **Slug** | `heat-exchanger-evaluator` | URL segment; shown read-only on Settings after create |
+| Portal **Python module** | `apps.heat_exchanger_evaluator.agent` | Runtime import path |
+| Portal **Agent class** | `HeatExchangerEvaluatorAgent` | Exact class name in `agent.py` |
+| Knowledge pack | `mixing` (or your pack id) | `py/knowledge/<pack>/`; manifest `knowledge_pack` optional (defaults to `equipment_system`) |
 
-### 1.4 Local test
+### 1.5 Local test
 
-```bash
-cd py/apps/<your_id>
-echo '{"system_name":"Media Prep Vessel","application":"biopharma"}' | python agent.py
+**Preferred — local chat (smart text):**
+
+```powershell
+python py\tools\local_chat.py --app <your_id>
+# > Media prep vessel, biopharma
+# > 2-1-2-3-1-1
+# > pptx
 ```
 
-- Status → stderr  
-- JSON result → stdout  
-- Fix validation errors before portal Test  
+- Type plain English, then a DIR code; recommendation prints as readable text
+- After evaluation, reply `pptx` / `y` for a 7-slide deck (local artifact)
+- Artifacts write under `./artifacts/` (gitignored): markdown + PDF report; optional PPTX
+- Optional: copy `.env.example` → `.env` and set personal `OPENAI_API_KEY` (never commit)
+- For evaluator depth: `OPENAI_CREATOR_MODEL=gpt-5.2` and `OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000` (code default remains `gpt-4o`)
+- `--json` dumps validated `equipment_selector_v1`; `--once "…"` for one-shot
 
-SDK (same content live): https://bpiplatform.bpeai.com/sdk
+**Reference PPTX management (SME):**
+
+```powershell
+python py\tools\manage_pptx_reference.py --pack mixing list
+python py\tools\manage_pptx_reference.py --pack mixing replace --src path\to\deck.pptx --name media_preparation_vessel_mixing_evaluation.pptx
+```
+
+**Advanced — JSON pipe** (same contract the server uses):
+
+```powershell
+cd py\apps\<your_id>
+'{"system_name":"Media Prep Vessel","application":"biopharma"}' | python agent.py
+```
+
+- Status → stderr; JSON → stdout
+- Fix validation errors before portal Test
+
+Canonical portal copy: [docs/PORTAL_SDK_LOCAL_TEST.md](./docs/PORTAL_SDK_LOCAL_TEST.md)  
+SDK (same content live after website deploy): https://bpiplatform.bpeai.com/sdk
+
+**Portal vs local formats:** Hub datasheets use **`datasheet_markdown` → S3 `.md`**. Local PDF/PPTX are for authoring review only unless product later adds binary upload.
 
 ---
 
@@ -110,12 +153,12 @@ Draft exists in DB. Runtime fails until Python is on the server (next step).
 
 ## 3. Install Python on the server — Creator + BPEAI
 
-No upload API. Code ships via git.
+**No upload API.** Code ships via git PR. BPEAI mirrors `py/apps/<id>/`, and as needed `py/knowledge/` + `bpeai_creator_sdk`, into the website deploy repo.
 
 | Step | Who |
 |------|-----|
 | PR into `bpeai-creator-apps` with `py/apps/<id>/` | Creator |
-| Review, copy into website `bpeai` `py/apps/`, merge | BPEAI |
+| Review, copy into website `bpeai` `py/`, merge | BPEAI |
 | EC2 rebuild | BPEAI |
 
 ```bash
@@ -126,6 +169,8 @@ docker compose up -d --build
 
 Runtime reads `python_module` + `agent_class` from the `creator_apps` row.
 
+**Security:** never commit API keys; use `.env` locally only; PRs are reviewed before merge. Platform OpenAI/Serper keys are not used for creator local test.
+
 ---
 
 ## 4. Test on the portal — Creator
@@ -135,6 +180,8 @@ Runtime reads `python_module` + `agent_class` from the `creator_apps` row.
 3. Fix → new PR / redeploy → retest
 
 Import / unknown-app errors → Python not deployed or module/class mismatch.
+
+Multi-phase DIR → evaluate → PPTX training is done primarily via **local_chat**. Portal Test remains a basic smoke check for this beta.
 
 ---
 
@@ -147,7 +194,7 @@ Import / unknown-app errors → Python not deployed or module/class mismatch.
 | App on hub | system | https://bpeai.com/engineering/equipment-intelligence |
 | Users open selector | End users | `/engineering/equipment-intelligence/<slug>` |
 
-Creators cannot self-publish. Mixing keeps a custom UI; other apps use the generic runner.
+Creators cannot self-publish. The first-party Mixing Agitator Matcher keeps a custom UI (legacy); new evaluator apps use the generic runner unless BPEAI adds a custom UI.
 
 ---
 
@@ -170,12 +217,12 @@ BPEAI can still change any app’s status and view `/admin/creator-analytics`.
 ## End-to-end checklist
 
 - **BPEAI:** Grant `creatorAccess` (email sent)
-- **Creator:** Profile → clone repo → copy `_template` → code → local test
+- **Creator:** Profile → clone repo → copy `_templates/equipment_evaluator` → rename ids → local_chat → local MD/PDF/PPTX
 - **Creator:** New app (module + class + access tier)
 - **BPEAI:** Merge into website + `docker compose` rebuild `vendor_api`
 - **Creator:** Portal Test → Submit for review
 - **BPEAI:** Publish
-- **User:** Run on EI hub
+- **User:** Run on EI hub (markdown datasheet)
 - **Creator:** Stats / settings / enable-disable as needed
 
 ## Quick role summary

@@ -1,0 +1,10 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Prefer the in-repo package over any older site-packages install.
+_SRC = Path(__file__).resolve().parents[1] / "src"
+_src_s = str(_SRC)
+if _src_s not in sys.path:
+    sys.path.insert(0, _src_s)

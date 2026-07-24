@@ -19,6 +19,16 @@ class KeySpecValue(BaseModel):
     unit: str | None = None
 
 
+class EvaluationMatrixRow(BaseModel):
+    option: str = ""
+    technical_fit: str = ""
+    gmp: str = ""
+    scale_up_risk: str = ""
+    cost_schedule: str = ""
+    reliability: str = ""
+    rank: int | None = None
+
+
 class EquipmentSelectorOutput(BaseModel):
     schema_version: Literal["equipment_selector_v1"] = "equipment_selector_v1"
     equipment_tag: str
@@ -34,6 +44,16 @@ class EquipmentSelectorOutput(BaseModel):
     mixing_options: List[Dict[str, Any]] = Field(default_factory=list)
     recommended_basis: str = ""
     manufacturers: List[str] = Field(default_factory=list)
+    # GPT-parity optional fields (Life Science Mixing Systems Expert)
+    design_basis: str = ""
+    dir_summary: str = ""
+    objectives: List[str] = Field(default_factory=list)
+    failure_modes: List[str] = Field(default_factory=list)
+    evaluation_matrix: List[Dict[str, Any]] = Field(default_factory=list)
+    alternate_basis: str = ""
+    do_not_specify: List[str] = Field(default_factory=list)
+    preliminary_specs: List[str] = Field(default_factory=list)
+    artifacts: Dict[str, Any] = Field(default_factory=dict)
 
 
 def validate_output(data: Dict[str, Any]) -> EquipmentSelectorOutput:

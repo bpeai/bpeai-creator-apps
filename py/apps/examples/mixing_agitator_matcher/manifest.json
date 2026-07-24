@@ -16,5 +16,6 @@
   "runtime": "server",
   "min_tier": "INDIVIDUAL",
   "status": "published",
-  "python_entrypoint": "mixing_agitator_matcher.agent"
+  "python_entrypoint": "apps.examples.mixing_agitator_matcher.agent",
+  "deprecated_note": "LEGACY — do not copy; use _templates/equipment_evaluator"
 }

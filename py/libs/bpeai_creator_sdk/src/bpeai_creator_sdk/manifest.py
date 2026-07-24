@@ -31,6 +31,7 @@ class CreatorAppManifest(BaseModel):
     label: str
     description: str = ""
     equipment_system: EquipmentSystem
+    knowledge_pack: str = ""
     equipment_subtypes: List[str] = Field(default_factory=list)
     author: CreatorAppAuthor
     app_kind: AppKind = "first_party"

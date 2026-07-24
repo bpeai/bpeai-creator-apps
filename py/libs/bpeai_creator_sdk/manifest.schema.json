@@ -32,6 +32,10 @@
         "valves_fittings"
       ]
     },
+    "knowledge_pack": {
+      "type": "string",
+      "description": "Optional SME pack id under py/knowledge/<id>/; defaults to equipment_system when omitted"
+    },
     "equipment_subtypes": {
       "type": "array",
       "items": { "type": "string" }
