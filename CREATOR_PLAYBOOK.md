@@ -115,6 +115,7 @@ python py\tools\local_chat.py --app <your_id>
 - Artifacts write under `./artifacts/` (gitignored): markdown + PDF report; optional PPTX
 - Optional: copy `.env.example` → `.env` and set personal `OPENAI_API_KEY` (never commit)
 - For evaluator depth: `OPENAI_CREATOR_MODEL=gpt-5.2` and `OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000` (code default remains `gpt-4o`)
+- Multi-provider (v1 allowlist): set `CREATOR_LLM_PROVIDER` to `openai` (default), `anthropic`, `google`, or `xai`, plus the matching API key. Non-OpenAI models are hard-allowlisted (`claude-sonnet-4-5`, `gemini-2.5-pro`, `grok-3`). See [docs/PROVIDER_DIR_QA.md](./docs/PROVIDER_DIR_QA.md).
 - `--json` dumps validated `equipment_selector_v1`; `--once "…"` for one-shot
 
 **Reference PPTX management (SME):**

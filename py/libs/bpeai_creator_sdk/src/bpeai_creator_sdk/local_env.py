@@ -48,3 +48,10 @@ def load_dotenv(path: Path | None = None, *, override: bool = False) -> Path | N
 
 def openai_key_present() -> bool:
     return bool((os.getenv("OPENAI_API_KEY") or "").strip())
+
+
+def llm_credentials_present(provider: str | None = None) -> bool:
+    """True when the API key for the active (or given) CREATOR_LLM_PROVIDER is set."""
+    from .llm.resolve import llm_credentials_present as _present
+
+    return _present(provider)

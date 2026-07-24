@@ -54,7 +54,9 @@ py/
 
    Optional personal key: copy `.env.example` → `.env` (gitignored). For evaluator
    depth set `OPENAI_CREATOR_MODEL=gpt-5.2` and `OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000`
-   (code default remains `gpt-4o`). See [docs/PORTAL_SDK_LOCAL_TEST.md](./docs/PORTAL_SDK_LOCAL_TEST.md).
+   (code default remains `gpt-4o`). Optional v1 providers: `CREATOR_LLM_PROVIDER=anthropic|google|xai`
+   (see [docs/PROVIDER_DIR_QA.md](./docs/PROVIDER_DIR_QA.md)).
+   See [docs/PORTAL_SDK_LOCAL_TEST.md](./docs/PORTAL_SDK_LOCAL_TEST.md).
 
    Local artifacts (gitignored `./artifacts/`): `*_evaluation.md`, `*_evaluation.pdf`,
    optional `*_evaluation.pptx`. **Portal hub datasheets use markdown only**

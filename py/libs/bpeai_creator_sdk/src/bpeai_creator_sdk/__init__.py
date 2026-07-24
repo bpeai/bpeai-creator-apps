@@ -6,8 +6,9 @@ from .artifacts import (
     replace_reference_deck,
     resolve_reference_deck,
 )
-from .base import CreatorAppBase, default_creator_model
-from .local_env import load_dotenv, openai_key_present
+from .base import CreatorAppBase, default_creator_model, default_creator_provider
+from .local_env import load_dotenv, llm_credentials_present, openai_key_present
+from .llm import complete_json
 from .local_format import format_result_text, format_selector_json, format_selector_text
 from .local_parse import parse_free_text, parse_inputs_heuristic
 from .local_run import load_agent_class, resolve_app_id, run_agent
@@ -46,11 +47,14 @@ __all__ = [
     "build_slide_pack_from_evaluation",
     "check_application",
     "check_equipment_option_names",
+    "complete_json",
     "default_creator_model",
+    "default_creator_provider",
     "format_result_text",
     "format_selector_json",
     "format_selector_text",
     "list_reference_decks",
+    "llm_credentials_present",
     "load_agent_class",
     "load_dotenv",
     "load_knowledge_pack",

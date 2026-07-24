@@ -33,11 +33,11 @@ def _bootstrap_sdk() -> None:
 
 _bootstrap_sdk()
 
-from bpeai_creator_sdk.local_env import load_dotenv, openai_key_present  # noqa: E402
+from bpeai_creator_sdk.local_env import load_dotenv, llm_credentials_present, openai_key_present  # noqa: E402
 from bpeai_creator_sdk.local_format import format_result_text, format_selector_json  # noqa: E402
 from bpeai_creator_sdk.local_parse import parse_free_text  # noqa: E402
 from bpeai_creator_sdk.local_run import resolve_app_id, run_agent  # noqa: E402
-from bpeai_creator_sdk.base import default_creator_model  # noqa: E402
+from bpeai_creator_sdk.base import default_creator_model, default_creator_provider  # noqa: E402
 
 
 def _status(message: str) -> None:
@@ -142,10 +142,20 @@ def _run_once(
 
 
 def _interactive(app_id: str, *, as_json: bool) -> int:
-    key_note = "OPENAI_API_KEY set" if openai_key_present() else "no OPENAI_API_KEY (heuristics only)"
+    provider = default_creator_provider()
     model = default_creator_model()
+    if llm_credentials_present(provider):
+        key_note = f"{provider} credentials set"
+    elif provider == "openai" and openai_key_present():
+        key_note = "OPENAI_API_KEY set"
+    else:
+        key_note = f"no credentials for {provider} (heuristics only)"
     print(f"Local chat — app: {app_id} ({key_note})", file=sys.stderr)
-    print(f"LLM model: {model} (set OPENAI_CREATOR_MODEL in .env to override)", file=sys.stderr)
+    print(
+        f"LLM: {provider}/{model} "
+        f"(set CREATOR_LLM_PROVIDER / CREATOR_LLM_MODEL or OPENAI_CREATOR_MODEL in .env)",
+        file=sys.stderr,
+    )
     print(
         "Type plain English, then a DIR code (e.g. 2-1-2-3-1-1). "
         "After evaluation, reply pptx (or y) for a 7-slide deck. "

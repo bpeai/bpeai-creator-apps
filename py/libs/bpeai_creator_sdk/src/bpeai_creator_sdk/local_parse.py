@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
-import os
-import re
 from typing import Any, Dict, Optional
+import re
 
-from openai import OpenAI
+from .llm import complete_json, llm_credentials_present, parse_json_safely
+
 
 # Phrases that commonly appear as application labels in free text.
 _APPLICATION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -103,54 +102,39 @@ def heuristics_look_thin(inputs: Dict[str, Any]) -> bool:
 
 
 def parse_inputs_with_openai(text: str, *, model: str | None = None) -> Dict[str, Any]:
-    """Use OpenAI to extract structured selector inputs from free text."""
-    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is missing")
+    """Use the configured creator LLM to extract structured selector inputs."""
+    return parse_inputs_with_llm(text, model=model)
 
-    chosen = (
-        model
-        or os.getenv("OPENAI_CREATOR_MODEL")
-        or os.getenv("OPENAI_MODEL")
-        or "gpt-4o"
-    ).strip()
-    client = OpenAI(api_key=api_key)
-    response = client.responses.create(
-        model=chosen,
-        input=[
-            {
-                "role": "system",
-                "content": (
-                    "Extract equipment selector inputs as a JSON object. "
-                    "Use keys when present: system_name, application, fluid. "
-                    "Omit unknown keys. Do not invent equipment models."
-                ),
-            },
-            {"role": "user", "content": text},
-        ],
-        text={"format": {"type": "json_object"}},
+
+def parse_inputs_with_llm(text: str, *, model: str | None = None) -> Dict[str, Any]:
+    """Use the configured creator LLM to extract structured selector inputs from free text."""
+    if not llm_credentials_present():
+        raise RuntimeError("LLM API key is missing for the configured CREATOR_LLM_PROVIDER")
+
+    completion = complete_json(
+        system=(
+            "Extract equipment selector inputs as a JSON object. "
+            "Use keys when present: system_name, application, fluid. "
+            "Omit unknown keys. Do not invent equipment models."
+        ),
+        user=text,
+        model=model,
         max_output_tokens=500,
     )
-    raw = getattr(response, "output_text", "") or ""
-    if not raw:
-        raise RuntimeError("LLM returned empty output for input parse")
-    parsed = json.loads(raw)
-    if not isinstance(parsed, dict):
-        raise ValueError("Expected JSON object from LLM input parse")
+    parsed = parse_json_safely(completion.text)
     parsed["raw_text"] = text.strip()
     return parsed
 
 
 def parse_free_text(text: str, *, use_openai_if_available: bool = True) -> Dict[str, Any]:
-    """Parse free text to inputs: heuristics first, optional OpenAI enrichment."""
+    """Parse free text to inputs: heuristics first, optional LLM enrichment."""
     inputs = parse_inputs_heuristic(text)
     if not use_openai_if_available:
         return inputs
-    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not api_key or not heuristics_look_thin(inputs):
+    if not llm_credentials_present() or not heuristics_look_thin(inputs):
         return inputs
     try:
-        llm_inputs = parse_inputs_with_openai(text)
+        llm_inputs = parse_inputs_with_llm(text)
     except Exception:
         return inputs
     # Prefer LLM values when present; keep heuristic fallbacks.

@@ -72,9 +72,13 @@ python py/tools/local_chat.py --app <your_slug>
 # > pptx
 ```
 
-Helpers: `local_env`, `local_parse`, `local_format`, `local_run`.  
+Helpers: `local_env`, `local_parse`, `local_format`, `local_run`, `llm` (multi-provider JSON).  
 Artifacts helpers: `build_evaluation_pdf`, `build_evaluation_pptx`, `list_reference_decks`,
 `replace_reference_deck`.
+
+LLM provider adapter (v1): default `CREATOR_LLM_PROVIDER=openai`. Optional allowlisted
+providers `anthropic` / `google` / `xai`. See `docs/PROVIDER_DIR_QA.md` in the creator-apps
+repo. Agents keep using `self.call_openai_json(...)` (alias of `call_llm_json`).
 
 Portal `/sdk` §3 wording: `docs/PORTAL_SDK_LOCAL_TEST.md` (keep in sync with website
 `src/lib/creatorSdkDocs.ts`).

@@ -20,13 +20,17 @@ recommendation prints as readable text. After evaluation, reply pptx or y for a
 local 7-slide deck. Use --json to dump validated equipment_selector_v1. Use
 --once "…" for a one-shot run.
 
-Optional personal OpenAI key (local PC only):
+Optional personal LLM key (local PC only):
   1. Copy .env.example → .env at the repo root (never commit .env)
-  2. Set OPENAI_API_KEY=sk-… (your key; BPEAI platform keys are not used locally)
+  2. Default provider is OpenAI: set OPENAI_API_KEY=sk-… (BPEAI platform keys are not used locally)
   3. For evaluator quality (match/exceed custom GPT depth), set a strong model, e.g.
      OPENAI_CREATOR_MODEL=gpt-5.2 (or another reasoning-capable model on your account).
      Code default remains gpt-4o if unset. Also set OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000.
-  Local chat prints the resolved LLM model name at startup.
+  4. Optional v1 providers (hard allowlist): CREATOR_LLM_PROVIDER=anthropic|google|xai
+     with ANTHROPIC_API_KEY / GOOGLE_API_KEY / XAI_API_KEY and allowlisted models
+     claude-sonnet-4-5 / gemini-2.5-pro / grok-3. Install extras:
+     pip install 'bpeai-creator-sdk[anthropic]' or [google] or [all].
+  Local chat prints the resolved provider/model at startup.
 
 Artifacts (gitignored ./artifacts/): *_evaluation.md, *_evaluation.pdf, optional
 *_evaluation.pptx. Portal hub datasheets use datasheet_markdown → S3 .md only.
@@ -37,7 +41,7 @@ example). SME packs live under py/knowledge/<system>/. Manage reference PPTX stu
   python py/tools/manage_pptx_reference.py --pack mixing list
 
 Rule-based agents work without a key. A key enables richer natural-language
-parsing and any self.call_openai_json(…) calls inside your agent.
+parsing and any self.call_openai_json(…) / call_llm_json(…) calls inside your agent.
 
 Advanced — JSON pipe (same contract the server uses):
 
