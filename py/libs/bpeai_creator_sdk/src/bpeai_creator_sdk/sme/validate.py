@@ -51,14 +51,26 @@ def validate_dir_code(
     pack: KnowledgePack,
     scenario_id: str,
     dir_code: str,
+    *,
+    requirements: Sequence[Mapping[str, Any]] | None = None,
+    common_codes: Sequence[Any] | None = None,
 ) -> DirValidation:
-    """Hard-validate a hyphen-separated DIR code against pack requirements."""
-    scenario = pack.scenario(scenario_id)
-    requirements = scenario.get("requirements") or []
+    """Hard-validate a hyphen-separated DIR code against pack / menu requirements."""
+    if requirements is None:
+        scenario = pack.scenario(scenario_id)
+        requirements = scenario.get("requirements") or []
     if not isinstance(requirements, list) or not requirements:
         return DirValidation(ok=False, error=f"Scenario '{scenario_id}' has no requirements.")
 
-    common = pack.common_codes(scenario_id)
+    if common_codes is None:
+        common = pack.common_codes(scenario_id)
+    else:
+        common = []
+        for item in common_codes:
+            if isinstance(item, str):
+                common.append(item)
+            elif isinstance(item, Mapping) and item.get("code"):
+                common.append(str(item["code"]))
     suggested = common[0] if common else ""
 
     rules = (pack.validation_rules.get("dir_code") or {}) if isinstance(pack.validation_rules, dict) else {}
@@ -155,16 +167,47 @@ def check_application(pack: KnowledgePack, application: str) -> ApplicationCheck
     known: bool | None = None
     warning = ""
     try:
-        from bpeai_taxonomy import valid_applications  # type: ignore
-
-        apps = {str(a).strip().lower() for a in (valid_applications() or [])}
-        # taxonomy may return dicts with name=
-        if apps and isinstance(next(iter(apps)), str):
-            pass
-        known = normalized.lower() in apps or raw.lower() in apps
-        if known is False and str(rules.get("mode") or "soft").lower() == "soft":
-            warning = f"Application '{raw}' not in shared taxonomy (soft)."
+        apps = _taxonomy_application_names()
+        if apps is None:
+            known = None
+        else:
+            known = normalized.lower() in apps or raw.lower() in apps
+            if known is False and str(rules.get("mode") or "soft").lower() == "soft":
+                warning = f"Application '{raw}' not in shared taxonomy (soft)."
     except Exception:
         # Creator-apps clones often lack bpeai_taxonomy — skip.
         known = None
     return ApplicationCheck(normalized=normalized or raw, known=known, warning=warning)
+
+
+def _taxonomy_application_names() -> set[str] | None:
+    """Normalize bpeai_taxonomy applications.yaml shapes to a lowercase name set."""
+    try:
+        from bpeai_taxonomy import valid_applications  # type: ignore
+    except Exception:
+        return None
+
+    raw = valid_applications()
+    if raw is None:
+        return None
+    names: set[str] = set()
+    if isinstance(raw, Mapping):
+        # {applications: [...]} or similar
+        items = raw.get("applications") or raw.get("items") or []
+        if not isinstance(items, list):
+            items = []
+    elif isinstance(raw, list):
+        items = raw
+    else:
+        return None
+
+    for item in items:
+        if isinstance(item, str):
+            names.add(item.strip().lower())
+        elif isinstance(item, Mapping):
+            for key in ("name", "id", "label", "slug"):
+                val = item.get(key)
+                if val:
+                    names.add(str(val).strip().lower())
+                    break
+    return names

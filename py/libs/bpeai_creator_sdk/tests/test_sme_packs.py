@@ -11,6 +11,7 @@ from bpeai_creator_sdk.sme import (
     list_missing_pack_files,
     load_knowledge_pack,
     pack_is_loadable,
+    resolve_dir_menu,
     resolve_scenario_id,
     stamp_draft_meta,
     validate_dir_code,
@@ -118,6 +119,29 @@ def test_resolve_scenario_aliases(mixing_pack):
         resolve_scenario_id(mixing_pack, "Chromatography resin slurry tank")
         == "chromatography_resin_slurry"
     )
+
+
+def test_resolve_dir_menu_industry_variant(mixing_pack):
+    menu = resolve_dir_menu(
+        mixing_pack,
+        system_name="Media Preparation Vessel",
+        industry="Industrial biotechnology",
+        equipment_system_variant="general_mixing",
+        require_approved=True,
+    )
+    assert menu.scenario_id == "media_preparation"
+    assert menu.industry == "Industrial biotechnology"
+    assert menu.is_approved
+    assert len(menu.requirements) == 6
+
+    inline = resolve_dir_menu(
+        mixing_pack,
+        system_name="Inline powder induction media prep",
+        industry="Biopharmaceuticals",
+        require_approved=True,
+    )
+    assert inline.equipment_system_variant == "inline_mixer"
+    assert inline.industry == "Biopharmaceuticals"
 
 
 def test_validate_dir_code_ok(mixing_pack):

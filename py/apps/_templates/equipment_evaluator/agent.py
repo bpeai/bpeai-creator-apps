@@ -44,6 +44,7 @@ from bpeai_creator_sdk.artifacts import (
 )
 from bpeai_creator_sdk.local_run import repo_py_root
 from bpeai_creator_sdk.sme import (
+    DirMenu,
     KnowledgePack,
     check_application,
     check_equipment_option_names,
@@ -51,6 +52,7 @@ from bpeai_creator_sdk.sme import (
     list_missing_pack_files,
     load_knowledge_pack,
     missing_report_headings,
+    resolve_dir_menu,
     resolve_scenario_id,
     stamp_draft_meta,
     thin_report_sections,
@@ -308,6 +310,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         system_name = str(inputs.get("system_name") or "Process Vessel").strip()
         application_raw = str(inputs.get("application") or "biopharmaceutical").strip()
+        industry_raw = str(inputs.get("industry") or "").strip()
+        variant_raw = str(inputs.get("equipment_system_variant") or "").strip()
         dir_code = str(inputs.get("dir_code") or "").strip()
         phase = str(inputs.get("phase") or "").strip().lower()
         deliverable = str(inputs.get("deliverable") or "evaluation").strip().lower()
@@ -316,23 +320,51 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             inputs.get("knowledge_pack") or self.knowledge_pack_id or "mixing"
         ).strip()
         py_root = repo_py_root()
-        eq_system = str(
-            inputs.get("equipment_system")
-            or getattr(self, "equipment_system", "")
-            or pack_id
-        ).strip()
-        pack, bootstrap_notes = self._ensure_knowledge_pack(
-            pack_id,
-            py_root=py_root,
-            equipment_system=eq_system,
-        )
-        scenario_id = resolve_scenario_id(pack, system_name)
+        bootstrap_notes: List[str] = []
+        pack_payload = inputs.get("knowledge_pack_payload")
+        if isinstance(pack_payload, dict):
+            pack = load_knowledge_pack(pack_id, py_root=py_root, payload=pack_payload)
+        else:
+            eq_system = str(
+                inputs.get("equipment_system")
+                or getattr(self, "equipment_system", "")
+                or pack_id
+            ).strip()
+            pack, bootstrap_notes = self._ensure_knowledge_pack(
+                pack_id,
+                py_root=py_root,
+                equipment_system=eq_system,
+            )
 
         app_check = check_application(pack, application_raw)
         application = app_check.normalized or application_raw
         combined_warning = " | ".join(
             w for w in [app_check.warning, *bootstrap_notes] if w
         )
+
+        require_approved = phase not in {"generate_dir"}
+        menu = resolve_dir_menu(
+            pack,
+            system_name=system_name,
+            equipment_system_variant=variant_raw or None,
+            industry=industry_raw or None,
+            application=application,
+            require_approved=require_approved,
+        )
+
+        if phase == "generate_dir":
+            return {
+                "phase": "generate_dir",
+                "message": (
+                    "DIR generation is performed via the platform knowledge API "
+                    "(POST .../dir-menus/generate). Local agents return the resolved menu template."
+                ),
+                "knowledge_pack": pack.pack_id,
+                "scenario_id": menu.scenario_id,
+                "equipment_system_variant": menu.equipment_system_variant,
+                "industry": menu.industry,
+                "template_requirements": menu.requirements,
+            }
 
         # PPTX from a prior evaluation payload
         if deliverable == "pptx" or phase == "pptx":
@@ -342,7 +374,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             if dir_code:
                 evaluated = self._evaluate(
                     pack,
-                    scenario_id,
+                    menu,
                     system_name,
                     application,
                     dir_code,
@@ -359,7 +391,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         if phase in {"dir", "dir_requirements"} or not dir_code:
             return self._dir_requirements(
                 pack,
-                scenario_id,
+                menu,
                 system_name,
                 application,
                 warning=combined_warning,
@@ -367,7 +399,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
 
         result = self._evaluate(
             pack,
-            scenario_id,
+            menu,
             system_name,
             application,
             dir_code,
@@ -549,7 +581,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
     def _dir_requirements(
         self,
         pack: KnowledgePack,
-        scenario_id: str,
+        menu: DirMenu,
         system_name: str,
         application: str,
         *,
@@ -558,9 +590,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         suggested_correction: str = "",
     ) -> Dict[str, Any]:
         self.status(f"Preparing design input requirements for {system_name}…")
-        scenario = pack.scenario(scenario_id)
-        requirements = scenario.get("requirements") or []
-        entries = pack.common_code_entries(scenario_id)
+        requirements = menu.requirements
+        entries = pack._normalize_common_codes(menu.common_codes)
         codes = [e["code"] for e in entries]
         example = codes[0] if codes else "1-1-1"
         out: Dict[str, Any] = {
@@ -568,12 +599,17 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             "system_name": system_name,
             "application": application,
             "knowledge_pack": pack.pack_id,
-            "scenario_id": scenario_id,
+            "scenario_id": menu.scenario_id,
+            "equipment_system_variant": menu.equipment_system_variant,
+            "industry": menu.industry,
+            "dir_menu_label": menu.label,
+            "dir_lifecycle": menu.lifecycle,
             "requirements": requirements,
             "common_codes": codes,
             "common_code_details": entries,
             "message": (
-                f"For {system_name}, I’ll assume {application} unless you specify otherwise. "
+                f"For {system_name} ({menu.industry} / {menu.equipment_system_variant}), "
+                f"I’ll assume {application} unless you specify otherwise. "
                 f"Reply with a hyphen-separated DIR code (e.g. {example})."
             ),
         }
@@ -587,20 +623,37 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
     def _evaluate(
         self,
         pack: KnowledgePack,
-        scenario_id: str,
+        menu: DirMenu,
         system_name: str,
         application: str,
         dir_code: str,
         *,
         app_warning: str = "",
     ) -> Dict[str, Any]:
-        scenario = pack.scenario(scenario_id)
-        requirements = scenario.get("requirements") or []
-        dir_check = validate_dir_code(pack, scenario_id, dir_code)
+        if not menu.is_approved:
+            return self._dir_requirements(
+                pack,
+                menu,
+                system_name,
+                application,
+                warning=app_warning,
+                validation_error=(
+                    f"DIR menu for {menu.industry} / {menu.equipment_system_variant} "
+                    f"is '{menu.lifecycle}' — approve before evaluate."
+                ),
+            )
+        requirements = menu.requirements
+        dir_check = validate_dir_code(
+            pack,
+            menu.scenario_id,
+            dir_code,
+            requirements=requirements,
+            common_codes=menu.common_codes,
+        )
         if not dir_check.ok:
             return self._dir_requirements(
                 pack,
-                scenario_id,
+                menu,
                 system_name,
                 application,
                 warning=app_warning,
@@ -646,7 +699,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"System: {system_name}\n"
             f"Application: {application}\n"
             f"Equipment system / pack: {pack.equipment_system} ({pack.pack_id})\n"
-            f"Scenario: {scenario_id}\n"
+            f"Scenario: {menu.scenario_id}\n"
+            f"Industry: {menu.industry}\n"
+            f"Equipment system variant: {menu.equipment_system_variant}\n"
             f"Validated DIR code: {dir_code}\n"
             f"Decoded DIR:\n{json.dumps(dir_check.decoded, indent=2)}\n\n"
             f"DIR requirement structure:\n{json.dumps(requirements, indent=2)}\n\n"
@@ -714,7 +769,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         result["system_name"] = system_name
         result["application"] = application
         result["knowledge_pack"] = pack.pack_id
-        result["scenario_id"] = scenario_id
+        result["scenario_id"] = menu.scenario_id
+        result["industry"] = menu.industry
+        result["equipment_system_variant"] = menu.equipment_system_variant
         result["decoded_dir"] = dir_check.decoded
         warnings = [w for w in [app_warning, *opt_check.warnings] if w]
         still_missing = missing_report_headings(

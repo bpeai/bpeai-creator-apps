@@ -1,6 +1,6 @@
 # SME Creator Playbook (code → test → install → manage)
 
-Updated 2026-07-24
+Updated 2026-07-26 · SDK [`CREATOR_SDK_VERSION`](./CREATOR_SDK_VERSION) · [`CHANGELOG.md`](./CHANGELOG.md)
 
 ## Hosts
 
@@ -39,7 +39,9 @@ If they lack access → `/platform/forbidden`.
 
 Work in the dedicated GitHub repo: **[bpeai/bpeai-creator-apps](https://github.com/bpeai/bpeai-creator-apps)** (not the website deploy repo).
 
-**Platform note (templates):** EI apps use a **template family** (by deliverable) + **SME knowledge pack** (YAML by equipment system) + **shared SDK**. Start from `py/apps/_templates/equipment_evaluator`. See [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md).
+**Platform note (templates):** EI apps use a **template family** (by deliverable) + **SME knowledge pack** + **shared SDK**. Start from `py/apps/_templates/equipment_evaluator`. See [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md).
+
+**Knowledge ownership:** Your pack content is **private to your apps** (portal-managed). Platform seeds under `py/knowledge/` (e.g. `mixing`) are BPEAI-owned; bind them or **clone** into a private pack on the portal. Do not expect other creators to see your pack. Python agent code still ships only via git PR (no zip upload).
 
 ### 1.1 Clone once, add apps over time
 
@@ -48,7 +50,7 @@ git clone https://github.com/bpeai/bpeai-creator-apps.git
 cd bpeai-creator-apps
 ```
 
-Keep one local clone. For each new evaluator app:
+Keep one local clone. Pull regularly for SDK/template updates (`git pull`). For each new evaluator app:
 
 ```powershell
 Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\heat_exchanger_evaluator
@@ -61,11 +63,18 @@ Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\heat_exchanger
 ```text
 py/apps/_templates/equipment_evaluator/   # copy source — do not edit in place for your app
 py/apps/<your_id>/                        # your app (open a PR that adds this)
-py/knowledge/<system>/                    # shared SME pack (rarely forked; prefer pack PRs)
+py/knowledge/<system>/                    # platform seed packs only (BPEAI); your packs live in portal/DB
 py/libs/bpeai_creator_sdk/                # do not fork; BPEAI mirrors into website deploy
 ```
 
-**Size guidance:** keep packs YAML-first; reference PPTX under `references/` are small **style stubs** (swap private decks with `manage_pptx_reference.py`). Never commit `.env` or generated `artifacts/` (PDF/MD/PPTX).
+**Size guidance:** keep pack YAML-first for seeds; manage creator DIR menus in portal **Knowledge**. Local sync: `python py/tools/sync_knowledge_pack.py`. Never commit `.env` or generated `artifacts/` (PDF/MD/PPTX).
+
+### 1.3 How creators get SDK / template updates
+
+1. `git pull` on this repo.
+2. Portal **SDK** page shows `CREATOR_SDK_VERSION` + changelog excerpt.
+3. Major bumps may email users with creator access.
+4. Read [`CHANGELOG.md`](./CHANGELOG.md) for breaking changes.
 
 App folder contents:
 

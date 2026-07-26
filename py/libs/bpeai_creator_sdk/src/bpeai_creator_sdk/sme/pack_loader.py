@@ -16,6 +16,8 @@ PACK_FILES = (
     "prompt_fragments.yaml",
 )
 
+APPROVED_LIFECYCLES = frozenset({"approved", "APPROVED"})
+
 
 def knowledge_root(py_root: Path | None = None) -> Path:
     """Return ``py/knowledge`` for the creator-apps (or mirrored) tree."""
@@ -30,9 +32,31 @@ def _load_yaml(path: Path) -> Any:
     return data if data is not None else {}
 
 
+def _norm(s: str) -> str:
+    return (s or "").strip().lower()
+
+
+@dataclass
+class DirMenu:
+    """Resolved DIR questionnaire for variant × industry × scenario."""
+
+    scenario_id: str
+    equipment_system_variant: str
+    industry: str
+    label: str
+    lifecycle: str
+    requirements: List[Dict[str, Any]]
+    common_codes: List[Any]
+    source: str = "menu"  # menu | scenario_fallback
+
+    @property
+    def is_approved(self) -> bool:
+        return _norm(self.lifecycle) in {"approved"} or self.source == "scenario_fallback"
+
+
 @dataclass
 class KnowledgePack:
-    """Loaded SME knowledge pack for one equipment system."""
+    """Loaded SME knowledge pack (filesystem or hydrated from DB/API)."""
 
     pack_id: str
     path: Path
@@ -53,9 +77,18 @@ class KnowledgePack:
         return str(self.meta.get("default_scenario") or "default")
 
     @property
+    def default_variant(self) -> str:
+        return str(self.meta.get("default_variant") or "general_mixing")
+
+    @property
     def scenarios(self) -> Dict[str, Any]:
         raw = self.dir_requirements.get("scenarios") or {}
         return raw if isinstance(raw, dict) else {}
+
+    @property
+    def menus(self) -> List[Dict[str, Any]]:
+        raw = self.dir_requirements.get("menus") or []
+        return [m for m in raw if isinstance(m, dict)] if isinstance(raw, list) else []
 
     def scenario(self, scenario_id: str) -> Dict[str, Any]:
         scen = self.scenarios.get(scenario_id)
@@ -75,10 +108,7 @@ class KnowledgePack:
                 names.append(name)
         return names
 
-    def common_code_entries(self, scenario_id: str) -> List[Dict[str, str]]:
-        """Normalize common_codes to [{code, caption}, ...]."""
-        scenario = self.scenario(scenario_id)
-        raw = scenario.get("common_codes") or []
+    def _normalize_common_codes(self, raw: Any) -> List[Dict[str, str]]:
         out: List[Dict[str, str]] = []
         if not isinstance(raw, list):
             return out
@@ -93,6 +123,11 @@ class KnowledgePack:
                     }
                 )
         return out
+
+    def common_code_entries(self, scenario_id: str) -> List[Dict[str, str]]:
+        """Normalize common_codes to [{code, caption}, ...]."""
+        scenario = self.scenario(scenario_id)
+        return self._normalize_common_codes(scenario.get("common_codes") or [])
 
     def common_codes(self, scenario_id: str) -> List[str]:
         return [e["code"] for e in self.common_code_entries(scenario_id)]
@@ -129,13 +164,31 @@ class KnowledgePack:
             parts.append("SME emphasis:\n" + "\n".join(f"- {e}" for e in emphasize))
         return "\n\n".join(p for p in parts if p)
 
+    def _menu_payload(self, menu: Mapping[str, Any], scenario_id: str) -> DirMenu:
+        scenario = self.scenario(scenario_id)
+        requirements = menu.get("requirements")
+        if not isinstance(requirements, list) or not requirements:
+            requirements = scenario.get("requirements") or []
+        common = menu.get("common_codes")
+        if common is None:
+            common = scenario.get("common_codes") or []
+        return DirMenu(
+            scenario_id=scenario_id,
+            equipment_system_variant=str(menu.get("equipment_system_variant") or self.default_variant),
+            industry=str(menu.get("industry") or ""),
+            label=str(menu.get("label") or scenario.get("label") or scenario_id),
+            lifecycle=str(menu.get("lifecycle") or "approved"),
+            requirements=[r for r in requirements if isinstance(r, dict)],
+            common_codes=list(common) if isinstance(common, list) else [],
+            source="menu",
+        )
+
 
 def resolve_scenario_id(pack: KnowledgePack, system_name: str) -> str:
     """Map free-text system_name to a scenario id using pack aliases."""
     text = (system_name or "").strip().lower()
     aliases = pack.meta.get("scenario_aliases") or {}
     if isinstance(aliases, dict):
-        # Longer aliases first so "media preparation" beats "media".
         scored: list[tuple[int, str]] = []
         for scenario_id, terms in aliases.items():
             if not isinstance(terms, list):
@@ -154,16 +207,190 @@ def resolve_scenario_id(pack: KnowledgePack, system_name: str) -> str:
     raise KeyError(f"Pack '{pack.pack_id}' has no scenarios")
 
 
+def resolve_variant_id(pack: KnowledgePack, system_name: str, variant: str | None = None) -> str:
+    """Resolve equipment_system_variant from explicit input or system_name aliases."""
+    explicit = (variant or "").strip()
+    if explicit:
+        return explicit
+    text = (system_name or "").strip().lower()
+    aliases = pack.meta.get("variant_aliases") or {}
+    if isinstance(aliases, dict):
+        scored: list[tuple[int, str]] = []
+        for variant_id, terms in aliases.items():
+            if not isinstance(terms, list):
+                continue
+            for term in terms:
+                t = str(term).strip().lower()
+                if t and t in text:
+                    scored.append((len(t), str(variant_id)))
+        if scored:
+            scored.sort(key=lambda x: x[0], reverse=True)
+            return scored[0][1]
+    return pack.default_variant
+
+
+def resolve_industry(pack: KnowledgePack, industry: str | None = None, application: str | None = None) -> str:
+    """Pick an industry key for DIR menu selection."""
+    candidates = pack.meta.get("industries") or []
+    if not isinstance(candidates, list):
+        candidates = []
+    cand_norm = {_norm(str(c)): str(c) for c in candidates}
+
+    for raw in (industry, application):
+        text = _norm(str(raw or ""))
+        if not text:
+            continue
+        if text in cand_norm:
+            return cand_norm[text]
+        for key, label in cand_norm.items():
+            if text in key or key in text:
+                return label
+        # Common short aliases
+        if "biopharm" in text or text in {"biopharma", "biopharmaceutical"}:
+            for key, label in cand_norm.items():
+                if "biopharm" in key:
+                    return label
+        if "industrial" in text and "biotech" in text:
+            for key, label in cand_norm.items():
+                if "industrial" in key:
+                    return label
+        if "small molecule" in text or "pharma" in text:
+            for key, label in cand_norm.items():
+                if "small molecule" in key or "pharmaceutical" in key:
+                    return label
+        if text == "food" or "food" in text:
+            for key, label in cand_norm.items():
+                if "food" in key:
+                    return label
+
+    if candidates:
+        return str(candidates[0])
+    return "Biopharmaceuticals"
+
+
+def resolve_dir_menu(
+    pack: KnowledgePack,
+    *,
+    system_name: str = "",
+    scenario_id: str | None = None,
+    equipment_system_variant: str | None = None,
+    industry: str | None = None,
+    application: str | None = None,
+    require_approved: bool = True,
+) -> DirMenu:
+    """Select DIR menu by (variant × industry × scenario); fall back to legacy scenario."""
+    sid = (scenario_id or "").strip() or resolve_scenario_id(pack, system_name)
+    variant = resolve_variant_id(pack, system_name, equipment_system_variant)
+    ind = resolve_industry(pack, industry=industry, application=application)
+
+    menus = pack.menus
+    if menus:
+        def score(m: Mapping[str, Any]) -> int:
+            s = 0
+            if _norm(str(m.get("scenario_id") or "")) == _norm(sid):
+                s += 100
+            if _norm(str(m.get("equipment_system_variant") or "")) == _norm(variant):
+                s += 40
+            if _norm(str(m.get("industry") or "")) == _norm(ind):
+                s += 40
+            lifecycle = _norm(str(m.get("lifecycle") or "approved"))
+            if require_approved and lifecycle not in {"approved"}:
+                return -1
+            return s
+
+        ranked = [(score(m), m) for m in menus]
+        ranked = [(sc, m) for sc, m in ranked if sc >= 100]
+        ranked.sort(key=lambda x: x[0], reverse=True)
+        if ranked:
+            best = ranked[0][1]
+            return pack._menu_payload(best, str(best.get("scenario_id") or sid))
+
+        # Same scenario + variant, any industry; then scenario-only approved menus
+        for prefer_variant in (True, False):
+            for m in menus:
+                if _norm(str(m.get("scenario_id") or "")) != _norm(sid):
+                    continue
+                lifecycle = _norm(str(m.get("lifecycle") or "approved"))
+                if require_approved and lifecycle not in {"approved"}:
+                    continue
+                if prefer_variant and _norm(str(m.get("equipment_system_variant") or "")) != _norm(variant):
+                    continue
+                return pack._menu_payload(m, sid)
+
+    # Legacy scenario fallback (treated as approved for local/filesystem seeds)
+    scenario = pack.scenario(sid)
+    return DirMenu(
+        scenario_id=sid,
+        equipment_system_variant=variant,
+        industry=ind,
+        label=str(scenario.get("label") or sid),
+        lifecycle="approved",
+        requirements=[r for r in (scenario.get("requirements") or []) if isinstance(r, dict)],
+        common_codes=list(scenario.get("common_codes") or [])
+        if isinstance(scenario.get("common_codes"), list)
+        else [],
+        source="scenario_fallback",
+    )
+
+
+def knowledge_pack_from_dict(
+    pack_id: str,
+    payload: Mapping[str, Any],
+    *,
+    path: Path | None = None,
+) -> KnowledgePack:
+    """Hydrate a KnowledgePack from a DB/API JSON payload."""
+    meta = dict(payload.get("meta") or payload.get("pack") or {})
+    meta.setdefault("pack_id", pack_id)
+    dir_req = payload.get("dir_requirements") or {}
+    if not isinstance(dir_req, dict):
+        dir_req = {}
+    # DB-shaped menus list → dir_requirements.menus
+    if "menus" in payload and isinstance(payload["menus"], list):
+        dir_req = {**dir_req, "menus": payload["menus"]}
+    content = payload.get("content") or {}
+    if isinstance(content, dict):
+        equipment_options = content.get("equipment_options") or payload.get("equipment_options") or {}
+        validation_rules = content.get("validation_rules") or payload.get("validation_rules") or {}
+        prompt_fragments = content.get("prompt_fragments") or payload.get("prompt_fragments") or {}
+        report_outline = content.get("report_outline") or payload.get("report_outline") or {}
+        pptx_outline = content.get("pptx_outline") or payload.get("pptx_outline") or {}
+        if content.get("meta") and isinstance(content["meta"], dict):
+            meta = {**meta, **content["meta"]}
+    else:
+        equipment_options = payload.get("equipment_options") or {}
+        validation_rules = payload.get("validation_rules") or {}
+        prompt_fragments = payload.get("prompt_fragments") or {}
+        report_outline = payload.get("report_outline") or {}
+        pptx_outline = payload.get("pptx_outline") or {}
+
+    return KnowledgePack(
+        pack_id=pack_id,
+        path=path or Path(f"<db:{pack_id}>"),
+        meta=meta if isinstance(meta, dict) else {},
+        dir_requirements=dir_req,
+        equipment_options=equipment_options if isinstance(equipment_options, dict) else {},
+        validation_rules=validation_rules if isinstance(validation_rules, dict) else {},
+        prompt_fragments=prompt_fragments if isinstance(prompt_fragments, dict) else {},
+        report_outline=report_outline if isinstance(report_outline, dict) else {},
+        pptx_outline=pptx_outline if isinstance(pptx_outline, dict) else {},
+    )
+
+
 def load_knowledge_pack(
     pack_id: str,
     *,
     py_root: Path | None = None,
     pack_root: Path | None = None,
+    payload: Mapping[str, Any] | None = None,
 ) -> KnowledgePack:
-    """Load ``py/knowledge/<pack_id>/`` YAML set."""
+    """Load pack from ``payload`` (DB/API) or ``py/knowledge/<pack_id>/`` YAML set."""
     pid = (pack_id or "").strip()
     if not pid:
         raise ValueError("pack_id is required")
+    if payload is not None:
+        return knowledge_pack_from_dict(pid, payload)
+
     root = Path(pack_root) if pack_root else knowledge_root(py_root)
     path = (root / pid).resolve()
     if not path.is_dir():
@@ -173,10 +400,7 @@ def load_knowledge_pack(
     if not isinstance(meta, dict):
         raise TypeError(f"pack.yaml must be a mapping: {path / 'pack.yaml'}")
 
-    declared = str(meta.get("pack_id") or pid).strip()
-    if declared != pid:
-        # Allow folder name to win; warn via inconsistency only if empty declared.
-        meta["pack_id"] = pid
+    meta["pack_id"] = pid
 
     dir_req = _load_yaml(path / "dir_requirements.yaml")
     if not isinstance(dir_req, dict):

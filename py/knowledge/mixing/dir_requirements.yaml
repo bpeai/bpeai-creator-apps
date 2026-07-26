@@ -1,6 +1,51 @@
-# DIR questionnaires by scenario.
+# DIR questionnaires.
 # DIR code = hyphen-separated 1-based option indexes, one per requirement in order.
 # Example media_preparation code: 2-1-2-3-1-1
+#
+# Preferred lookup: menus keyed by (equipment_system_variant × industry × scenario_id).
+# Legacy `scenarios` remain as content sources / fallback when no menu matches.
+
+menus:
+  - scenario_id: media_preparation
+    equipment_system_variant: general_mixing
+    industry: Biopharmaceuticals
+    lifecycle: approved
+    label: Media / buffer preparation (Biopharmaceuticals)
+  - scenario_id: media_preparation
+    equipment_system_variant: general_mixing
+    industry: Industrial biotechnology
+    lifecycle: approved
+    label: Media / buffer preparation (Industrial biotechnology)
+  - scenario_id: media_preparation
+    equipment_system_variant: general_mixing
+    industry: Pharmaceutical small molecule
+    lifecycle: approved
+    label: Media / buffer preparation (Pharma small molecule)
+  - scenario_id: media_preparation
+    equipment_system_variant: general_mixing
+    industry: Food
+    lifecycle: approved
+    label: Media / buffer preparation (Food)
+  - scenario_id: media_preparation
+    equipment_system_variant: inline_mixer
+    industry: Biopharmaceuticals
+    lifecycle: approved
+    label: Inline / powder-induction media prep (Biopharmaceuticals)
+  - scenario_id: media_preparation
+    equipment_system_variant: single_use_mixer
+    industry: Biopharmaceuticals
+    lifecycle: approved
+    label: Single-use media prep (Biopharmaceuticals)
+  - scenario_id: chromatography_resin_slurry
+    equipment_system_variant: general_mixing
+    industry: Biopharmaceuticals
+    lifecycle: approved
+    label: Chromatography resin slurry (Biopharmaceuticals)
+  - scenario_id: chromatography_resin_slurry
+    equipment_system_variant: general_mixing
+    industry: Industrial biotechnology
+    lifecycle: approved
+    label: Chromatography resin slurry (Industrial biotechnology)
 
 scenarios:
   media_preparation:

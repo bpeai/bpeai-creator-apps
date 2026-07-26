@@ -5,7 +5,9 @@ Canonical starter for **design option evaluation** EI apps (DIR → recommendati
 Quality bar: match or exceed the **Life Science Mixing Systems Expert** custom GPT
 (structured DIR workflow, deep option evaluation, markdown report, optional 7-slide PPTX).
 
-SME content comes from a **knowledge pack** under `py/knowledge/<system>/` (default: `mixing`).
+SME content comes from a **knowledge pack** (default seed: `mixing`). Prefer portal **Knowledge** for private packs and DIR CRUD; do not fork DIR menus into `agent.py`. Point the app at a pack id and bind it on the portal.
+
+DIR menus resolve by `(equipment_system_variant × industry × scenario)`. Inputs: `industry`, `equipment_system_variant`, `application`, `system_name`.
 
 If the target pack (or any YAML component) is missing, the agent LLM-bootstraps an
 **initial draft** under `py/knowledge/<id>/` with
@@ -19,7 +21,7 @@ Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\mixing_system_
 
 Then rename class / `app_id` / manifest fields, set `knowledge_pack_id` /
 `equipment_system`, and point `manifest.json` `knowledge_pack` at an existing pack
-(or let the agent draft a new one on first run).
+(platform seed, private portal pack slug, or let the agent draft a new one on first run).
 
 ## Local test
 

@@ -1,0 +1,30 @@
+name: Mirror reminder (creator-apps → bpeai)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "py/libs/bpeai_creator_sdk/**"
+      - "py/knowledge/**"
+      - "py/apps/_templates/**"
+      - "CREATOR_SDK_VERSION"
+      - "CHANGELOG.md"
+      - "CREATOR_PLAYBOOK.md"
+      - "docs/EI_APP_TEMPLATE_DESIGN.md"
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Print mirror instructions
+        run: |
+          echo "Allowlisted paths changed in bpeai-creator-apps."
+          echo "On a machine with both repos checked out, run:"
+          echo "  cd bpeai"
+          echo "  ./scripts/mirror-creator-apps.ps1 -CreatorAppsRoot ../bpeai-creator-apps"
+          echo "Then open a PR into bpeai and rebuild vendor_api after merge."
+          echo "SDK version:"
+          cat CREATOR_SDK_VERSION || true
