@@ -1,0 +1,46 @@
+# DRAFT — initial version pending SME / platform approval.
+# Do not treat as production-validated content until approved.
+pack_id: filtration
+equipment_system: filtration
+version: "0.0.1-draft"
+approval_status: draft_pending_sme_approval
+label: Life science vent / sterile barrier filtration
+description: >
+  Initial draft SME pack for sterile vent / tank-breather filtration DIR
+  questionnaires and option catalogs. Subject to SME / platform approval before
+  production use. Intended for equipment_evaluator apps such as vent_filter_expert.
+
+industries:
+  - Biopharmaceuticals
+  - Pharmaceutical small molecule
+  - Industrial biotechnology
+  - Vaccine manufacturing
+
+default_scenario: sterile_tank_vent
+
+scenario_aliases:
+  sterile_tank_vent:
+    - vent
+    - vent filter
+    - tank vent
+    - tank breather
+    - sterile vent
+    - buffer tank vent
+    - holding tank vent
+  bioreactor_vent:
+    - bioreactor
+    - fermenter
+    - culture vessel vent
+    - sparge vent
+
+taxonomy_preparation_ids:
+  - buffer_solution
+  - cell_culture_media
+  - fermentation_media
+
+prompt_hooks:
+  system_role: senior_process_filtration_engineer
+  emphasize:
+    - Focus on sterile vent / tank-breather barrier filtration, not bulk liquid sterilizing filtration as the primary duty
+    - Consider hydrophobic sterile membranes, housing format, redundancy, condensate/SIP, and integrity testing
+    - Prefer options listed in equipment_options.yaml when recommending

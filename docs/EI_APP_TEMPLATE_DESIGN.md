@@ -62,7 +62,8 @@ SDK may load these when available and fall back gracefully for creator-only clon
 
 ### Pack-local (`bpeai-creator-apps` → `py/knowledge/<system>/`)
 
-**Production packs:** [`py/knowledge/mixing/`](../py/knowledge/mixing/).
+**Production packs:** [`py/knowledge/mixing/`](../py/knowledge/mixing/).  
+**Draft packs:** [`py/knowledge/filtration/`](../py/knowledge/filtration/) (`approval_status: draft_pending_sme_approval`).
 
 | File | Purpose |
 |------|---------|
@@ -75,7 +76,12 @@ SDK may load these when available and fall back gracefully for creator-only clon
 | `pptx_outline.yaml` | Slide outline + `reference_decks` |
 | `references/*.pptx` | Style stubs (replace private decks via `manage_pptx_reference.py`) |
 
-Future systems: `heat_transfer/`, `filtration/`, `chromatography/`, `fluid_transfer/`, `cell_culture/`, …
+If a pack or any of the above components is missing at runtime, the
+`equipment_evaluator` template LLM-bootstraps an initial draft (SDK:
+`sme.pack_bootstrap`; agent: `_ensure_knowledge_pack`). Drafts are subject to
+SME / platform approval before production use.
+
+Future systems: `heat_transfer/`, `chromatography/`, `fluid_transfer/`, `cell_culture/`, …
 
 ---
 

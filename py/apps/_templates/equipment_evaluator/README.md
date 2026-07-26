@@ -7,13 +7,19 @@ Quality bar: match or exceed the **Life Science Mixing Systems Expert** custom G
 
 SME content comes from a **knowledge pack** under `py/knowledge/<system>/` (default: `mixing`).
 
+If the target pack (or any YAML component) is missing, the agent LLM-bootstraps an
+**initial draft** under `py/knowledge/<id>/` with
+`approval_status: draft_pending_sme_approval`. Review before production use.
+
 ## Quick start
 
 ```powershell
 Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\mixing_system_expert
 ```
 
-Then rename class / `app_id` / manifest fields, keep `knowledge_pack: mixing` (or point at another pack).
+Then rename class / `app_id` / manifest fields, set `knowledge_pack_id` /
+`equipment_system`, and point `manifest.json` `knowledge_pack` at an existing pack
+(or let the agent draft a new one on first run).
 
 ## Local test
 

@@ -1,0 +1,42 @@
+# DRAFT — initial version pending SME / platform approval.
+# Required sections for chat evaluation + datasheet_markdown (PDF-equivalent).
+
+required_headings:
+  - "Validated DIR"
+  - "Design basis"
+  - "Strong-fit filter types"
+  - "Recommended basis of design"
+  - "Option evaluation"
+  - "Do not specify"
+  - "Preliminary specification"
+  - "Manufacturers and references"
+
+sections:
+  - id: validated_dir
+    heading: Validated DIR
+    description: Restate DIR code, system, application assumption, and decoded basis bullets.
+  - id: design_basis
+    heading: Design basis
+    description: Narrative implication of the DIR for vent-filter / sterile-barrier selection.
+  - id: objectives
+    heading: Filtration objectives, constraints and failure modes
+    description: Process steps, what can go wrong, target sterile-barrier outcome.
+  - id: strong_fit
+    heading: Strong-fit filter types
+    description: Ranked generic short names; mark recommended basis.
+  - id: recommended
+    heading: Recommended basis of design
+    description: Selection statement plus why-best bullets; cite industrial refs when used.
+  - id: option_evaluation
+    heading: Option evaluation
+    description: Per-option industrial applications, pros, cons/watchouts, manufacturers.
+  - id: exclusions
+    heading: Do not specify
+    description: Technologies that are a poor primary basis for this DIR.
+  - id: specs
+    heading: Preliminary specification
+    description: Spec points, vendor shortlist, references.
+
+min_mixing_options: 5
+require_alternate_basis: true
+require_do_not_specify: true

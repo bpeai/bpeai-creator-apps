@@ -8,9 +8,13 @@ from bpeai_creator_sdk.local_format import format_dir_text, format_result_text
 from bpeai_creator_sdk.local_parse import parse_inputs_heuristic
 from bpeai_creator_sdk.local_run import is_selector_result, repo_py_root
 from bpeai_creator_sdk.sme import (
+    list_missing_pack_files,
     load_knowledge_pack,
+    pack_is_loadable,
     resolve_scenario_id,
+    stamp_draft_meta,
     validate_dir_code,
+    write_pack_file,
 )
 
 
@@ -39,6 +43,46 @@ def test_load_mixing_pack(mixing_pack):
     assert mixing_pack.fragment("depth_requirements")
     system = mixing_pack.build_system_prompt()
     assert "Minimum depth bar" in system or "depth" in system.lower()
+
+
+def test_load_filtration_draft_pack(py_root: Path):
+    pack = load_knowledge_pack("filtration", py_root=py_root)
+    assert pack.pack_id == "filtration"
+    assert pack.equipment_system == "filtration"
+    assert pack.meta.get("approval_status") == "draft_pending_sme_approval"
+    assert "sterile_tank_vent" in pack.scenarios
+    assert pack.option_names()
+    assert resolve_scenario_id(pack, "Buffer tank vent filter") == "sterile_tank_vent"
+    ok = validate_dir_code(pack, "sterile_tank_vent", "2-1-2-3-1-1")
+    assert ok.ok
+
+
+def test_pack_bootstrap_inventory(py_root: Path, tmp_path: Path):
+    assert pack_is_loadable("mixing", py_root=py_root)
+    assert list_missing_pack_files("mixing", py_root=py_root, include_optional=False) == []
+    # Write a tiny draft component into a temp knowledge root via pack_id path override:
+    # use write_pack_file against a fake pack under tmp by monkeypatching knowledge layout.
+    fake_root = tmp_path / "knowledge"
+    fake_root.mkdir()
+    # Direct write into tmp pack dir using write_pack_file's py_root
+    (tmp_path / "knowledge").mkdir(exist_ok=True)
+    path = write_pack_file(
+        "demo_pack",
+        "pack.yaml",
+        stamp_draft_meta(
+            {"label": "Demo"},
+            pack_id="demo_pack",
+            equipment_system="demo",
+        ),
+        py_root=tmp_path,
+        draft=True,
+    )
+    assert path.is_file()
+    text = path.read_text(encoding="utf-8")
+    assert "draft_pending_sme_approval" in text or "DRAFT" in text
+    missing = list_missing_pack_files("demo_pack", py_root=tmp_path, include_optional=False)
+    assert "dir_requirements.yaml" in missing
+    assert not pack_is_loadable("demo_pack", py_root=tmp_path)
 
 
 def test_thin_report_sections():

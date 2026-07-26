@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-"""Equipment evaluator template agent (DIR → evaluate → optional PPTX).
+"""Vent Filter Expert agent (DIR → evaluate → optional PPTX).
 
-Creator checklist after copying this folder to ``py/apps/<your_id>/``:
-  1. Rename this class and set ``app_id`` to match folder / manifest ``id``.
-  2. Set ``creator_display_name`` (hub attribution).
-  3. Set ``knowledge_pack_id`` (and optional ``equipment_system``) for the pack under
-     ``py/knowledge/<id>/``. If the pack or any YAML components are missing, this
-     agent LLM-bootstraps an **initial draft** (pending SME/platform approval).
-  4. Update ``manifest.json`` (slug, label, equipment_system, optional knowledge_pack).
-  5. Local test: ``python py/tools/local_chat.py --app <your_id>`` then DIR → pptx.
-  6. Leave EVALUATION_PROMPT / depth bar alone unless you are changing the
-     deliverable contract; pack ``prompt_fragments.yaml`` is the SME dial.
-  7. Review any ``draft_pending_sme_approval`` pack files before production use.
+Identity (keep in sync with ``manifest.json`` and portal New app):
+  - ``app_id`` / folder: ``vent_filter_expert``
+  - class: ``VentFilterExpertAgent``
+  - ``creator_display_name`` / manifest author.display_name
+  - ``knowledge_pack_id`` → ``py/knowledge/filtration/`` (draft until SME-approved)
+  - Missing pack YAML is LLM-bootstrapped as draft-for-approval via
+    ``_ensure_knowledge_pack`` / ``_generate_pack_component_llm``.
+
+Local test: ``python py/tools/local_chat.py --app vent_filter_expert`` then DIR → pptx.
+Leave EVALUATION_PROMPT / depth bar alone unless changing the deliverable contract;
+pack ``prompt_fragments.yaml`` is the SME dial.
 
 Local artifacts (gitignored ``./artifacts/``): markdown + PDF; optional PPTX.
 Portal hub stores ``datasheet_markdown`` as S3 ``.md`` only (no PDF/PPTX upload).
@@ -30,7 +30,7 @@ if __package__ is None or __package__ == "":
     _sdk_src = _py_root / "libs" / "bpeai_creator_sdk" / "src"
     if str(_sdk_src) not in sys.path:
         sys.path.insert(0, str(_sdk_src))
-    __package__ = "apps._templates.equipment_evaluator"
+    __package__ = "apps.vent_filter_expert"
 
 import json
 import re
@@ -59,7 +59,7 @@ from bpeai_creator_sdk.sme import (
 )
 from bpeai_creator_sdk.tools import enrich_search_hits_with_excerpts, format_search_context
 
-PPTX_SLIDE_PACK_PROMPT = """Convert this mixing evaluation JSON into a presentation slide pack.
+PPTX_SLIDE_PACK_PROMPT = """Convert this vent-filtration evaluation JSON into a presentation slide pack.
 
 Return ONLY JSON with this shape:
 {
@@ -77,36 +77,36 @@ Return ONLY JSON with this shape:
     },
     {
       "id": "design_basis",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Vent Filter Selection / <system>",
       "heading": "Design basis from DIR code",
       "cards": [{"label": "WORKING VOLUME", "value": "...", "accent": false}],
       "selection_implication": "2 sentences max"
     },
     {
       "id": "objectives",
-      "eyebrow": "Agitator Selection / <system>",
-      "heading": "Mixing objectives, constraints and failure modes",
+      "eyebrow": "Vent Filter Selection / <system>",
+      "heading": "Filtration objectives, constraints and failure modes",
       "process_steps": [{"n": 1, "title": "...", "detail": "..."}],
       "failure_modes": ["...", "..."],
       "target_outcome": "one concise outcome sentence"
     },
     {
       "id": "options",
-      "eyebrow": "Agitator Selection / <system>",
-      "heading": "Realistic mixing-system options",
+      "eyebrow": "Vent Filter Selection / <system>",
+      "heading": "Realistic vent-filtration options",
       "rows": [{"name": "...", "fit": "best|strong|conditional|limited|add-on|special-case", "notes": "..."}],
       "recommendation_line": "Recommendation: ..."
     },
     {
       "id": "matrix",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Vent Filter Selection / <system>",
       "heading": "Option evaluation matrix",
       "rows": [{"option":"...","technical_fit":"...","gmp":"...","scale_up_risk":"...","cost_schedule":"...","reliability":"...","rank":1}],
       "decision_logic": "one short paragraph"
     },
     {
       "id": "recommendation",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Vent Filter Selection / <system>",
       "heading": "Recommended basis and alternate option",
       "recommended": "...",
       "recommended_why": ["...", "..."],
@@ -117,7 +117,7 @@ Return ONLY JSON with this shape:
     },
     {
       "id": "specs",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Vent Filter Selection / <system>",
       "heading": "Preliminary specification points / vendors / references",
       "specs": ["..."],
       "manufacturers": ["..."],
@@ -225,26 +225,36 @@ def _dir_aware_queries(
         str(d.get("label") or "").lower(): str(d.get("option_text") or "")
         for d in decoded
     }
-    volume = by_label.get("working volume", "")
-    vessel = next((v for k, v in by_label.items() if "vessel" in k or "format" in k or "tank" in k), "")
-    solids = next(
-        (v for k, v in by_label.items() if "media" in k or "solids" in k or "resin" in k),
+    volume = next(
+        (v for k, v in by_label.items() if "volume" in k),
+        by_label.get("working volume", ""),
+    )
+    vessel = next((v for k, v in by_label.items() if "vessel" in k or "format" in k), "")
+    duty = next(
+        (v for k, v in by_label.items() if "gas" in k or "vent" in k or "duty" in k or "exhaust" in k),
         "",
     )
-    duty = next((v for k, v in by_label.items() if "objective" in k or "duty" in k), "")
-    powder = next((v for k, v in by_label.items() if "powder" in k or "addition" in k), "")
+    barrier = next(
+        (v for k, v in by_label.items() if "steril" in k or "barrier" in k),
+        "",
+    )
+    fmt = next((v for k, v in by_label.items() if "filter format" in k or "format preference" in k), "")
+    thermal = next(
+        (v for k, v in by_label.items() if "thermal" in k or "condensate" in k or "sip" in k),
+        "",
+    )
 
     queries = [
-        f"{system_name} {equipment_system} agitator {application} {volume}".strip(),
-        f"{application} media preparation vessel agitator impeller selection {vessel}".strip(),
-        f"sanitary {equipment_system} {solids} {duty} {application}".strip(),
-        f"biopharmaceutical powder dissolution agitator hydrofoil {volume}".strip(),
-        f"inline powder induction eductor media buffer preparation {powder}".strip(),
-        f"aseptic magnetic bottom mixer biopharmaceutical {vessel}".strip(),
-        # Vendor / product-line discovery (deeper citations)
-        f"Lightnin A310 A510 hydrofoil media preparation biopharmaceutical agitator",
-        f"Admix Fastfeed Silverson Flashmix powder induction biopharma",
-        f"Alfa Laval LeviMag magnetic mixer single use biopharmaceutical",
+        f"{system_name} sterile vent filter {application} {volume}".strip(),
+        f"{application} tank vent hydrophobic sterile filter {vessel} {duty}".strip(),
+        f"biopharmaceutical sterile tank breather filter 0.2 micron {barrier}".strip(),
+        f"hydrophobic PTFE vent filter capsule CIP SIP {thermal}".strip(),
+        f"sanitary sterile vent filter housing heated condensate {fmt}".strip(),
+        f"single-use bioreactor exhaust sterile vent filter {application}".strip(),
+        # Vendor / product-line discovery
+        f"Pall Emflon hydrophobic sterile vent filter biopharmaceutical",
+        f"Sartorius Midisart hydrophobic vent filter tank breather",
+        f"Millipore Aervent sterile air vent filter biopharma",
     ]
     # Deduplicate while preserving order.
     seen: set[str] = set()
@@ -292,18 +302,17 @@ def _write_pdf_artifact(result: Dict[str, Any]) -> Path | None:
     return build_evaluation_pdf(result, output_path=target)
 
 
-class EquipmentEvaluatorAgent(CreatorAppBase):
-    """Pack-backed DIR → evaluate template (custom-GPT parity).
+class VentFilterExpertAgent(CreatorAppBase):
+    """Pack-backed DIR → evaluate agent for vent / sterile barrier filtration.
 
-    After copy: rename class, ``app_id``, ``knowledge_pack_id``, ``creator_display_name``.
-    Missing packs / YAML components are LLM-bootstrapped as draft-for-approval.
+    Uses ``py/knowledge/filtration/`` (draft until SME-approved). Missing pack
+    YAML components are LLM-bootstrapped as draft-for-approval.
     """
 
-    app_id = "equipment_evaluator"
-    knowledge_pack_id = "mixing"
-    # Hint for pack bootstrap when the pack folder does not exist yet.
-    equipment_system = "mixing"
-    creator_display_name = "Your Name"
+    app_id = "vent_filter_expert"
+    knowledge_pack_id = "filtration"
+    equipment_system = "filtration"
+    creator_display_name = "Redcaad"
 
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         system_name = str(inputs.get("system_name") or "Process Vessel").strip()
@@ -313,7 +322,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         deliverable = str(inputs.get("deliverable") or "evaluation").strip().lower()
 
         pack_id = str(
-            inputs.get("knowledge_pack") or self.knowledge_pack_id or "mixing"
+            inputs.get("knowledge_pack") or self.knowledge_pack_id or "filtration"
         ).strip()
         py_root = repo_py_root()
         eq_system = str(
@@ -871,7 +880,7 @@ def run_from_stdio() -> None:
 
     raw = sys.stdin.buffer.read().decode("utf-8-sig")
     inputs = json.loads(raw) if raw.strip() else {}
-    agent = EquipmentEvaluatorAgent(status_callback=lambda m: print(m, file=sys.stderr))
+    agent = VentFilterExpertAgent(status_callback=lambda m: print(m, file=sys.stderr))
     result = agent.run(inputs)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

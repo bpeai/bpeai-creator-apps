@@ -1,0 +1,21 @@
+{
+  "id": "vent_filter_expert",
+  "slug": "vent-filter-expert",
+  "label": "Vent Filter Expert",
+  "description": "DIR → design option evaluation for sterile vent / tank-breather filtration, backed by an SME knowledge pack.",
+  "equipment_system": "filtration",
+  "equipment_subtypes": ["vent_filter", "tank_breather", "sterile_barrier"],
+  "author": {
+    "creator_id": "redcaad",
+    "display_name": "Redcaad"
+  },
+  "app_kind": "creator",
+  "output_schema_version": "equipment_selector_v1",
+  "required_inputs": ["system_name"],
+  "route": "/engineering/equipment-intelligence/vent-filter-expert",
+  "runtime": "server",
+  "min_tier": "INDIVIDUAL",
+  "status": "draft",
+  "python_entrypoint": "apps.vent_filter_expert.agent",
+  "knowledge_pack": "filtration"
+}

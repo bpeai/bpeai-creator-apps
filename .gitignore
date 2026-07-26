@@ -6,4 +6,5 @@ __pycache__/
 venv/
 .env
 .DS_Store
-artifacts/
+# Local evaluation outputs (md/pdf/pptx), not the SDK artifacts package
+/artifacts/
