@@ -41,7 +41,7 @@ Work in the dedicated GitHub repo: **[bpeai/bpeai-creator-apps](https://github.c
 
 **Platform note (templates):** EI apps use a **template family** (by deliverable) + **SME knowledge pack** + **shared SDK**. Start from `py/apps/_templates/equipment_evaluator`. See [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md).
 
-**Knowledge ownership:** Your pack content is **private to your apps** (portal-managed). Platform seeds under `py/knowledge/` (e.g. `mixing`) are BPEAI-owned; bind them or **clone** into a private pack on the portal. Do not expect other creators to see your pack. Python agent code still ships only via git PR (no zip upload).
+**Knowledge ownership:** Your pack content is **private to your apps** (portal-managed). Canonical platform seeds live in the **website deploy repo** (`bpeai/py/knowledge/`, e.g. `mixing`, `filtration`) — **not** in this repo. Bind or **clone** them on the portal. This repo only has `py/knowledge/_examples/` stubs for local SDK tests. Python agent code still ships only via git PR (no zip upload).
 
 ### 1.1 Clone once, add apps over time
 
@@ -63,7 +63,7 @@ Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\heat_exchanger
 ```text
 py/apps/_templates/equipment_evaluator/   # copy source — do not edit in place for your app
 py/apps/<your_id>/                        # your app (open a PR that adds this)
-py/knowledge/<system>/                    # platform seed packs only (BPEAI); your packs live in portal/DB
+py/knowledge/_examples/                   # thin stubs for local tests only (not production seeds)
 py/libs/bpeai_creator_sdk/                # do not fork; BPEAI mirrors into website deploy
 ```
 
@@ -106,7 +106,7 @@ You *can* create the portal draft first, but module/class must still match the c
 | Portal **Slug** | `heat-exchanger-evaluator` | URL segment; shown read-only on Settings after create |
 | Portal **Python module** | `apps.heat_exchanger_evaluator.agent` | Runtime import path |
 | Portal **Agent class** | `HeatExchangerEvaluatorAgent` | Exact class name in `agent.py` |
-| Knowledge pack | `mixing` (or your pack id) | `py/knowledge/<pack>/`; manifest `knowledge_pack` optional (defaults to `equipment_system`) |
+| Knowledge pack | `mixing` (or your pack id) | Portal bind/clone; platform seeds in website `py/knowledge/`; manifest `knowledge_pack` optional |
 
 ### 1.5 Local test
 
@@ -163,7 +163,7 @@ Draft exists in DB. Runtime fails until Python is on the server (next step).
 
 ## 3. Install Python on the server — Creator + BPEAI
 
-**No upload API.** Code ships via git PR. BPEAI mirrors `py/apps/<id>/`, and as needed `py/knowledge/` + `bpeai_creator_sdk`, into the website deploy repo.
+**No upload API.** Code ships via git PR. BPEAI mirrors `py/apps/<id>/` + `bpeai_creator_sdk` (not production knowledge packs) into the website deploy repo.
 
 | Step | Who |
 |------|-----|

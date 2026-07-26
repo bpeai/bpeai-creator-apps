@@ -1,0 +1,7 @@
+options:
+  - name: Axial hydrofoil agitator
+    fit_hints: [best, strong]
+  - name: Pitched-blade turbine
+    fit_hints: [conditional, strong]
+  - name: Inline powder induction
+    fit_hints: [strong, add-on]

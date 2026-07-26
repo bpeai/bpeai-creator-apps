@@ -5,9 +5,10 @@ from __future__ import annotations
 Creator checklist after copying this folder to ``py/apps/<your_id>/``:
   1. Rename this class and set ``app_id`` to match folder / manifest ``id``.
   2. Set ``creator_display_name`` (hub attribution).
-  3. Set ``knowledge_pack_id`` (and optional ``equipment_system``) for the pack under
-     ``py/knowledge/<id>/``. If the pack or any YAML components are missing, this
-     agent LLM-bootstraps an **initial draft** (pending SME/platform approval).
+  3. Set ``knowledge_pack_id`` (and optional ``equipment_system``) to a platform
+     or portal pack id. Canonical seeds live in the bpeai deploy repo; private
+     packs are portal-managed. If missing locally, this agent may LLM-bootstrap
+     an **initial draft** under ``py/knowledge/<id>/`` (pending approval).
   4. Update ``manifest.json`` (slug, label, equipment_system, optional knowledge_pack).
   5. Local test: ``python py/tools/local_chat.py --app <your_id>`` then DIR → pptx.
   6. Leave EVALUATION_PROMPT / depth bar alone unless you are changing the

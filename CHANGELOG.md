@@ -1,5 +1,15 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.1 — 2026-07-26
+
+### Knowledge packs: examples only in this repo
+
+- Removed production `py/knowledge/mixing/` and `py/knowledge/filtration/` from creator-apps.
+- Canonical platform seeds live in **bpeai** `py/knowledge/`.
+- Added `py/knowledge/_examples/mixing_stub/` for local SDK unit tests.
+- Mirror script/workflow no longer treat production knowledge as creator-apps content.
+- Integration tests that need full mixing load from `BPEAI_KNOWLEDGE_ROOT` or sibling `bpeai/py/knowledge`.
+
 ## 0.2.0 — 2026-07-26
 
 ### Knowledge pack alignment (hybrid)

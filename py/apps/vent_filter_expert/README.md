@@ -3,11 +3,12 @@
 DIR → design option evaluation for sterile vent / tank-breather filtration.
 
 Starter from `py/apps/_templates/equipment_evaluator`. SME content uses the
-**filtration** pack (`py/knowledge/filtration/`) — currently
-`draft_pending_sme_approval` (initial version for review).
+**filtration** platform pack — canonical location is the **bpeai** deploy repo
+(`py/knowledge/filtration/`, draft pending SME approval). Bind/clone on the portal.
 
-If pack YAML components are missing at runtime, the agent LLM-bootstraps draft
-files via `_ensure_knowledge_pack` (subject to SME/platform approval).
+If pack YAML is missing locally, the agent LLM-bootstraps a draft via
+`_ensure_knowledge_pack` (subject to SME/platform approval). Do not commit a
+full filtration pack into creator-apps.
 
 ## Identity (must match portal)
 
@@ -22,6 +23,8 @@ files via `_ensure_knowledge_pack` (subject to SME/platform approval).
 
 ## Local test
 
+Prefer portal pack payload / sync, or bootstrap on first run:
+
 ```powershell
 python py\tools\local_chat.py --app vent_filter_expert
 # > Buffer hold tank vent filter, biopharma
@@ -35,7 +38,7 @@ Artifacts (markdown + PDF + optional PPTX) write under `./artifacts/` (gitignore
 
 | Phase | Trigger | Result |
 |-------|---------|--------|
-| DIR | no `dir_code`, or `phase=dir` | Questionnaire + captioned common codes from pack YAML |
+| DIR | no `dir_code`, or `phase=dir` | Questionnaire + captioned common codes from pack |
 | Evaluate | valid `dir_code` | GPT-parity `equipment_selector_v1` + sectioned `datasheet_markdown` (+ `.md` / `.pdf`) |
 | PPTX | `pptx` / `y` in local chat, or `deliverable=pptx` | 7-slide deck with auto-fit fonts |
 
@@ -48,4 +51,4 @@ Artifacts (markdown + PDF + optional PPTX) write under `./artifacts/` (gitignore
 
 - Design: `docs/EI_APP_TEMPLATE_DESIGN.md`
 - Playbook: `CREATOR_PLAYBOOK.md`
-- Pack: `py/knowledge/filtration/` (draft — pending approval)
+- Pack (canonical): `bpeai/py/knowledge/filtration/` (draft — pending approval)

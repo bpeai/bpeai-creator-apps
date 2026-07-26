@@ -36,7 +36,8 @@ Artifacts (gitignored ./artifacts/): *_evaluation.md, *_evaluation.pdf, optional
 *_evaluation.pptx. Portal hub datasheets use datasheet_markdown → S3 .md only.
 
 Start from py/apps/_templates/equipment_evaluator (not the legacy mixing matcher
-example). SME packs live under py/knowledge/<system>/. Manage reference PPTX stubs:
+example). Platform SME packs live in the bpeai deploy repo (`py/knowledge/<system>/`);
+this repo only has `_examples/` stubs. Manage reference PPTX stubs against bpeai seeds:
 
   python py/tools/manage_pptx_reference.py --pack mixing list
 

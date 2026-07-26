@@ -28,23 +28,30 @@ DRAFT_BANNER = (
 )
 
 
-def pack_dir(pack_id: str, *, py_root: Path | None = None) -> Path:
+def pack_dir(
+    pack_id: str,
+    *,
+    py_root: Path | None = None,
+    pack_root: Path | None = None,
+) -> Path:
     pid = (pack_id or "").strip()
     if not pid:
         raise ValueError("pack_id is required")
-    return (knowledge_root(py_root) / pid).resolve()
+    root = Path(pack_root) if pack_root else knowledge_root(py_root)
+    return (root / pid).resolve()
 
 
 def list_missing_pack_files(
     pack_id: str,
     *,
     py_root: Path | None = None,
+    pack_root: Path | None = None,
     required: Sequence[str] = PACK_FILES,
     optional: Sequence[str] = OPTIONAL_PACK_FILES,
     include_optional: bool = True,
 ) -> List[str]:
-    """Return filenames that are missing under ``py/knowledge/<pack_id>/``."""
-    root = pack_dir(pack_id, py_root=py_root)
+    """Return filenames that are missing under the pack directory."""
+    root = pack_dir(pack_id, py_root=py_root, pack_root=pack_root)
     wanted = list(required)
     if include_optional:
         wanted.extend(optional)
@@ -55,11 +62,17 @@ def list_missing_pack_files(
     return missing
 
 
-def pack_is_loadable(pack_id: str, *, py_root: Path | None = None) -> bool:
+def pack_is_loadable(
+    pack_id: str,
+    *,
+    py_root: Path | None = None,
+    pack_root: Path | None = None,
+) -> bool:
     """True when every core PACK_FILES entry exists (optional files ignored)."""
     return not list_missing_pack_files(
         pack_id,
         py_root=py_root,
+        pack_root=pack_root,
         include_optional=False,
     )
 

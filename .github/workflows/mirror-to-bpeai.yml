@@ -5,7 +5,6 @@ on:
     branches: [main, master]
     paths:
       - "py/libs/bpeai_creator_sdk/**"
-      - "py/knowledge/**"
       - "py/apps/_templates/**"
       - "CREATOR_SDK_VERSION"
       - "CHANGELOG.md"
@@ -26,5 +25,6 @@ jobs:
           echo "  cd bpeai"
           echo "  ./scripts/mirror-creator-apps.ps1 -CreatorAppsRoot ../bpeai-creator-apps"
           echo "Then open a PR into bpeai and rebuild vendor_api after merge."
+          echo "NOTE: py/knowledge is NOT mirrored (canonical seeds live in bpeai)."
           echo "SDK version:"
           cat CREATOR_SDK_VERSION || true

@@ -1,0 +1,11 @@
+dir_code:
+  min_index: 1
+equipment_option_name:
+  mode: soft
+application:
+  mode: soft
+  normalize: lowercase_strip
+  aliases:
+    biopharma: biopharmaceutical
+fit_enum:
+  allowed: [best, strong, conditional, limited, add-on, special-case]

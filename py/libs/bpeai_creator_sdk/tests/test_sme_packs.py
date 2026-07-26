@@ -26,47 +26,44 @@ def py_root() -> Path:
 
 
 @pytest.fixture(scope="module")
-def mixing_pack(py_root: Path):
-    return load_knowledge_pack("mixing", py_root=py_root)
+def examples_root(py_root: Path) -> Path:
+    return py_root / "knowledge" / "_examples"
 
 
-def test_repo_py_root_finds_knowledge(py_root: Path):
+@pytest.fixture(scope="module")
+def mixing_stub(py_root: Path, examples_root: Path):
+    return load_knowledge_pack("mixing_stub", py_root=py_root, pack_root=examples_root)
+
+
+def test_repo_has_example_stub_not_production_packs(py_root: Path):
     root = repo_py_root(py_root)
-    assert (root / "knowledge" / "mixing" / "pack.yaml").is_file()
+    assert (root / "knowledge" / "_examples" / "mixing_stub" / "pack.yaml").is_file()
+    assert not (root / "knowledge" / "mixing").is_dir()
+    assert not (root / "knowledge" / "filtration").is_dir()
 
 
-def test_load_mixing_pack(mixing_pack):
-    assert mixing_pack.pack_id == "mixing"
-    assert mixing_pack.equipment_system == "mixing"
-    assert "media_preparation" in mixing_pack.scenarios
-    assert mixing_pack.option_names()
-    assert mixing_pack.fragment("role")
-    assert mixing_pack.fragment("depth_requirements")
-    system = mixing_pack.build_system_prompt()
-    assert "Minimum depth bar" in system or "depth" in system.lower()
+def test_load_mixing_stub(mixing_stub):
+    assert mixing_stub.pack_id == "mixing_stub"
+    assert mixing_stub.equipment_system == "mixing"
+    assert "media_preparation" in mixing_stub.scenarios
+    assert mixing_stub.option_names()
+    assert mixing_stub.fragment("role")
+    assert mixing_stub.fragment("depth_requirements")
+    system = mixing_stub.build_system_prompt()
+    assert "depth" in system.lower() or "EXAMPLE" in system or "example" in system.lower()
 
 
-def test_load_filtration_draft_pack(py_root: Path):
-    pack = load_knowledge_pack("filtration", py_root=py_root)
-    assert pack.pack_id == "filtration"
-    assert pack.equipment_system == "filtration"
-    assert pack.meta.get("approval_status") == "draft_pending_sme_approval"
-    assert "sterile_tank_vent" in pack.scenarios
-    assert pack.option_names()
-    assert resolve_scenario_id(pack, "Buffer tank vent filter") == "sterile_tank_vent"
-    ok = validate_dir_code(pack, "sterile_tank_vent", "2-1-2-3-1-1")
-    assert ok.ok
-
-
-def test_pack_bootstrap_inventory(py_root: Path, tmp_path: Path):
-    assert pack_is_loadable("mixing", py_root=py_root)
-    assert list_missing_pack_files("mixing", py_root=py_root, include_optional=False) == []
-    # Write a tiny draft component into a temp knowledge root via pack_id path override:
-    # use write_pack_file against a fake pack under tmp by monkeypatching knowledge layout.
-    fake_root = tmp_path / "knowledge"
-    fake_root.mkdir()
-    # Direct write into tmp pack dir using write_pack_file's py_root
-    (tmp_path / "knowledge").mkdir(exist_ok=True)
+def test_pack_bootstrap_inventory(py_root: Path, examples_root: Path, tmp_path: Path):
+    assert pack_is_loadable("mixing_stub", py_root=py_root, pack_root=examples_root)
+    assert (
+        list_missing_pack_files(
+            "mixing_stub",
+            py_root=py_root,
+            pack_root=examples_root,
+            include_optional=False,
+        )
+        == []
+    )
     path = write_pack_file(
         "demo_pack",
         "pack.yaml",
@@ -102,7 +99,6 @@ def test_thin_report_sections():
     )
     assert thin_report_sections(rich_md, headings, min_chars=120) == []
 
-    # Nested ## under # Option evaluation should count toward depth
     nested = (
         "# Option evaluation\n"
         "## Option 1\n"
@@ -113,52 +109,39 @@ def test_thin_report_sections():
     assert thin_report_sections(nested, ["Option evaluation"], min_chars=120) == []
 
 
-def test_resolve_scenario_aliases(mixing_pack):
-    assert resolve_scenario_id(mixing_pack, "Media Preparation Vessel") == "media_preparation"
-    assert (
-        resolve_scenario_id(mixing_pack, "Chromatography resin slurry tank")
-        == "chromatography_resin_slurry"
-    )
+def test_resolve_scenario_aliases(mixing_stub):
+    assert resolve_scenario_id(mixing_stub, "Media Preparation Vessel") == "media_preparation"
 
 
-def test_resolve_dir_menu_industry_variant(mixing_pack):
+def test_resolve_dir_menu_industry_variant(mixing_stub):
     menu = resolve_dir_menu(
-        mixing_pack,
+        mixing_stub,
         system_name="Media Preparation Vessel",
-        industry="Industrial biotechnology",
+        industry="Biopharmaceuticals",
         equipment_system_variant="general_mixing",
         require_approved=True,
     )
     assert menu.scenario_id == "media_preparation"
-    assert menu.industry == "Industrial biotechnology"
+    assert menu.industry == "Biopharmaceuticals"
     assert menu.is_approved
-    assert len(menu.requirements) == 6
-
-    inline = resolve_dir_menu(
-        mixing_pack,
-        system_name="Inline powder induction media prep",
-        industry="Biopharmaceuticals",
-        require_approved=True,
-    )
-    assert inline.equipment_system_variant == "inline_mixer"
-    assert inline.industry == "Biopharmaceuticals"
+    assert len(menu.requirements) == 3
 
 
-def test_validate_dir_code_ok(mixing_pack):
-    result = validate_dir_code(mixing_pack, "media_preparation", "2-1-2-3-1-1")
+def test_validate_dir_code_ok(mixing_stub):
+    result = validate_dir_code(mixing_stub, "media_preparation", "2-1-2")
     assert result.ok
-    assert len(result.decoded) == 6
+    assert len(result.decoded) == 3
 
 
-def test_validate_dir_code_bad_length(mixing_pack):
-    result = validate_dir_code(mixing_pack, "media_preparation", "2-1-2")
+def test_validate_dir_code_bad_length(mixing_stub):
+    result = validate_dir_code(mixing_stub, "media_preparation", "2-1")
     assert not result.ok
-    assert "Expected 6" in result.error
+    assert "Expected 3" in result.error
     assert result.suggested_correction
 
 
-def test_validate_dir_code_out_of_range(mixing_pack):
-    result = validate_dir_code(mixing_pack, "media_preparation", "9-1-2-3-1-1")
+def test_validate_dir_code_out_of_range(mixing_stub):
+    result = validate_dir_code(mixing_stub, "media_preparation", "9-1-2")
     assert not result.ok
 
 
@@ -194,13 +177,13 @@ def test_format_dir_text():
                     "options": [{"index": 1, "text": "50–250 L"}],
                 }
             ],
-            "common_codes": ["2-1-2-3-1-1"],
+            "common_codes": ["2-1-2"],
             "message": "Reply with a DIR code.",
         }
     )
     assert "Design Input Requirements" in text
     assert "Working volume" in text
-    assert "2-1-2-3-1-1" in text
+    assert "2-1-2" in text
     assert format_result_text({"phase": "dir_requirements", "requirements": []}).startswith(
         "Design Input"
     )

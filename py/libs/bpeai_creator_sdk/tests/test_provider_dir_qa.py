@@ -22,10 +22,11 @@ from bpeai_creator_sdk.llm.resolve import llm_credentials_present
 from bpeai_creator_sdk.local_run import ensure_import_paths, run_agent
 from bpeai_creator_sdk.output import validate_output
 from bpeai_creator_sdk.sme import (
-    load_knowledge_pack,
     missing_report_headings,
     validate_dir_code,
 )
+
+from pack_paths import load_platform_pack_or_skip
 
 DIR_CODE = "2-1-2-3-1-1"
 SCENARIO = "media_preparation"
@@ -55,7 +56,7 @@ def py_root() -> Path:
 
 @pytest.fixture(scope="module")
 def mixing_pack(py_root: Path):
-    return load_knowledge_pack("mixing", py_root=py_root)
+    return load_platform_pack_or_skip("mixing", py_root)
 
 
 @pytest.mark.llm

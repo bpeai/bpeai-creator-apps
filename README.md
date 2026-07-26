@@ -9,9 +9,13 @@ used for local test.
 
 **Full playbook:** [CREATOR_PLAYBOOK.md](./CREATOR_PLAYBOOK.md)
 
-**Template architecture (beta locked):** [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md) —
-template family × knowledge pack × SDK. Production mixing pack:
-[`py/knowledge/mixing/`](./py/knowledge/mixing/).
+**Template architecture:** [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md) —
+template family × knowledge pack × SDK.
+
+**Knowledge packs:** Canonical platform seeds live in the **bpeai** deploy repo
+(`py/knowledge/mixing`, `filtration`, …). This repo only has
+[`py/knowledge/_examples/`](./py/knowledge/_examples/) stubs for local tests.
+Creator private packs are portal-managed — do not PR full SME packs here.
 
 ## What this repo is for
 
@@ -24,7 +28,7 @@ template family × knowledge pack × SDK. Production mixing pack:
 ```text
 py/
   libs/bpeai_creator_sdk/               ← shared SDK (do not fork; BPEAI mirrors)
-  knowledge/<system>/                   ← SME packs (YAML + stub reference PPTX)
+  knowledge/_examples/                  ← thin stubs for local tests only
   apps/
     _templates/equipment_evaluator/     ← copy this to start (DIR → evaluate)
     examples/mixing_agitator_matcher/   ← LEGACY — do not copy (historical only)
@@ -42,7 +46,7 @@ py/
 
 3. Rename the agent class and set `app_id` / `knowledge_pack_id` to match your pack.
 4. Edit `manifest.json` (slug, label, description, `equipment_system`, optional `knowledge_pack`).
-5. Prefer editing **YAML packs** under `py/knowledge/<system>/` for DIR / options / prompts — not giant prompt strings.
+5. Manage DIR / options on the portal **Knowledge** page (or clone a platform seed). Do not add production packs under `py/knowledge/`.
 6. **Local test** (smart text preferred):
 
    ```powershell
@@ -52,42 +56,9 @@ py/
    # > pptx
    ```
 
-   Optional personal key: copy `.env.example` → `.env` (gitignored). For evaluator
-   depth set `OPENAI_CREATOR_MODEL=gpt-5.2` and `OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000`
-   (code default remains `gpt-4o`). Optional v1 providers: `CREATOR_LLM_PROVIDER=anthropic|google|xai`
-   (see [docs/PROVIDER_DIR_QA.md](./docs/PROVIDER_DIR_QA.md)).
-   See [docs/PORTAL_SDK_LOCAL_TEST.md](./docs/PORTAL_SDK_LOCAL_TEST.md).
+   Optional: sync a pack from the portal with `py/tools/sync_knowledge_pack.py`.
 
-   Local artifacts (gitignored `./artifacts/`): `*_evaluation.md`, `*_evaluation.pdf`,
-   optional `*_evaluation.pptx`. **Portal hub datasheets use markdown only**
-   (`datasheet_markdown` → S3 `.md`).
+7. Open a PR with `py/apps/<your_id>/` only (plus docs if needed).
+8. After BPEAI merges + rebuilds: portal **Test** → **Submit** → admin publish.
 
-7. Push your branch and **open a PR** into this repo.
-8. On **bpiplatform.bpeai.com**:
-   - **New app** → set Python module `apps.<your_id>.agent` and agent class name
-   - After BPEAI merges & deploys → **Test** → **Submit for review**
-
-Full contract: [bpiplatform.bpeai.com/sdk](https://bpiplatform.bpeai.com/sdk) and
-`py/libs/bpeai_creator_sdk/README.md`.
-
-## Required output
-
-Your agent must return `equipment_selector_v1` with at least:
-
-- `equipment_tag`, `selected_model`, `equipment_system`
-- `key_specs[]`, `rationale`
-- `creator_attribution` `{ display_name, app_id }`
-
-Evaluator apps also populate GPT-parity fields (`design_basis`, `failure_modes`,
-`mixing_options`, `evaluation_matrix`, `datasheet_markdown`, …).
-
-## Roles
-
-| Who | Does |
-|-----|------|
-| **Creator** | Code here, local test, portal draft, portal Test, Submit |
-| **BPEAI** | Review PR, copy into main `bpeai` deploy repo, rebuild `vendor_api`, publish on the hub |
-
-## Support
-
-Questions about access or publish: contact your BPEAI technical lead.
+See [CREATOR_PLAYBOOK.md](./CREATOR_PLAYBOOK.md) for the full flow.

@@ -22,7 +22,7 @@ Day-to-day edits for templates/SDK/seeds land first in **bpeai-creator-apps**, t
 | Layer | Responsibility | Lives in |
 |-------|----------------|----------|
 | **1. Template family** | Deliverable / output contract + run phases | `py/apps/_templates/<family>/` |
-| **2. Knowledge pack** | Creator (or platform) SME content: DIR menus, options, prompts | Platform seeds: `py/knowledge/<id>/`; creator packs: Postgres (+ S3 snapshots) |
+| **2. Knowledge pack** | Creator (or platform) SME content: DIR menus, options, prompts | Platform seeds: **bpeai** `py/knowledge/<id>/`; creator packs: Postgres (+ S3 snapshots); this repo: `_examples/` stubs only |
 | **3. SDK** | Shared LLM helpers, pack loading, validation, artifacts | `py/libs/bpeai_creator_sdk/` |
 
 **Rule:** If SMEs would debate a list in a meeting, it belongs in a knowledge pack (or shared `bpeai_taxonomy`), not buried in a prompt string.
@@ -72,10 +72,14 @@ Do **not** fork a new Python template per equipment system. Systems differ by **
 
 SDK may load these when available and fall back gracefully for creator-only clones.
 
-### Platform seed packs (`bpeai-creator-apps` → `py/knowledge/<id>/`)
+### Platform seed packs (`bpeai` deploy → `py/knowledge/<id>/`)
 
-**Production packs:** [`py/knowledge/mixing/`](../py/knowledge/mixing/).  
-**Draft packs:** [`py/knowledge/filtration/`](../py/knowledge/filtration/) (`approval_status: draft_pending_sme_approval`).
+Canonical seeds live in the **website deploy repo**, not here:
+
+- Production: `bpeai/py/knowledge/mixing/`
+- Draft: `bpeai/py/knowledge/filtration/` (`approval_status: draft_pending_sme_approval`)
+
+This authoring repo only ships **example stubs**: [`py/knowledge/_examples/`](../py/knowledge/_examples/).
 
 | File | Purpose |
 |------|---------|
@@ -87,10 +91,9 @@ SDK may load these when available and fall back gracefully for creator-only clon
 | `report_outline.yaml` / `pptx_outline.yaml` | Report / slide outlines |
 | `references/*.pptx` | Style stubs |
 
-If a pack or any of the above components is missing at runtime, the
-`equipment_evaluator` template LLM-bootstraps an initial draft (SDK:
-`sme.pack_bootstrap`; agent: `_ensure_knowledge_pack`). Drafts are subject to
-SME / platform approval before production use.
+Creators manage private packs on the portal. If a pack is missing locally, the
+`equipment_evaluator` template may LLM-bootstrap a draft (SDK: `sme.pack_bootstrap`).
+Drafts need SME / platform approval before production use.
 
 Future systems: `heat_transfer/`, `chromatography/`, `fluid_transfer/`, `cell_culture/`, …
 

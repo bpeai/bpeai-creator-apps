@@ -5,11 +5,14 @@ Canonical starter for **design option evaluation** EI apps (DIR → recommendati
 Quality bar: match or exceed the **Life Science Mixing Systems Expert** custom GPT
 (structured DIR workflow, deep option evaluation, markdown report, optional 7-slide PPTX).
 
-SME content comes from a **knowledge pack** (default seed: `mixing`). Prefer portal **Knowledge** for private packs and DIR CRUD; do not fork DIR menus into `agent.py`. Point the app at a pack id and bind it on the portal.
+SME content comes from a **knowledge pack** (default id: `mixing`). Prefer portal
+**Knowledge** for private packs and DIR CRUD; do not fork DIR menus into `agent.py`.
+Canonical platform seeds live in **bpeai** `py/knowledge/` — not in this repo
+(only `_examples/` stubs exist here for SDK tests).
 
 DIR menus resolve by `(equipment_system_variant × industry × scenario)`. Inputs: `industry`, `equipment_system_variant`, `application`, `system_name`.
 
-If the target pack (or any YAML component) is missing, the agent LLM-bootstraps an
+If the target pack is missing locally, the agent may LLM-bootstrap an
 **initial draft** under `py/knowledge/<id>/` with
 `approval_status: draft_pending_sme_approval`. Review before production use.
 
@@ -60,4 +63,5 @@ python py\tools\manage_pptx_reference.py --pack mixing replace --src path\to\dec
 
 - Design: `docs/EI_APP_TEMPLATE_DESIGN.md`
 - Playbook: `CREATOR_PLAYBOOK.md`
-- Mixing pack: `py/knowledge/mixing/`
+- Mixing pack (canonical): `bpeai/py/knowledge/mixing/`
+- Local example stub: `py/knowledge/_examples/mixing_stub/`

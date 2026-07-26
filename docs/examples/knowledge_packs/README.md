@@ -1,7 +1,11 @@
-# Knowledge packs (docs pointer)
+# Knowledge pack examples
 
-Production SME packs live under **`py/knowledge/<system>/`**.
+**Production platform seeds do not live in creator-apps.**
 
-Example: [`py/knowledge/mixing/`](../../../py/knowledge/mixing/).
+| Where | What |
+|-------|------|
+| `bpeai/py/knowledge/<id>/` | Canonical platform seeds (`mixing`, `filtration`, …) |
+| Portal → Knowledge | Creator-owned private packs |
+| [`py/knowledge/_examples/`](../../../py/knowledge/_examples/) | Thin stubs for local SDK tests |
 
-Do not maintain a second YAML sketch here — it drifts from production.
+See `docs/EI_APP_TEMPLATE_DESIGN.md` for the hybrid ownership model.

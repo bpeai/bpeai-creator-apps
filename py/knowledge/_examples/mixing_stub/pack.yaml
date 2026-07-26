@@ -1,0 +1,42 @@
+# EXAMPLE ONLY — not a platform production seed.
+# Canonical mixing pack lives in the bpeai deploy repo: py/knowledge/mixing/
+pack_id: mixing_stub
+equipment_system: mixing
+version: "0.1.0-example"
+label: Mixing stub (example)
+description: >
+  Minimal example pack for local SDK tests and template smoke checks.
+  Do not use as a production SME pack. Bind/clone platform packs on the portal.
+
+expertise_keys:
+  - mixing
+alignment_category: equipment_technology
+alignment_subcategory: mixing_agitation
+
+coverage_scope:
+  default: life_science
+  industries:
+    - Biopharmaceuticals
+
+industries:
+  - Biopharmaceuticals
+
+default_variant: general_mixing
+default_scenario: media_preparation
+
+scenario_aliases:
+  media_preparation:
+    - media
+    - buffer
+    - media preparation
+
+variant_aliases:
+  general_mixing:
+    - mixing
+    - agitator
+    - vessel
+
+prompt_hooks:
+  system_role: example_mixing_engineer
+  emphasize:
+    - This is an EXAMPLE pack for local tests only
