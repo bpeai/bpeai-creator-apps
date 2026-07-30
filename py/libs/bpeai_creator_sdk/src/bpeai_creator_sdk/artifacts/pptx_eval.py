@@ -208,17 +208,39 @@ def _eyebrow_and_title(slide, eyebrow: str, title: str) -> None:
 
 
 def default_reference_path(pack_path: Path | None = None) -> Path | None:
-    candidates = []
+    """Resolve a style-reference PPTX. Names are not required to be standardized.
+
+    Preference:
+      1. First ``*.pptx`` under ``<pack>/references/`` (sorted)
+      2. Historical mixing example names under the pack (if present)
+      3. Committed ``py/knowledge/_templates/references/*.pptx``
+      4. Legacy ``knowledge/mixing/references`` fallbacks
+    """
+    candidates: list[Path] = []
     if pack_path is not None:
-        candidates.append(Path(pack_path) / "references" / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
-        candidates.append(Path(pack_path) / "references" / "media_preparation_vessel_mixing_evaluation.pptx")
-    # relative fallbacks
+        ref_root = Path(pack_path) / "references"
+        if ref_root.is_dir():
+            candidates.extend(sorted(ref_root.glob("*.pptx")))
+        # Historical names (optional continuity)
+        candidates.append(ref_root / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
+        candidates.append(ref_root / "media_preparation_vessel_mixing_evaluation.pptx")
     here = Path(__file__).resolve()
     for root in here.parents:
-        knowledge = root / "knowledge" / "mixing" / "references"
-        candidates.append(knowledge / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
-        candidates.append(knowledge / "media_preparation_vessel_mixing_evaluation.pptx")
+        shared = root / "knowledge" / "_templates" / "references"
+        if shared.is_dir():
+            candidates.extend(sorted(shared.glob("*.pptx")))
+        mixing = root / "knowledge" / "mixing" / "references"
+        candidates.append(mixing / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
+        candidates.append(mixing / "media_preparation_vessel_mixing_evaluation.pptx")
+    seen: set[str] = set()
     for c in candidates:
+        try:
+            key = str(c.resolve()).lower() if c.exists() else str(c).lower()
+        except OSError:
+            key = str(c).lower()
+        if key in seen:
+            continue
+        seen.add(key)
         if c.is_file():
             return c
     return None

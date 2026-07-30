@@ -84,26 +84,41 @@ This authoring repo only ships **example stubs**: [`py/knowledge/_examples/`](..
 | File | Purpose |
 |------|---------|
 | `pack.yaml` | Pack metadata: expertise, alignment, coverage, industries, aliases |
-| `dir_requirements.yaml` | DIR menus keyed by **variant × industry × scenario** (+ legacy scenarios) |
+| `dir_requirements.yaml` | SME-readable **list catalog** `dir_menus[]` (+ optional legacy scenarios/menus) |
+| `dir_catalog.md` | Auto-generated Markdown review table for SMEs |
 | `equipment_options.yaml` | Allowed technology / option catalog |
 | `validation_rules.yaml` | Hard/soft rules for DIR codes and LLM field enums |
 | `prompt_fragments.yaml` | Injectable SME guidance |
 | `report_outline.yaml` / `pptx_outline.yaml` | Report / slide outlines |
-| `references/*.pptx` | Style stubs |
+| `references/*.pptx` / `*.pdf` | Style stubs (any name; seeded from `py/knowledge/_templates/references/`) |
 
 Creators manage private packs on the portal. If a pack is missing locally, the
-`equipment_evaluator` template may LLM-bootstrap a draft (SDK: `sme.pack_bootstrap`).
-Drafts need SME / platform approval before production use.
+`equipment_evaluator` template may LLM-bootstrap a draft under `py/knowledge/<id>/`
+(SDK: `sme.pack_bootstrap`). Those creator packs are **gitignored** in this repo —
+only `_examples/` stubs are committed.
 
 Future systems: `heat_transfer/`, `chromatography/`, `fluid_transfer/`, `cell_culture/`, …
 
-### DIR selection dimensions
+### DIR selection dimensions (match-or-generate)
 
-Runtime selects an approved menu with:
+A technology pack may hold **many** DIR questionnaires. SMEs cannot pre-author every
+case; the template **reuses** a catalog hit or **generates** a new draft for the run.
 
-`(equipment_system_variant × industry × scenario_id)`
+Fingerprint:
 
-Inputs: `equipment_system_variant`, `industry` (or inferred from `application`), `system_name` → scenario aliases.
+`(equipment_system_variant × industry × scenario_id)` plus `system_name` / `application` aliases
+
+Flow:
+
+1. Lookup `dir_menus[]` (approved first, then prior `draft_generated` for same fingerprint)
+2. On miss → Serper research + LLM questionnaire (5–8 requirements, numeric starter codes)
+3. Append draft to the local pack catalog + refresh `dir_catalog.md`
+4. Present DIR to the user; evaluate may use `draft_generated` for that local run
+5. SME reviews the catalog and promotes `status: approved` for reuse
+
+`common_codes` must be hyphen-separated numeric starters with captions (not tags like `SIP`).
+
+Legacy packs without `dir_menus[]` still resolve via `menus[]` / `scenarios`.
 
 ---
 
@@ -111,10 +126,10 @@ Inputs: `equipment_system_variant`, `industry` (or inferred from `application`),
 
 Phases:
 
-1. **`dir`** — return approved DIR questionnaire (+ common codes)
+1. **`dir`** — match catalog or generate draft questionnaire (+ numeric common codes)
 2. **`evaluate`** — validate DIR → Serper → structured LLM → soft checks → artifacts
 3. **`pptx`** (local) — optional deck from evaluation JSON
-4. **`generate_dir`** (portal / authoring) — LLM draft menu → creator review → `APPROVED`
+4. **`generate_dir`** — force generate/persist a draft menu for the fingerprint
 
 Inputs (minimum):
 
@@ -125,7 +140,7 @@ Inputs (minimum):
 - `phase` (`dir` | `evaluate` | `pptx` | `generate_dir`)
 - `knowledge_pack` (pack id / slug)
 
-Production evaluate uses **APPROVED** menus only.
+Creator apps copied from the template are local/gitignored; do not commit them.
 
 ---
 
@@ -135,6 +150,7 @@ Production evaluate uses **APPROVED** menus only.
 bpeai_creator_sdk/
   sme/
     pack_loader.py   # filesystem + DB payload hydrate; resolve_dir_menu
+    dir_catalog.py   # list catalog match/append + dir_catalog.md
     validate.py      # DIR + option + taxonomy soft checks
   ...
 ```

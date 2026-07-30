@@ -13,6 +13,16 @@ def format_dir_text(result: Mapping[str, Any]) -> str:
     lines.append("─" * 40)
     lines.append(f"System:      {system}")
     lines.append(f"Application: {application}")
+    scenario = (result.get("scenario_id") or "").strip()
+    menu_label = (result.get("dir_menu_label") or "").strip()
+    variant = (result.get("equipment_system_variant") or "").strip()
+    industry = (result.get("industry") or "").strip()
+    if menu_label:
+        lines.append(f"DIR menu:    {menu_label}")
+    if scenario:
+        lines.append(f"Scenario:    {scenario}")
+    if variant or industry:
+        lines.append(f"Variant/ind: {variant or '—'} / {industry or '—'}")
 
     err = (result.get("validation_error") or "").strip()
     if err:
@@ -30,7 +40,8 @@ def format_dir_text(result: Mapping[str, Any]) -> str:
     requirements = result.get("requirements") or []
     if isinstance(requirements, list) and requirements:
         lines.append("")
-        lines.append(f"Design Input Requirements — {system}")
+        title = menu_label or system
+        lines.append(f"Design Input Requirements — {title}")
         lines.append("─" * 40)
         for req in requirements:
             if not isinstance(req, Mapping):
@@ -64,7 +75,7 @@ def format_dir_text(result: Mapping[str, Any]) -> str:
             lines.append(f"  • {code}")
 
     lines.append("")
-    lines.append("Reply with the closest code to evaluate realistic mixing options.")
+    lines.append("Reply with the closest code to evaluate realistic equipment options.")
     return "\n".join(lines).rstrip() + "\n"
 
 

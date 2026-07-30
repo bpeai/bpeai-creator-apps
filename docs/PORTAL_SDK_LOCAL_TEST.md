@@ -36,8 +36,11 @@ Artifacts (gitignored ./artifacts/): *_evaluation.md, *_evaluation.pdf, optional
 *_evaluation.pptx. Portal hub datasheets use datasheet_markdown → S3 .md only.
 
 Start from py/apps/_templates/equipment_evaluator (not the legacy mixing matcher
-example). Platform SME packs live in the bpeai deploy repo (`py/knowledge/<system>/`);
-this repo only has `_examples/` stubs. Manage reference PPTX stubs against bpeai seeds:
+example). Copy the template to py/apps/<your_id> for local work — creator apps and
+py/knowledge/<pack>/ drafts are gitignored; this repo commits templates + `_examples/`
+stubs only. Platform SME packs live in the bpeai deploy repo. DIR phase match-or-generates
+questionnaires (numeric common codes) into your local pack catalog. Manage reference
+PPTX stubs against bpeai seeds:
 
   python py/tools/manage_pptx_reference.py --pack mixing list
 

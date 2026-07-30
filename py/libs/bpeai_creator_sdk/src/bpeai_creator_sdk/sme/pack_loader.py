@@ -47,11 +47,19 @@ class DirMenu:
     lifecycle: str
     requirements: List[Dict[str, Any]]
     common_codes: List[Any]
-    source: str = "menu"  # menu | scenario_fallback
+    source: str = "menu"  # dir_catalog | menu | scenario_fallback
+    menu_id: str = ""
+    summary: str = ""
 
     @property
     def is_approved(self) -> bool:
-        return _norm(self.lifecycle) in {"approved"} or self.source == "scenario_fallback"
+        """True when menu may be used for evaluate (approved, draft_generated, or legacy fallback)."""
+        life = _norm(self.lifecycle)
+        if life in {"approved"}:
+            return True
+        if life in {"draft_generated"} and self.source in {"dir_catalog", "generated"}:
+            return True
+        return self.source == "scenario_fallback"
 
 
 @dataclass
@@ -83,18 +91,41 @@ class KnowledgePack:
     @property
     def scenarios(self) -> Dict[str, Any]:
         raw = self.dir_requirements.get("scenarios") or {}
-        return raw if isinstance(raw, dict) else {}
+        base = dict(raw) if isinstance(raw, dict) else {}
+        # Synthesize scenario keys from list catalog so aliases can resolve.
+        for row in self.dir_menus:
+            sid = str(row.get("scenario_id") or "").strip()
+            if sid and sid not in base:
+                base[sid] = {
+                    "label": row.get("label") or sid,
+                    "common_codes": row.get("common_codes") or [],
+                    "requirements": row.get("requirements") or [],
+                }
+        return base
 
     @property
     def menus(self) -> List[Dict[str, Any]]:
         raw = self.dir_requirements.get("menus") or []
         return [m for m in raw if isinstance(m, dict)] if isinstance(raw, list) else []
 
+    @property
+    def dir_menus(self) -> List[Dict[str, Any]]:
+        raw = self.dir_requirements.get("dir_menus") or []
+        return [m for m in raw if isinstance(m, dict)] if isinstance(raw, list) else []
+
     def scenario(self, scenario_id: str) -> Dict[str, Any]:
+        """Return legacy scenario mapping, or synthesize from a dir_menus row."""
         scen = self.scenarios.get(scenario_id)
-        if not isinstance(scen, dict):
-            raise KeyError(f"Unknown scenario '{scenario_id}' in pack '{self.pack_id}'")
-        return scen
+        if isinstance(scen, dict):
+            return scen
+        for row in self.dir_menus:
+            if _norm(str(row.get("scenario_id") or "")) == _norm(scenario_id):
+                return {
+                    "label": row.get("label") or scenario_id,
+                    "common_codes": row.get("common_codes") or [],
+                    "requirements": row.get("requirements") or [],
+                }
+        raise KeyError(f"Unknown scenario '{scenario_id}' in pack '{self.pack_id}'")
 
     def option_catalog(self) -> List[Dict[str, Any]]:
         opts = self.equipment_options.get("options") or []
@@ -184,22 +215,52 @@ class KnowledgePack:
         )
 
 
-def resolve_scenario_id(pack: KnowledgePack, system_name: str) -> str:
-    """Map free-text system_name to a scenario id using pack aliases."""
-    text = (system_name or "").strip().lower()
+def _alias_match_text(*parts: str | None) -> str:
+    """Join free-text fields used for scenario / variant alias matching."""
+    return " ".join(str(p or "").strip() for p in parts if str(p or "").strip()).lower()
+
+
+def _best_alias_match(aliases: Mapping[str, Any], text: str, *, allowed_ids: set[str] | None = None) -> str | None:
+    """Return id whose alias term is the longest substring match in ``text``."""
+    if not text or not isinstance(aliases, Mapping):
+        return None
+    scored: list[tuple[int, str]] = []
+    for raw_id, terms in aliases.items():
+        if not isinstance(terms, list):
+            continue
+        sid = str(raw_id)
+        if allowed_ids is not None and sid not in allowed_ids:
+            continue
+        for term in terms:
+            t = str(term).strip().lower()
+            if t and t in text:
+                scored.append((len(t), sid))
+    if not scored:
+        return None
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored[0][1]
+
+
+def resolve_scenario_id(
+    pack: KnowledgePack,
+    system_name: str,
+    *,
+    application: str | None = None,
+) -> str:
+    """Map system_name (+ optional application) to a scenario id via pack aliases.
+
+    Alias matching uses the combined free text so packs can distinguish equipment
+    roles (e.g. bioreactor vent vs buffer hold tank vent) within one technology pack.
+    """
+    text = _alias_match_text(system_name, application)
     aliases = pack.meta.get("scenario_aliases") or {}
-    if isinstance(aliases, dict):
-        scored: list[tuple[int, str]] = []
-        for scenario_id, terms in aliases.items():
-            if not isinstance(terms, list):
-                continue
-            for term in terms:
-                t = str(term).strip().lower()
-                if t and t in text:
-                    scored.append((len(t), str(scenario_id)))
-        if scored:
-            scored.sort(key=lambda x: x[0], reverse=True)
-            return scored[0][1]
+    matched = _best_alias_match(
+        aliases if isinstance(aliases, dict) else {},
+        text,
+        allowed_ids=set(pack.scenarios.keys()),
+    )
+    if matched:
+        return matched
     if pack.default_scenario in pack.scenarios:
         return pack.default_scenario
     if pack.scenarios:
@@ -207,25 +268,22 @@ def resolve_scenario_id(pack: KnowledgePack, system_name: str) -> str:
     raise KeyError(f"Pack '{pack.pack_id}' has no scenarios")
 
 
-def resolve_variant_id(pack: KnowledgePack, system_name: str, variant: str | None = None) -> str:
-    """Resolve equipment_system_variant from explicit input or system_name aliases."""
+def resolve_variant_id(
+    pack: KnowledgePack,
+    system_name: str,
+    variant: str | None = None,
+    *,
+    application: str | None = None,
+) -> str:
+    """Resolve equipment_system_variant from explicit input or system/application aliases."""
     explicit = (variant or "").strip()
     if explicit:
         return explicit
-    text = (system_name or "").strip().lower()
+    text = _alias_match_text(system_name, application)
     aliases = pack.meta.get("variant_aliases") or {}
-    if isinstance(aliases, dict):
-        scored: list[tuple[int, str]] = []
-        for variant_id, terms in aliases.items():
-            if not isinstance(terms, list):
-                continue
-            for term in terms:
-                t = str(term).strip().lower()
-                if t and t in text:
-                    scored.append((len(t), str(variant_id)))
-        if scored:
-            scored.sort(key=lambda x: x[0], reverse=True)
-            return scored[0][1]
+    matched = _best_alias_match(aliases if isinstance(aliases, dict) else {}, text)
+    if matched:
+        return matched
     return pack.default_variant
 
 
@@ -278,9 +336,47 @@ def resolve_dir_menu(
     application: str | None = None,
     require_approved: bool = True,
 ) -> DirMenu:
-    """Select DIR menu by (variant × industry × scenario); fall back to legacy scenario."""
-    sid = (scenario_id or "").strip() or resolve_scenario_id(pack, system_name)
-    variant = resolve_variant_id(pack, system_name, equipment_system_variant)
+    """Select DIR menu by (variant × industry × scenario); fall back to legacy scenario.
+
+    Prefer list catalog ``dir_menus[]`` when present. Otherwise score legacy
+    ``menus[]``, then fall back to ``scenarios[scenario_id]``.
+    """
+    # List catalog (SME-readable) — preferred
+    from .dir_catalog import match_dir_menu
+
+    catalog_hit = match_dir_menu(
+        pack,
+        system_name=system_name,
+        scenario_id=scenario_id,
+        equipment_system_variant=equipment_system_variant,
+        industry=industry,
+        application=application,
+        allow_draft=not require_approved,
+    )
+    # When require_approved=True, still allow draft_generated for creator local runs
+    # if it is the best fingerprint match (evaluate gate uses DirMenu.is_approved).
+    if catalog_hit is None and require_approved:
+        catalog_hit = match_dir_menu(
+            pack,
+            system_name=system_name,
+            scenario_id=scenario_id,
+            equipment_system_variant=equipment_system_variant,
+            industry=industry,
+            application=application,
+            allow_draft=True,
+        )
+    if catalog_hit is not None:
+        return catalog_hit
+
+    sid = (scenario_id or "").strip() or resolve_scenario_id(
+        pack, system_name, application=application
+    )
+    variant = resolve_variant_id(
+        pack,
+        system_name,
+        equipment_system_variant,
+        application=application,
+    )
     ind = resolve_industry(pack, industry=industry, application=application)
 
     menus = pack.menus

@@ -1,5 +1,50 @@
-# EXAMPLE ONLY — minimal DIR menus for local tests.
+# EXAMPLE ONLY — SME-readable DIR list catalog for local SDK / template tests.
+pack_id: mixing_stub
+version: 1
 
+dir_menus:
+  - menu_id: media_preparation__general_mixing__biopharmaceuticals
+    status: approved
+    scenario_id: media_preparation
+    equipment_system_variant: general_mixing
+    industry: Biopharmaceuticals
+    system_examples:
+      - Media Preparation Vessel
+      - media prep
+      - buffer preparation
+    label: Media / buffer preparation (example)
+    summary: >
+      Example DIR for biopharmaceutical media/buffer prep mixing selection
+      (volume, vessel format, primary objective).
+    generated_from: seed
+    common_codes:
+      - code: "2-1-1"
+        caption: "250–1,000 L stainless CIP/SIP vessel dissolving dry powder."
+      - code: "2-2-2"
+        caption: "250–1,000 L single-use mixer blending liquid concentrates."
+      - code: "3-1-3"
+        caption: ">1,000 L stainless CIP/SIP vessel maintaining homogeneity."
+    requirements:
+      - index: 1
+        label: Working volume
+        options:
+          - { index: 1, text: "50–250 L" }
+          - { index: 2, text: "250–1,000 L" }
+          - { index: 3, text: "> 1,000 L" }
+      - index: 2
+        label: Vessel format
+        options:
+          - { index: 1, text: "Stainless CIP/SIP vessel" }
+          - { index: 2, text: "Single-use mixer" }
+          - { index: 3, text: "Inline / batch-loop" }
+      - index: 3
+        label: Primary mixing objective
+        options:
+          - { index: 1, text: "Dissolve dry powder" }
+          - { index: 2, text: "Blend liquids" }
+          - { index: 3, text: "Maintain homogeneity" }
+
+# Legacy shape kept for fallback tests (optional). New packs should use dir_menus only.
 menus:
   - scenario_id: media_preparation
     equipment_system_variant: general_mixing
@@ -11,7 +56,7 @@ scenarios:
   media_preparation:
     label: Media / buffer preparation (example)
     common_codes:
-      - code: "2-1-2"
+      - code: "2-1-1"
         caption: "Example starter code for local tests."
     requirements:
       - index: 1

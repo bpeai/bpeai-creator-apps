@@ -47,6 +47,16 @@ def _option_max(requirement: Mapping[str, Any]) -> int:
     return max(indexes) if indexes else len(options)
 
 
+def is_numeric_dir_code(code: str, *, requirement_count: int | None = None) -> bool:
+    """True when ``code`` is a hyphen-separated positive integer sequence."""
+    parts = [p.strip() for p in (code or "").split("-") if p.strip()]
+    if not parts or not all(p.isdigit() and int(p) >= 1 for p in parts):
+        return False
+    if requirement_count is not None and len(parts) != requirement_count:
+        return False
+    return True
+
+
 def validate_dir_code(
     pack: KnowledgePack,
     scenario_id: str,
@@ -71,7 +81,10 @@ def validate_dir_code(
                 common.append(item)
             elif isinstance(item, Mapping) and item.get("code"):
                 common.append(str(item["code"]))
-    suggested = common[0] if common else ""
+    # Prefer numeric starter codes as suggested_correction (ignore mnemonic tags).
+    req_count = len(requirements) if isinstance(requirements, list) else None
+    numeric_common = [c for c in common if is_numeric_dir_code(c, requirement_count=req_count)]
+    suggested = (numeric_common or common or [""])[0]
 
     rules = (pack.validation_rules.get("dir_code") or {}) if isinstance(pack.validation_rules, dict) else {}
     min_index = int(rules.get("min_index") or 1)
@@ -153,7 +166,9 @@ def check_equipment_option_names(
 
 def check_application(pack: KnowledgePack, application: str) -> ApplicationCheck:
     """Soft-normalize application; optionally check shared taxonomy if installed."""
-    rules = pack.validation_rules.get("application") or {}
+    rules_raw = pack.validation_rules.get("application") or {}
+    # Draft LLM packs sometimes emit a bare string; treat as empty soft rules.
+    rules = rules_raw if isinstance(rules_raw, Mapping) else {}
     aliases = rules.get("aliases") or {}
     raw = (application or "").strip()
     normalized = raw

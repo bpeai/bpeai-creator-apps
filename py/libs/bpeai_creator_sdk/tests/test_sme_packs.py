@@ -8,13 +8,21 @@ from bpeai_creator_sdk.local_format import format_dir_text, format_result_text
 from bpeai_creator_sdk.local_parse import parse_inputs_heuristic
 from bpeai_creator_sdk.local_run import is_selector_result, repo_py_root
 from bpeai_creator_sdk.sme import (
+    append_dir_menu,
+    filter_numeric_common_codes,
+    is_numeric_dir_code,
     list_missing_pack_files,
     load_knowledge_pack,
+    match_dir_menu,
+    normalize_bootstrapped_component,
+    normalize_generated_menu,
     pack_is_loadable,
+    prepare_bootstrapped_component,
     resolve_dir_menu,
     resolve_scenario_id,
     stamp_draft_meta,
     validate_dir_code,
+    write_dir_catalog_markdown,
     write_pack_file,
 )
 
@@ -38,8 +46,42 @@ def mixing_stub(py_root: Path, examples_root: Path):
 def test_repo_has_example_stub_not_production_packs(py_root: Path):
     root = repo_py_root(py_root)
     assert (root / "knowledge" / "_examples" / "mixing_stub" / "pack.yaml").is_file()
-    assert not (root / "knowledge" / "mixing").is_dir()
-    assert not (root / "knowledge" / "filtration").is_dir()
+    # Production platform seeds are not shipped here. Local creator draft packs
+    # under py/knowledge/<id>/ (e.g. LLM-bootstrapped filtration) are allowed.
+
+
+def test_committed_style_templates_preferred(py_root: Path, monkeypatch: pytest.MonkeyPatch):
+    from bpeai_creator_sdk.sme import seed_template_references, template_references_root
+
+    monkeypatch.delenv("BPEAI_TEMPLATE_REFERENCES_ROOT", raising=False)
+    monkeypatch.delenv("BPEAI_REFERENCES_ROOT", raising=False)
+
+    shared = template_references_root(py_root)
+    assert shared is not None
+    assert shared == (py_root / "knowledge" / "_templates" / "references").resolve()
+    assert any(shared.glob("*.pptx"))
+    assert any(shared.glob("*.pdf"))
+
+    # Any filename in the shared folder seeds; names need not be standardized.
+    dest_root = py_root / "knowledge" / "_test_seed_pack_tmp"
+    if dest_root.exists():
+        import shutil
+
+        shutil.rmtree(dest_root)
+    try:
+        copied = seed_template_references("_test_seed_pack_tmp", py_root=py_root)
+        assert any(p.endswith(".pptx") for p in copied)
+        assert any(p.endswith(".pdf") for p in copied)
+        assert (dest_root / "references").is_dir()
+        assert list((dest_root / "references").glob("*.pptx"))
+        assert list((dest_root / "references").glob("*.pdf"))
+        # Second seed must not overwrite / re-copy.
+        assert seed_template_references("_test_seed_pack_tmp", py_root=py_root) == []
+    finally:
+        import shutil
+
+        if dest_root.exists():
+            shutil.rmtree(dest_root)
 
 
 def test_load_mixing_stub(mixing_stub):
@@ -81,6 +123,41 @@ def test_pack_bootstrap_inventory(py_root: Path, examples_root: Path, tmp_path: 
     missing = list_missing_pack_files("demo_pack", py_root=tmp_path, include_optional=False)
     assert "dir_requirements.yaml" in missing
     assert not pack_is_loadable("demo_pack", py_root=tmp_path)
+
+
+def test_normalize_bootstrapped_validation_rules_and_pack_unwrap():
+    bad_rules = {
+        "application": "vent_filter_expert",
+        "dir_code": "validation_rules",
+        "equipment_option_name": "vent_filter",
+        "fit_enum": {"allowed": ["best", "strong"]},
+    }
+    fixed = prepare_bootstrapped_component(
+        "validation_rules.yaml",
+        bad_rules,
+        pack_id="filtration",
+        equipment_system="filtration",
+    )
+    assert isinstance(fixed["application"], dict)
+    assert fixed["application"]["mode"] == "soft"
+    assert fixed["equipment_system_field"]["must_equal"] == "filtration"
+
+    nested_pack = {
+        "pack.yaml": {
+            "label": "Filtration draft",
+            "industries": ["biopharmaceutical"],
+            "default_scenario": "sterile_vent",
+            "prompt_hooks": {"system_role": "expert", "emphasize": ["draft"]},
+        },
+        "dir_requirements.yaml": {"scenarios": {}},
+        "pack_id": "filtration",
+    }
+    pack = normalize_bootstrapped_component(
+        "pack.yaml", nested_pack, pack_id="filtration", equipment_system="filtration"
+    )
+    assert "pack.yaml" not in pack
+    assert pack["approval_status"] == "draft_pending_sme_approval"
+    assert isinstance(pack["prompt_hooks"], dict)
 
 
 def test_thin_report_sections():
@@ -125,6 +202,200 @@ def test_resolve_dir_menu_industry_variant(mixing_stub):
     assert menu.industry == "Biopharmaceuticals"
     assert menu.is_approved
     assert len(menu.requirements) == 3
+    assert menu.source == "dir_catalog"
+    assert menu.common_codes
+    assert is_numeric_dir_code(str(menu.common_codes[0]["code"] if isinstance(menu.common_codes[0], dict) else menu.common_codes[0]), requirement_count=3)
+
+
+def test_match_dir_menu_from_list_catalog(mixing_stub):
+    hit = match_dir_menu(
+        mixing_stub,
+        system_name="Media Preparation Vessel",
+        application="Biopharmaceuticals",
+        allow_draft=True,
+    )
+    assert hit is not None
+    assert hit.scenario_id == "media_preparation"
+    assert hit.menu_id
+
+
+def test_normalize_generated_menu_requires_numeric_common_codes():
+    raw = {
+        "label": "Demo",
+        "summary": "Demo summary",
+        "common_codes": [{"code": "SIP", "caption": "bad tag"}],
+        "requirements": [
+            {
+                "index": 1,
+                "label": "A",
+                "options": [{"index": 1, "text": "a1"}, {"index": 2, "text": "a2"}],
+            },
+            {
+                "index": 2,
+                "label": "B",
+                "options": [{"index": 1, "text": "b1"}, {"index": 2, "text": "b2"}],
+            },
+            {
+                "index": 3,
+                "label": "C",
+                "options": [{"index": 1, "text": "c1"}, {"index": 2, "text": "c2"}],
+            },
+        ],
+    }
+    row = normalize_generated_menu(
+        raw,
+        system_name="Demo Vessel",
+        application="biopharmaceutical",
+        scenario_id="demo_dir",
+        variant="general",
+        industry="biopharmaceutical",
+    )
+    assert row["status"] == "draft_generated"
+    assert len(row["common_codes"]) >= 2
+    assert all(is_numeric_dir_code(c["code"], requirement_count=3) for c in row["common_codes"])
+    assert filter_numeric_common_codes([{"code": "SIP"}], requirements=row["requirements"]) == []
+
+
+def test_append_dir_menu_and_catalog_md(mixing_stub, tmp_path: Path):
+    # Copy stub into temp pack path for write tests
+    import shutil
+
+    dest = tmp_path / "mixing_stub"
+    shutil.copytree(mixing_stub.path, dest)
+    pack = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
+    row = {
+        "menu_id": "demo_dir__general__biopharmaceuticals",
+        "status": "draft_generated",
+        "scenario_id": "demo_dir",
+        "equipment_system_variant": "general_mixing",
+        "industry": "Biopharmaceuticals",
+        "system_examples": ["Demo Vessel"],
+        "label": "Demo DIR",
+        "summary": "Appended draft for tests.",
+        "generated_from": "runtime",
+        "common_codes": [
+            {"code": "1-1-1", "caption": "Baseline demo starter."},
+            {"code": "2-1-2", "caption": "Alternate demo starter."},
+        ],
+        "requirements": pack.scenario("media_preparation")["requirements"],
+    }
+    append_dir_menu(pack, row, write_markdown=True)
+    reloaded = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
+    assert any(m.get("menu_id") == row["menu_id"] for m in reloaded.dir_menus)
+    md = write_dir_catalog_markdown(reloaded)
+    assert md.is_file()
+    text = md.read_text(encoding="utf-8")
+    assert "demo_dir__general__biopharmaceuticals" in text
+    assert "draft_generated" in text
+
+
+def test_equipment_evaluator_generates_dir_on_catalog_miss(mixing_stub, tmp_path: Path, monkeypatch):
+    """Template match-or-generate path with mocked Serper + LLM (no network)."""
+    import shutil
+    import sys
+
+    py_root = Path(__file__).resolve().parents[3]
+    if str(py_root) not in sys.path:
+        sys.path.insert(0, str(py_root))
+
+    from apps._templates.equipment_evaluator.agent import EquipmentEvaluatorAgent
+
+    dest = tmp_path / "mixing_stub"
+    shutil.copytree(mixing_stub.path, dest)
+    pack = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
+
+    fake_dir = {
+        "label": "Resin slurry mix DIR",
+        "summary": "Draft DIR for chromatography resin slurry mixing.",
+        "system_examples": ["Chromatography Resin Slurry Tank"],
+        "common_codes": [
+            {
+                "code": "2-1-1-1-1",
+                "caption": "Mid-scale stainless CIP/SIP slurry suspension, low shear, GMP.",
+            },
+            {
+                "code": "3-1-2-1-2",
+                "caption": "Large stainless vessel, gentle resuspension, moderate DP OK.",
+            },
+        ],
+        "requirements": [
+            {
+                "index": 1,
+                "label": "Working volume",
+                "options": [
+                    {"index": 1, "text": "50–250 L"},
+                    {"index": 2, "text": "250–1,000 L"},
+                    {"index": 3, "text": "> 1,000 L"},
+                ],
+            },
+            {
+                "index": 2,
+                "label": "Vessel format",
+                "options": [
+                    {"index": 1, "text": "Stainless CIP/SIP"},
+                    {"index": 2, "text": "Single-use"},
+                ],
+            },
+            {
+                "index": 3,
+                "label": "Solids challenge",
+                "options": [
+                    {"index": 1, "text": "Resin slurry"},
+                    {"index": 2, "text": "Low solids"},
+                ],
+            },
+            {
+                "index": 4,
+                "label": "Shear sensitivity",
+                "options": [
+                    {"index": 1, "text": "Low shear required"},
+                    {"index": 2, "text": "Moderate shear OK"},
+                ],
+            },
+            {
+                "index": 5,
+                "label": "Documentation",
+                "options": [
+                    {"index": 1, "text": "GMP/aseptic"},
+                    {"index": 2, "text": "GMP-lite"},
+                ],
+            },
+        ],
+    }
+
+    agent = EquipmentEvaluatorAgent()
+    monkeypatch.setattr(agent, "serper_search", lambda *a, **k: [])
+    monkeypatch.setattr(agent, "call_openai_json", lambda **kwargs: fake_dir)
+    monkeypatch.setattr(agent, "status", lambda *a, **k: None)
+
+    # Unrelated system must not reuse media_preparation via default_scenario.
+    assert (
+        match_dir_menu(
+            pack,
+            system_name="Chromatography Resin Slurry Tank",
+            application="biopharmaceutical",
+            allow_draft=True,
+        )
+        is None
+    )
+
+    menu, notes = agent._resolve_or_generate_dir_menu(
+        pack,
+        system_name="Chromatography Resin Slurry Tank",
+        application="biopharmaceutical",
+        scenario_id=None,
+        equipment_system_variant=None,
+        industry=None,
+        force_generate=False,
+    )
+    assert menu.lifecycle == "draft_generated"
+    assert menu.source == "generated"
+    assert len(menu.requirements) >= 5
+    assert any("Generated draft DIR" in n for n in notes)
+    reloaded = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
+    assert any(
+        str(m.get("status") or "") == "draft_generated" for m in reloaded.dir_menus
+    )
 
 
 def test_validate_dir_code_ok(mixing_stub):
@@ -170,6 +441,10 @@ def test_format_dir_text():
             "phase": "dir_requirements",
             "system_name": "Media Prep",
             "application": "biopharmaceutical",
+            "scenario_id": "hold_tank_vent_aseptic",
+            "dir_menu_label": "Hold tank sterile vent",
+            "equipment_system_variant": "hold_tank_vent",
+            "industry": "biopharmaceutical",
             "requirements": [
                 {
                     "index": 1,
@@ -184,6 +459,9 @@ def test_format_dir_text():
     assert "Design Input Requirements" in text
     assert "Working volume" in text
     assert "2-1-2" in text
+    assert "hold_tank_vent_aseptic" in text
+    assert "Hold tank sterile vent" in text
+    assert "equipment options" in text
     assert format_result_text({"phase": "dir_requirements", "requirements": []}).startswith(
         "Design Input"
     )

@@ -8,3 +8,19 @@ venv/
 .DS_Store
 # Local evaluation outputs (md/pdf/pptx), not the SDK artifacts package
 /artifacts/
+
+# Creator-owned EI apps (template copies). Keep shared templates + examples.
+py/apps/*
+!py/apps/__init__.py
+!py/apps/_templates/
+!py/apps/_templates/**
+!py/apps/examples/
+!py/apps/examples/**
+
+# Creator-owned knowledge packs. Keep stubs, shared style templates + knowledge README.
+py/knowledge/*
+!py/knowledge/README.md
+!py/knowledge/_examples/
+!py/knowledge/_examples/**
+!py/knowledge/_templates/
+!py/knowledge/_templates/**

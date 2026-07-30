@@ -41,7 +41,7 @@ Work in the dedicated GitHub repo: **[bpeai/bpeai-creator-apps](https://github.c
 
 **Platform note (templates):** EI apps use a **template family** (by deliverable) + **SME knowledge pack** + **shared SDK**. Start from `py/apps/_templates/equipment_evaluator`. See [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md).
 
-**Knowledge ownership:** Your pack content is **private to your apps** (portal-managed). Canonical platform seeds live in the **website deploy repo** (`bpeai/py/knowledge/`, e.g. `mixing`, `filtration`) — **not** in this repo. Bind or **clone** them on the portal. This repo only has `py/knowledge/_examples/` stubs for local SDK tests. Python agent code still ships only via git PR (no zip upload).
+**Knowledge ownership:** Your pack content is **private to your apps** (portal-managed). Canonical platform seeds live in the **website deploy repo** (`bpeai/py/knowledge/`, e.g. `mixing`, `filtration`) — **not** in this repo. Bind or **clone** them on the portal. This repo only has `py/knowledge/_examples/` stubs for local SDK tests. Local creator packs under `py/knowledge/<id>/` and copied apps under `py/apps/<your_id>/` are **gitignored** (template + SDK are the shared sources of truth). Python agent code ships via git PR only when BPEAI’s publish process requires it (no zip upload).
 
 ### 1.1 Clone once, add apps over time
 
@@ -62,12 +62,13 @@ Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\heat_exchanger
 
 ```text
 py/apps/_templates/equipment_evaluator/   # copy source — do not edit in place for your app
-py/apps/<your_id>/                        # your app (open a PR that adds this)
+py/apps/<your_id>/                        # your app (local/gitignored; copy from template)
 py/knowledge/_examples/                   # thin stubs for local tests only (not production seeds)
+py/knowledge/<pack_id>/                   # your pack drafts + DIR catalog (local/gitignored)
 py/libs/bpeai_creator_sdk/                # do not fork; BPEAI mirrors into website deploy
 ```
 
-**Size guidance:** keep pack YAML-first for seeds; manage creator DIR menus in portal **Knowledge**. Local sync: `python py/tools/sync_knowledge_pack.py`. Never commit `.env` or generated `artifacts/` (PDF/MD/PPTX).
+**Size guidance:** keep pack YAML-first; DIR menus grow via match-or-generate into `dir_menus` + `dir_catalog.md` for SME review. Manage portal packs via **Knowledge**. Local sync: `python py/tools/sync_knowledge_pack.py`. Never commit `.env`, `artifacts/`, creator app copies, or creator packs.
 
 ### 1.3 How creators get SDK / template updates
 
