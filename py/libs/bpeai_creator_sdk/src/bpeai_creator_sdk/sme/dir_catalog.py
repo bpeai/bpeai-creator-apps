@@ -46,6 +46,21 @@ def dir_menus(pack: KnowledgePack) -> List[Dict[str, Any]]:
     return []
 
 
+def _option_max_for_req(req: Mapping[str, Any]) -> int:
+    opts = req.get("options") if isinstance(req, Mapping) else None
+    max_idx = 0
+    if isinstance(opts, list) and opts:
+        for opt in opts:
+            if isinstance(opt, Mapping) and "index" in opt:
+                try:
+                    max_idx = max(max_idx, int(opt["index"]))
+                except (TypeError, ValueError):
+                    continue
+        if not max_idx:
+            max_idx = len(opts)
+    return max_idx
+
+
 def filter_numeric_common_codes(
     common_codes: Sequence[Any],
     *,
@@ -69,17 +84,7 @@ def filter_numeric_common_codes(
             ok = True
             for i, idx in enumerate(parts):
                 req = requirements[i] if i < len(requirements) else {}
-                opts = req.get("options") if isinstance(req, Mapping) else None
-                max_idx = 0
-                if isinstance(opts, list) and opts:
-                    for opt in opts:
-                        if isinstance(opt, Mapping) and "index" in opt:
-                            try:
-                                max_idx = max(max_idx, int(opt["index"]))
-                            except (TypeError, ValueError):
-                                continue
-                    if not max_idx:
-                        max_idx = len(opts)
+                max_idx = _option_max_for_req(req) if isinstance(req, Mapping) else 0
                 if max_idx and (idx < 1 or idx > max_idx):
                     ok = False
                     break
@@ -87,6 +92,114 @@ def filter_numeric_common_codes(
                 continue
         out.append({"code": code, "caption": caption})
     return out
+
+
+def synthesize_common_codes(
+    requirements: Sequence[Mapping[str, Any]],
+    *,
+    system_name: str = "",
+    application: str = "",
+    count: int = 4,
+) -> List[Dict[str, str]]:
+    """Build 3–4 captioned starter codes matching requirement arity (never wrong length)."""
+    reqs = [r for r in requirements if isinstance(r, Mapping)]
+    n = len(reqs)
+    if n < 1:
+        return []
+
+    def _clamp(indices: Sequence[int]) -> str:
+        parts: List[str] = []
+        for i, req in enumerate(reqs):
+            max_i = _option_max_for_req(req) or 1
+            want = indices[i] if i < len(indices) else 1
+            parts.append(str(min(max(1, int(want)), max_i)))
+        return "-".join(parts)
+
+    def _bias(indices: List[int], words: Sequence[str]) -> List[int]:
+        out = list(indices)
+        for i, req in enumerate(reqs):
+            opts = req.get("options") or []
+            if not isinstance(opts, list):
+                continue
+            for opt in opts:
+                if not isinstance(opt, Mapping):
+                    continue
+                ot = str(opt.get("text") or "").lower()
+                if any(w in ot for w in words):
+                    try:
+                        out[i] = int(opt.get("index") or out[i])
+                    except (TypeError, ValueError):
+                        pass
+                    break
+        return out
+
+    base = [2] * n
+    profiles = [
+        (
+            _bias(base[:], ("stainless", "316", "sip", "steam", "production", "cartridge", "housing")),
+            f"Production stainless / SIP bias for {system_name or 'this system'}.",
+        ),
+        (
+            _bias(
+                [min(3, _option_max_for_req(r) or 3) for r in reqs],
+                ("large", "sterile", "integrity", "fit", "in-line", "inline", "bidirectional", "high"),
+            ),
+            f"Large-scale GMP / sterile barrier / FIT-capable bias ({application or 'life science'}).",
+        ),
+        (
+            _bias([1] * n, ("single-use", "disposable", "capsule", "gamma", "bag", "rtu")),
+            f"Single-use / smaller-scale bias for {system_name or 'this system'}.",
+        ),
+        (
+            _bias(
+                [2 if i < n // 2 else min(2, _option_max_for_req(reqs[i]) or 2) for i in range(n)],
+                ("moderate", "pilot", "reusable", "autoclave", "local"),
+            ),
+            f"Pilot / mid-scale reusable housing bias for {system_name or 'this system'}.",
+        ),
+    ]
+    seen: set[str] = set()
+    out: List[Dict[str, str]] = []
+    for idxs, caption in profiles:
+        code = _clamp(idxs)
+        if code in seen:
+            continue
+        seen.add(code)
+        out.append({"code": code, "caption": caption})
+        if len(out) >= max(1, min(4, count)):
+            break
+    return out
+
+
+def ensure_common_codes_for_requirements(
+    common_codes: Sequence[Any],
+    requirements: Sequence[Mapping[str, Any]],
+    *,
+    system_name: str = "",
+    application: str = "",
+    min_count: int = 3,
+    max_count: int = 4,
+) -> List[Dict[str, str]]:
+    """Return valid common codes (correct arity); synthesize when pack codes are stale."""
+    valid = filter_numeric_common_codes(common_codes, requirements=requirements)
+    if len(valid) >= min_count:
+        return valid[:max_count]
+    synthesized = synthesize_common_codes(
+        requirements,
+        system_name=system_name,
+        application=application,
+        count=max_count,
+    )
+    # Prefer any valid pack codes first, then fill from synthesized
+    seen = {c["code"] for c in valid}
+    for c in synthesized:
+        if c["code"] in seen:
+            continue
+        valid.append(c)
+        seen.add(c["code"])
+        if len(valid) >= max_count:
+            break
+    return valid[:max_count] if valid else synthesized[:max_count]
 
 
 def menu_id_for(

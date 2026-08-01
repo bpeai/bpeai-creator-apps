@@ -890,9 +890,21 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
     ) -> Dict[str, Any]:
         self.status(f"Assembling design input requirements for {system_name}…")
         requirements = menu.requirements
-        entries = pack._normalize_common_codes(menu.common_codes)
+        try:
+            from bpeai_creator_sdk.sme.dir_catalog import ensure_common_codes_for_requirements
+
+            entries = ensure_common_codes_for_requirements(
+                menu.common_codes,
+                requirements,
+                system_name=system_name,
+                application=application,
+                min_count=3,
+                max_count=4,
+            )
+        except Exception:
+            entries = pack._normalize_common_codes(menu.common_codes)
         codes = [e["code"] for e in entries]
-        example = codes[0] if codes else "1-1-1"
+        example = codes[0] if codes else "-".join("1" for _ in (requirements or [1]))
         out: Dict[str, Any] = {
             "phase": "dir_requirements",
             "system_name": system_name,

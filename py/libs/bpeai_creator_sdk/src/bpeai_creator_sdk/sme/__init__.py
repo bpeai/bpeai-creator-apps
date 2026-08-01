@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from .dir_catalog import (
     append_dir_menu,
+    ensure_common_codes_for_requirements,
     filter_numeric_common_codes,
     match_dir_menu,
+    synthesize_common_codes,
     menu_id_for,
     normalize_generated_menu,
     write_dir_catalog_markdown,
@@ -63,6 +65,7 @@ __all__ = [
     "check_equipment_option_names",
     "align_pack_meta_with_scenarios",
     "component_schema_hints",
+    "ensure_common_codes_for_requirements",
     "ensure_creator_pack_assets",
     "filter_numeric_common_codes",
     "is_numeric_dir_code",
@@ -86,6 +89,7 @@ __all__ = [
     "seed_template_references",
     "stamp_draft_meta",
     "structure_example_snippet",
+    "synthesize_common_codes",
     "template_references_root",
     "thin_report_sections",
     "validate_dir_code",

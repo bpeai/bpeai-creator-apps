@@ -81,10 +81,15 @@ def validate_dir_code(
                 common.append(item)
             elif isinstance(item, Mapping) and item.get("code"):
                 common.append(str(item["code"]))
-    # Prefer numeric starter codes as suggested_correction (ignore mnemonic tags).
-    req_count = len(requirements) if isinstance(requirements, list) else None
-    numeric_common = [c for c in common if is_numeric_dir_code(c, requirement_count=req_count)]
-    suggested = (numeric_common or common or [""])[0]
+    # Prefer numeric starter codes with correct arity (repair stale 6-of-7 packs).
+    from .dir_catalog import ensure_common_codes_for_requirements
+
+    repaired = ensure_common_codes_for_requirements(
+        common_codes if common_codes is not None else common,
+        requirements,
+    )
+    numeric_common = [c["code"] for c in repaired]
+    suggested = (numeric_common or [""])[0]
 
     rules = (pack.validation_rules.get("dir_code") or {}) if isinstance(pack.validation_rules, dict) else {}
     min_index = int(rules.get("min_index") or 1)
