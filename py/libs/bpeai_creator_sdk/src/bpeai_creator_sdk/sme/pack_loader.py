@@ -453,6 +453,16 @@ def knowledge_pack_from_dict(
         pptx_outline = content.get("pptx_outline") or payload.get("pptx_outline") or {}
         if content.get("meta") and isinstance(content["meta"], dict):
             meta = {**meta, **content["meta"]}
+        # Prefer full uploaded dir_requirements (incl. dir_menus) from content blob
+        content_dir = content.get("dir_requirements")
+        if isinstance(content_dir, dict):
+            merged = {**dir_req, **content_dir}
+            # Keep non-empty list catalogs from either side
+            for key in ("dir_menus", "menus"):
+                left = dir_req.get(key) if isinstance(dir_req.get(key), list) else []
+                right = content_dir.get(key) if isinstance(content_dir.get(key), list) else []
+                merged[key] = right or left
+            dir_req = merged
     else:
         equipment_options = payload.get("equipment_options") or {}
         validation_rules = payload.get("validation_rules") or {}
@@ -460,8 +470,16 @@ def knowledge_pack_from_dict(
         report_outline = payload.get("report_outline") or {}
         pptx_outline = payload.get("pptx_outline") or {}
 
+    # Normalize: if menus present but dir_menus empty, mirror for list-catalog matchers
+    menus = dir_req.get("menus") if isinstance(dir_req.get("menus"), list) else []
+    dir_menus = dir_req.get("dir_menus") if isinstance(dir_req.get("dir_menus"), list) else []
+    if menus and not dir_menus:
+        dir_req = {**dir_req, "dir_menus": menus}
+    elif dir_menus and not menus:
+        dir_req = {**dir_req, "menus": dir_menus}
+
     return KnowledgePack(
-        pack_id=pack_id,
+        pack_id=str(meta.get("pack_id") or pack_id),
         path=path or Path(f"<db:{pack_id}>"),
         meta=meta if isinstance(meta, dict) else {},
         dir_requirements=dir_req,

@@ -142,6 +142,33 @@ def is_selector_result(result: Dict[str, Any]) -> bool:
     return bool(result.get("equipment_tag") and result.get("selected_model") and result.get("rationale"))
 
 
+def _manifest_llm_overrides(app_id: str, py_root: Path | None) -> Dict[str, Any]:
+    """Read llm_* fields from apps/<id>/manifest.json when present."""
+    root = py_root or repo_py_root()
+    path = root / "apps" / app_id / "manifest.json"
+    if not path.is_file():
+        return {}
+    try:
+        import json
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out: Dict[str, Any] = {}
+    if data.get("llm_provider"):
+        out["provider"] = str(data["llm_provider"]).strip()
+    if data.get("llm_model"):
+        out["model"] = str(data["llm_model"]).strip()
+    if data.get("llm_max_output_tokens") is not None:
+        try:
+            out["max_output_tokens"] = int(data["llm_max_output_tokens"])
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
 def run_agent(
     app_id: str,
     inputs: Dict[str, Any],
@@ -159,7 +186,24 @@ def run_agent(
         agent_class=agent_class,
     )
     agent = cls(status_callback=status_callback)
-    result = agent.run(inputs)
+    overrides = _manifest_llm_overrides(app_id, py_root)
+    restore = None
+    if overrides:
+        try:
+            from bpeai_creator_sdk.llm.resolve import push_run_overrides
+
+            restore = push_run_overrides(
+                provider=overrides.get("provider"),
+                model=overrides.get("model"),
+                max_output_tokens=overrides.get("max_output_tokens"),
+            )
+        except Exception:
+            restore = None
+    try:
+        result = agent.run(inputs)
+    finally:
+        if restore is not None:
+            restore()
     if not isinstance(result, dict):
         raise TypeError("Agent.run() must return a dict")
     if is_selector_result(result):

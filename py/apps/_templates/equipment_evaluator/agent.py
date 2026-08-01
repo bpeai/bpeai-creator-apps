@@ -346,6 +346,54 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
     equipment_system = "mixing"
     creator_display_name = "Your Name"
 
+    def _persist_dir_menu_to_platform(self, pack: KnowledgePack, row: Dict[str, Any]) -> None:
+        """POST generated DIR menu into the creator's private pack (web runtime)."""
+        import json
+        import os
+        import urllib.error
+        import urllib.request
+
+        # Prefer DB slug from payload meta; fall back to pack_id
+        pack_key = str(
+            pack.meta.get("db_slug") or pack.meta.get("pack_id") or pack.pack_id or ""
+        ).strip()
+        if not pack_key:
+            return
+        base = (
+            os.environ.get("BPEAI_INTERNAL_BASE_URL")
+            or os.environ.get("NEXT_INTERNAL_BASE_URL")
+            or "http://web:3000"
+        ).rstrip("/")
+        token = (
+            os.environ.get("INTERNAL_API_TOKEN")
+            or os.environ.get("CREATOR_INTERNAL_TOKEN")
+            or os.environ.get("VENDOR_API_INTERNAL_TOKEN")
+            or ""
+        )
+        if not token:
+            self.status("DIR catalog DB persist skipped (no INTERNAL_API_TOKEN)")
+            return
+        url = f"{base}/api/internal/knowledge-packs/{pack_key}/dir-menus"
+        body = json.dumps({"menu": row}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-internal-token": token,
+                "Accept": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                resp.read()
+            self.status("Saved generated DIR menu to knowledge pack")
+        except urllib.error.HTTPError as exc:
+            self.status(f"DIR catalog DB persist failed (HTTP {exc.code})")
+        except Exception as exc:
+            self.status(f"DIR catalog DB persist failed ({exc})")
+
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         system_name = str(inputs.get("system_name") or "Process Vessel").strip()
         application_raw = str(inputs.get("application") or "biopharmaceutical").strip()
@@ -802,14 +850,17 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             variant=variant,
             industry=ind,
         )
-        # Persist when pack is a real filesystem folder (creator packs).
+        # Persist: filesystem packs write YAML; DB-hydrated packs POST to internal API.
         try:
-            if pack.path.exists() and not str(pack.path).startswith("<"):
+            path_s = str(pack.path)
+            if pack.path.exists() and not path_s.startswith("<"):
                 append_dir_menu(pack, row, write_markdown=True)
             else:
                 menus = pack.dir_requirements.setdefault("dir_menus", [])
                 if isinstance(menus, list):
                     menus.append(row)
+                if path_s.startswith("<db:"):
+                    self._persist_dir_menu_to_platform(pack, row)
         except Exception as exc:
             self.status(f"DIR catalog persist skipped ({exc})")
             menus = pack.dir_requirements.setdefault("dir_menus", [])
@@ -831,7 +882,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         validation_error: str = "",
         suggested_correction: str = "",
     ) -> Dict[str, Any]:
-        self.status(f"Preparing design input requirements for {system_name}…")
+        self.status(f"Assembling design input requirements for {system_name}…")
         requirements = menu.requirements
         entries = pack._normalize_common_codes(menu.common_codes)
         codes = [e["code"] for e in entries]
@@ -862,6 +913,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         if validation_error:
             out["validation_error"] = validation_error
             out["suggested_correction"] = suggested_correction or (codes[0] if codes else "")
+        self.status(f"Design input requirements ready for {system_name}")
         return out
 
     def _evaluate(

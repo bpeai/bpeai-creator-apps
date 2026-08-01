@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from typing import Tuple
+import threading
+from typing import Callable, Optional, Tuple
 
 from .allowlist import DEFAULT_MODELS, SUPPORTED_PROVIDERS, validate_model
 from .anthropic_provider import AnthropicProvider
@@ -17,10 +18,54 @@ _ADAPTERS: dict[str, LlmProvider] = {
     "xai": XAIProvider(),
 }
 
+_tls = threading.local()
+
+
+def push_run_overrides(
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+    max_output_tokens: int | None = None,
+) -> Callable[[], None]:
+    """Apply per-run LLM overrides (thread-local). Returns a restore callback."""
+    stack: list[dict] = getattr(_tls, "override_stack", None) or []
+    prev = {
+        "provider": getattr(_tls, "provider", None),
+        "model": getattr(_tls, "model", None),
+        "max_output_tokens": getattr(_tls, "max_output_tokens", None),
+    }
+    stack.append(prev)
+    _tls.override_stack = stack
+    if provider:
+        _tls.provider = provider.strip().lower()
+    if model:
+        _tls.model = model.strip()
+    if max_output_tokens is not None:
+        _tls.max_output_tokens = int(max_output_tokens)
+
+    def _restore() -> None:
+        cur_stack: list[dict] = getattr(_tls, "override_stack", None) or []
+        if not cur_stack:
+            _tls.provider = None
+            _tls.model = None
+            _tls.max_output_tokens = None
+            return
+        old = cur_stack.pop()
+        _tls.override_stack = cur_stack
+        _tls.provider = old.get("provider")
+        _tls.model = old.get("model")
+        _tls.max_output_tokens = old.get("max_output_tokens")
+
+    return _restore
+
 
 def default_creator_provider() -> str:
     """Resolve CREATOR_LLM_PROVIDER (default openai)."""
-    raw = (os.getenv("CREATOR_LLM_PROVIDER") or "openai").strip().lower()
+    override = getattr(_tls, "provider", None)
+    if override:
+        raw = str(override).strip().lower()
+    else:
+        raw = (os.getenv("CREATOR_LLM_PROVIDER") or "openai").strip().lower()
     if not raw:
         return "openai"
     if raw not in SUPPORTED_PROVIDERS:
@@ -31,6 +76,9 @@ def default_creator_provider() -> str:
 
 def default_max_output_tokens() -> int:
     """Resolve max output tokens with legacy OpenAI fallback."""
+    override = getattr(_tls, "max_output_tokens", None)
+    if override is not None:
+        return int(override)
     raw = (
         os.getenv("CREATOR_LLM_MAX_OUTPUT_TOKENS")
         or os.getenv("OPENAI_CREATOR_MAX_OUTPUT_TOKENS")
@@ -42,7 +90,10 @@ def default_max_output_tokens() -> int:
 def default_creator_model(provider: str | None = None) -> str:
     """Resolve model for the active (or given) provider."""
     prov = (provider or default_creator_provider()).strip().lower()
-    explicit = (os.getenv("CREATOR_LLM_MODEL") or "").strip()
+    override = getattr(_tls, "model", None)
+    explicit = (str(override).strip() if override else "") or (
+        os.getenv("CREATOR_LLM_MODEL") or ""
+    ).strip()
     if prov == "openai":
         chosen = (
             explicit

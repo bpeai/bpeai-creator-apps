@@ -109,7 +109,27 @@ You *can* create the portal draft first, but module/class must still match the c
 | Portal **Agent class** | `HeatExchangerEvaluatorAgent` | Exact class name in `agent.py` |
 | Knowledge pack | `mixing` (or your pack id) | Portal bind/clone; platform seeds in website `py/knowledge/`; manifest `knowledge_pack` optional |
 
-### 1.5 Local test
+### 1.5 Local ≈ web (private packs + versions)
+
+Creator apps use **private knowledge packs** only (not platform seeds). Local YAML under `py/knowledge/<pack_id>/` must be uploaded with the app so Test/hub runs use the same `pack.yaml` + DIR menus.
+
+| Field | Where | Meaning |
+|-------|--------|---------|
+| `manifest.json` → `version` | App | Creator-facing semver (e.g. `0.2.0`) |
+| `pack.yaml` → `version` | Pack | Creator-facing semver |
+| Portal `releaseVersion` | Copied on upload | Shown on Test / Settings |
+| Portal upload counter | Auto-increment | How many times code/pack was replaced |
+| `manifest.json` → `llm_model` / `llm_provider` | Optional | Local + portal per-app model (also settable in Settings) |
+
+**Update loop**
+
+1. Edit locally; bump semver in `manifest.json` / `pack.yaml` when shipping a meaningful change.
+2. Upload zip (portal `/apps/upload` or `python py/tools/upload_creator_bundle.py --apps <id> --packs <pack>`).
+3. Confirm Test page shows your **private** pack (not a platform seed) + release versions.
+4. Optional pull: `python py/tools/download_knowledge_pack.py --pack <slug-or-id> --out py/knowledge`
+5. Submit → admin publish.
+
+### 1.6 Local test
 
 **Preferred — local chat (smart text):**
 
@@ -125,6 +145,7 @@ python py\tools\local_chat.py --app <your_id>
 - Artifacts write under `./artifacts/` (gitignored): markdown + PDF report; optional PPTX
 - Optional: copy `.env.example` → `.env` and set personal `OPENAI_API_KEY` (never commit)
 - For evaluator depth: `OPENAI_CREATOR_MODEL=gpt-5.2` and `OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000` (code default remains `gpt-4o`)
+- Or set `llm_model` / `llm_provider` in `manifest.json` (applied by `local_chat` / `run_agent`)
 - Multi-provider (v1 allowlist): set `CREATOR_LLM_PROVIDER` to `openai` (default), `anthropic`, `google`, or `xai`, plus the matching API key. Non-OpenAI models are hard-allowlisted (`claude-sonnet-4-5`, `gemini-2.5-pro`, `grok-3`). See [docs/PROVIDER_DIR_QA.md](./docs/PROVIDER_DIR_QA.md).
 - `--json` dumps validated `equipment_selector_v1`; `--once "…"` for one-shot
 
