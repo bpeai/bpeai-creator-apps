@@ -41,7 +41,7 @@ Work in the dedicated GitHub repo: **[bpeai/bpeai-creator-apps](https://github.c
 
 **Platform note (templates):** EI apps use a **template family** (by deliverable) + **SME knowledge pack** + **shared SDK**. Start from `py/apps/_templates/equipment_evaluator`. See [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md).
 
-**Knowledge ownership:** Your pack content is **private to your apps** (portal-managed). Canonical platform seeds live in the **website deploy repo** (`bpeai/py/knowledge/`, e.g. `mixing`, `filtration`) — **not** in this repo. Bind or **clone** them on the portal. This repo only has `py/knowledge/_examples/` stubs for local SDK tests. Local creator packs under `py/knowledge/<id>/` and copied apps under `py/apps/<your_id>/` are **gitignored** (template + SDK are the shared sources of truth). Python agent code ships via git PR only when BPEAI’s publish process requires it (no zip upload).
+**Knowledge ownership:** Your pack content is **private to your apps** (portal-managed). Canonical platform seeds live in the **website deploy repo** (`bpeai/py/knowledge/`, e.g. `mixing`, `filtration`) — **not** in this repo. Clone a seed into a **private** pack if you need a starting point; creator apps cannot bind platform seeds at runtime. This repo only has `py/knowledge/_examples/` stubs for local SDK tests. Local creator packs under `py/knowledge/<id>/` and apps under `py/apps/<your_id>/` are **gitignored**. **Ship path:** portal zip upload or `py/tools/upload_creator_bundle.py` (see [docs/EI_HANDSHAKE.md](./docs/EI_HANDSHAKE.md)).
 
 ### 1.1 Clone once, add apps over time
 
@@ -173,35 +173,33 @@ SDK (same content live after website deploy): https://bpiplatform.bpeai.com/sdk
 
 ---
 
-## 2. Register draft on the portal — Creator
+## 2. Upload app + private pack — Creator (primary)
 
-1. https://bpiplatform.bpeai.com → nav **New app** (or Dashboard CTA).
-2. Fill slug, label, description, equipment system, Free/Pro/Pro+, Python module, Agent class.
-3. Save → **App settings** (`/apps/<id>`). Slug and app id are shown read-only there.
+1. https://bpiplatform.bpeai.com → **Upload** (or **New app**), zip `py/apps/<id>/` + `py/knowledge/<pack>/`.
+2. Or CLI: `python py/tools/upload_creator_bundle.py --apps <id> --packs <pack>` with
+   `BPEAI_PLATFORM_URL` + `BPEAI_SESSION_COOKIE`.
+3. Confirm Settings → private knowledge pack is bound (upload usually auto-binds).
+4. **Test** on `/platform/apps/<id>/test` — same runner as the hub (`ei_handshake_v1`).
+5. **Submit for review** → BPEAI admin publishes.
 
-Draft exists in DB. Runtime fails until Python is on the server (next step).
+Wire contract: [docs/EI_HANDSHAKE.md](./docs/EI_HANDSHAKE.md).
 
 ---
 
-## 3. Install Python on the server — Creator + BPEAI
+## 3. Runtime on BPEAI — platform (not creator)
 
-**No upload API.** Code ships via git PR. BPEAI mirrors `py/apps/<id>/` + `bpeai_creator_sdk` (not production knowledge packs) into the website deploy repo.
+Creators do **not** rebuild EC2. Upload stores code under `creator_runtime` / S3;
+`vendor_api` loads by `app_id` + bound pack payload.
 
 | Step | Who |
 |------|-----|
-| PR into `bpeai-creator-apps` with `py/apps/<id>/` | Creator |
-| Review, copy into website `bpeai` `py/`, merge | BPEAI |
-| EC2 rebuild | BPEAI |
+| Upload zip / CLI | Creator |
+| Test + Submit | Creator |
+| Publish | BPEAI admin |
+| SDK / seed / handshake changes | BPEAI deploy |
 
-```bash
-cd ~/bpeai
-git pull origin master
-docker compose up -d --build
-```
-
-Runtime reads `python_module` + `agent_class` from the `creator_apps` row.
-
-**Security:** never commit API keys; use `.env` locally only; PRs are reviewed before merge. Platform OpenAI/Serper keys are not used for creator local test.
+**Security:** never commit API keys; use `.env` locally only. Platform OpenAI/Serper
+keys are not used for creator local test.
 
 ---
 

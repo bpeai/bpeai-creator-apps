@@ -34,7 +34,24 @@
     },
     "knowledge_pack": {
       "type": "string",
-      "description": "Optional SME pack id under py/knowledge/<id>/; defaults to equipment_system when omitted"
+      "description": "Local pack folder id under py/knowledge/<id>/ (uploaded + bound as a private pack). Defaults to equipment_system when omitted."
+    },
+    "handshake_protocol": {
+      "type": "string",
+      "const": "ei_handshake_v1",
+      "description": "Wire protocol version for EI app ↔ BPEAI processing (see docs/EI_HANDSHAKE.md)"
+    },
+    "version": {
+      "type": "string",
+      "description": "Creator-facing semver for this app release (e.g. 0.2.0)"
+    },
+    "llm_provider": {
+      "type": "string",
+      "description": "Optional per-app LLM provider override"
+    },
+    "llm_model": {
+      "type": "string",
+      "description": "Optional per-app LLM model override"
     },
     "equipment_subtypes": {
       "type": "array",

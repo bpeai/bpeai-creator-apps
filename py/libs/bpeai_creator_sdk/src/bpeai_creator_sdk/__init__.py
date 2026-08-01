@@ -13,10 +13,19 @@ from .local_format import format_result_text, format_selector_json, format_selec
 from .local_parse import parse_free_text, parse_inputs_heuristic
 from .local_run import load_agent_class, resolve_app_id, run_agent
 from .manifest import CreatorAppAuthor, CreatorAppManifest, EquipmentSystem
+from .handshake import (
+    HANDSHAKE_PROTOCOL_VERSION,
+    attach_handshake,
+    build_handshake_meta,
+    normalize_options_fields,
+    options_from_result,
+)
 from .output import (
     CreatorAttribution,
     EquipmentSelectorOutput,
+    EvaluationOption,
     KeySpecValue,
+    MixingOption,
     OUTPUT_SCHEMA_VERSION,
     output_to_equipment_row,
     validate_output,
@@ -40,13 +49,18 @@ __all__ = [
     "CreatorAppManifest",
     "CreatorAttribution",
     "EquipmentSelectorOutput",
+    "EvaluationOption",
     "EquipmentSystem",
+    "HANDSHAKE_PROTOCOL_VERSION",
     "KeySpecValue",
+    "MixingOption",
     "DirMenu",
     "KnowledgePack",
     "OUTPUT_SCHEMA_VERSION",
+    "attach_handshake",
     "build_evaluation_pdf",
     "build_evaluation_pptx",
+    "build_handshake_meta",
     "build_slide_pack_from_evaluation",
     "check_application",
     "check_equipment_option_names",
@@ -62,7 +76,9 @@ __all__ = [
     "load_dotenv",
     "load_knowledge_pack",
     "missing_report_headings",
+    "normalize_options_fields",
     "openai_key_present",
+    "options_from_result",
     "output_to_equipment_row",
     "parse_free_text",
     "parse_inputs_heuristic",

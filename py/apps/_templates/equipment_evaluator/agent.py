@@ -209,7 +209,7 @@ Return JSON matching equipment_selector_v1 WITH these GPT-parity fields populate
     {"option": "…", "technical_fit": "Best|Strong|…", "gmp": "High|…",
      "scale_up_risk": "Low|…", "cost_schedule": "Best|…", "reliability": "High|…", "rank": 1}
   ],
-  "mixing_options": [
+  "evaluation_options": [
     {
       "name": "Generic technology option name from the SME catalog when possible",
       "fit": "best|strong|conditional|limited|add-on|special-case",
@@ -219,10 +219,15 @@ Return JSON matching equipment_selector_v1 WITH these GPT-parity fields populate
       "manufacturers": ["Vendor (product-line hint)", "…"]
     }
   ],
+  "mixing_options": [],
   "manufacturers": ["…"],
   "datasheet_markdown": "FULL sectioned markdown report (see required headings)",
-  "source_basis": ["user_inputs", "knowledge_pack", "serper_search", "industry_references"]
+  "source_basis": ["user_inputs", "knowledge_pack", "serper_search", "industry_references"],
+  "handshake_protocol": "ei_handshake_v1"
 }
+NOTE: evaluation_options is canonical for all equipment systems. mixing_options may
+be returned as an empty array or omitted; the platform mirrors evaluation_options
+into mixing_options for older clients.
 
 Requirements (depth bar — do not produce thin one-line sections):
 - Use the decoded DIR; do not invent a different volume/vessel/duty.
@@ -750,13 +755,14 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 return legacy, notes
             # If pack already has a usable legacy questionnaire for this scenario, reuse.
             if legacy.requirements and legacy.source in {"menu", "scenario_fallback"}:
-                # Only skip generation when fingerprint aliases matched a real scenario
-                # (not a bare empty default). Prefer generation for unknown systems when
-                # catalog is list-based and empty of matches.
-                if pack.dir_menus:
-                    # List catalog is authoritative — miss means generate.
-                    pass
-                else:
+                # Prefer authored pack questionnaires (scenarios / menus) over LLM
+                # regenerate. List-catalog miss alone must not invent a parallel DIR
+                # when fingerprint aliases already resolved a real scenario.
+                if legacy.source == "scenario_fallback":
+                    return legacy, notes
+                if legacy.scenario_id and legacy.scenario_id not in {"", "default"}:
+                    return legacy, notes
+                if not pack.dir_menus:
                     return legacy, notes
 
         try:
@@ -1012,11 +1018,16 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         raw = self.call_openai_json(system=system_prompt, user=user_prompt)
         raw = self._normalize_raw(raw, pack, system_name)
 
-        # Soft-check option names
+        # Soft-check option names (evaluation_options canonical; mixing_options alias)
+        opts = raw.get("evaluation_options")
+        if not isinstance(opts, list) or not opts:
+            opts = raw.get("mixing_options") if isinstance(raw.get("mixing_options"), list) else []
+        raw["evaluation_options"] = opts
+        raw["mixing_options"] = opts
         names: List[str] = []
         if raw.get("selected_model"):
             names.append(str(raw["selected_model"]))
-        for opt in raw.get("mixing_options") or []:
+        for opt in opts:
             if isinstance(opt, dict) and opt.get("name"):
                 names.append(str(opt["name"]))
         opt_check = check_equipment_option_names(pack, names)
@@ -1027,7 +1038,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         )
         # Expand allowed fits used by GPT sample
         allowed_fit |= {"add-on", "special-case", "addon", "special_case"}
-        for opt in raw.get("mixing_options") or []:
+        for opt in opts:
             if isinstance(opt, dict) and opt.get("fit") not in allowed_fit:
                 fit = str(opt.get("fit") or "").lower().replace("_", "-")
                 opt["fit"] = fit if fit in allowed_fit else "conditional"
@@ -1043,7 +1054,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 f"Missing headings: {missing or 'none'}.\n"
                 f"Thin sections (expand to substantive multi-sentence engineering content): "
                 f"{thin or 'none'}.\n"
-                f"Also ensure failure_modes has >=3 items, each mixing_options entry meets the "
+                f"Also ensure failure_modes has >=3 items, each evaluation_options entry meets the "
                 f"depth bar, and weave search citations (title + URL) into rationale and markdown.\n"
                 f"Return the FULL corrected JSON object (same schema) with a complete "
                 f"datasheet_markdown that includes ALL required headings: {heading_block}.\n\n"
@@ -1136,7 +1147,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 "alternate_basis": evaluation.get("alternate_basis"),
                 "rationale": evaluation.get("rationale"),
                 "selected_model": evaluation.get("selected_model"),
-                "mixing_options": evaluation.get("mixing_options"),
+                "evaluation_options": evaluation.get("evaluation_options")
+                or evaluation.get("mixing_options"),
+                "mixing_options": evaluation.get("evaluation_options")
+                or evaluation.get("mixing_options"),
                 "evaluation_matrix": evaluation.get("evaluation_matrix"),
                 "preliminary_specs": evaluation.get("preliminary_specs"),
                 "manufacturers": evaluation.get("manufacturers"),

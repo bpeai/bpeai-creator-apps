@@ -53,11 +53,19 @@ class DirMenu:
 
     @property
     def is_approved(self) -> bool:
-        """True when menu may be used for evaluate (approved, draft_generated, or legacy fallback)."""
+        """True when menu may be used for evaluate (approved, draft, or legacy fallback).
+
+        Creator portal uploads often land as pending_review / generated — still
+        evaluable for Test and private packs (same as local draft_generated).
+        """
         life = _norm(self.lifecycle)
         if life in {"approved"}:
             return True
-        if life in {"draft_generated"} and self.source in {"dir_catalog", "generated"}:
+        if life in {
+            "draft_generated",
+            "generated",
+            "pending_review",
+        } and self.source in {"dir_catalog", "generated", "menu"}:
             return True
         return self.source == "scenario_fallback"
 

@@ -20,8 +20,22 @@ from .pack_loader import (
 )
 from .validate import is_numeric_dir_code, validate_dir_code
 
-DRAFT_USABLE_STATUSES = frozenset({"draft_generated", "approved", "APPROVED"})
+DRAFT_USABLE_STATUSES = frozenset(
+    {
+        "draft_generated",
+        "generated",
+        "pending_review",
+        "approved",
+        "APPROVED",
+        "GENERATED",
+        "PENDING_REVIEW",
+    }
+)
 APPROVED_STATUSES = frozenset({"approved", "APPROVED"})
+# Creator private packs often land as pending_review after portal upload — still usable for Test.
+CREATOR_USABLE_DRAFT = frozenset(
+    {"draft_generated", "generated", "pending_review", "GENERATED", "PENDING_REVIEW"}
+)
 
 
 def dir_menus(pack: KnowledgePack) -> List[Dict[str, Any]]:
@@ -149,11 +163,12 @@ def match_dir_menu(
 
     scored: list[tuple[int, Dict[str, Any]]] = []
     for row in rows:
-        status = _norm(str(row.get("status") or row.get("lifecycle") or "approved"))
-        if status in APPROVED_STATUSES:
+        status_raw = str(row.get("status") or row.get("lifecycle") or "approved")
+        status = _norm(status_raw)
+        if status in {_norm(s) for s in APPROVED_STATUSES}:
             status_ok = True
             status_bonus = 20
-        elif allow_draft and status in {"draft_generated"}:
+        elif allow_draft and status in {_norm(s) for s in CREATOR_USABLE_DRAFT}:
             status_ok = True
             status_bonus = 5
         else:
@@ -177,8 +192,17 @@ def match_dir_menu(
         if isinstance(examples, list) and text:
             for ex in examples:
                 t = str(ex).strip().lower()
-                if t and t in text:
-                    example_bonus = max(example_bonus, min(40, len(t)))
+                if not t:
+                    continue
+                # Full example appears in user text, or shared significant tokens (either direction).
+                if t in text or text in t:
+                    example_bonus = max(example_bonus, min(40, max(len(t), len(text))))
+                    continue
+                ex_tokens = {w for w in t.replace("/", " ").split() if len(w) >= 4}
+                text_tokens = {w for w in text.replace("/", " ").split() if len(w) >= 4}
+                overlap = ex_tokens & text_tokens
+                if len(overlap) >= 2:
+                    example_bonus = max(example_bonus, 12 + 4 * len(overlap))
         score += example_bonus
 
         # Accept: scenario fingerprint match, or strong system_examples evidence.
@@ -237,23 +261,51 @@ def normalize_generated_menu(
 
     codes = filter_numeric_common_codes(raw.get("common_codes") or [], requirements=norm_reqs)
     if len(codes) < 2:
-        # Synthesize two conservative starters from first option of each requirement
-        base = "-".join("1" for _ in norm_reqs)
-        alt_parts = []
-        for req in norm_reqs:
-            opts = req.get("options") or []
-            alt_parts.append(str(min(2, len(opts)) if opts else 1))
-        alt = "-".join(alt_parts)
-        codes = [
-            {
-                "code": base,
-                "caption": f"Baseline starter for {system_name} ({application}).",
-            },
-            {
-                "code": alt,
-                "caption": f"Alternate starter for {system_name} ({application}).",
-            },
-        ]
+        # Prefer varied, captioned starters — never emit all-1s / all-2s placeholders.
+        n = len(norm_reqs)
+
+        def _pick(indices: list[int], caption: str) -> Dict[str, Any]:
+            parts = []
+            for i, req in enumerate(norm_reqs):
+                opts = req.get("options") or []
+                max_i = len(opts) if opts else 1
+                want = indices[i] if i < len(indices) else 1
+                parts.append(str(min(max(1, want), max_i)))
+            return {"code": "-".join(parts), "caption": caption}
+
+        gmp = _pick(
+            [3] * n,
+            f"Large-scale GMP production bias for {system_name}: prefer stainless / SIP / FIT-capable choices where available.",
+        )
+        mid_c = _pick(
+            [2] * n,
+            f"Pilot/production reusable housing bias for {system_name} ({application}).",
+        )
+        su = _pick(
+            [1] * n,
+            f"Single-use / smaller-scale bias for {system_name} ({application}).",
+        )
+        for label, target_words in (
+            (gmp, ("stainless", "316", "sip", "steam", "integrity", "fit", "gmp", "production", "large")),
+            (mid_c, ("reusable", "cartridge", "housing", "moderate", "pilot")),
+            (su, ("single-use", "disposable", "capsule", "gamma")),
+        ):
+            parts = label["code"].split("-")
+            for i, req in enumerate(norm_reqs):
+                opts = req.get("options") or []
+                for opt in opts:
+                    ot = str(opt.get("text") or "").lower()
+                    if any(w in ot for w in target_words):
+                        parts[i] = str(int(opt.get("index") or parts[i]))
+                        break
+            label["code"] = "-".join(parts)
+        codes = []
+        seen: set[str] = set()
+        for c in (gmp, mid_c, su):
+            if c["code"] in seen:
+                continue
+            seen.add(c["code"])
+            codes.append(c)
 
     mid = str(raw.get("menu_id") or "").strip() or menu_id_for(
         scenario_id=scenario_id,

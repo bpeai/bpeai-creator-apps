@@ -31,8 +31,8 @@ Day-to-day edits for templates/SDK/seeds land first in **bpeai-creator-apps**, t
 
 - **Creator packs are private** to that creator’s EI apps only (not a marketplace).
 - One creator may bind **one pack to many of their apps**.
-- **Platform seeds** (e.g. `mixing`) are BPEAI-owned; creators may bind or **clone** into a private pack.
-- **Python agent code** stays git PR only — no zip/S3 code upload.
+- **Platform seeds** (e.g. `mixing`) are BPEAI-owned; creators **clone** into a private pack (creator apps cannot bind seeds at runtime).
+- **Python agent code** ships via **portal zip upload** / `upload_creator_bundle.py` (primary). See [EI_HANDSHAKE.md](./EI_HANDSHAKE.md).
 
 ---
 
@@ -40,10 +40,11 @@ Day-to-day edits for templates/SDK/seeds land first in **bpeai-creator-apps**, t
 
 | Asset | Transfer |
 |-------|----------|
-| Python agent (`py/apps/<id>/`) | git PR → BPEAI mirror → `vendor_api` rebuild |
-| SDK + templates + platform seed YAML | git mirror creator-apps → bpeai |
-| Creator knowledge pack + DIR menus | Portal API → Postgres (+ versioned S3 YAML snapshot) |
+| Python agent (`py/apps/<id>/`) | Portal zip / CLI → S3 + `creator_runtime` → `vendor_api` load by `app_id` |
+| SDK + templates + platform seed YAML | git mirror creator-apps → bpeai (BPEAI deploy) |
+| Creator knowledge pack + DIR menus | Upload zip / Portal API → Postgres (+ versioned S3 YAML snapshot) |
 | Shared vocab | `bpeai_taxonomy` in bpeai (git) |
+| Run wire protocol | `ei_handshake_v1` (SSE + durable `ei_runtime_runs`) |
 
 ---
 
@@ -174,6 +175,6 @@ Manifest:
 ## Non-goals
 
 - Desktop (`bpeai-workspace-app`) integration
-- Zip / S3 **Python code** upload for creators (git PR only)
 - Cross-creator pack sharing / marketplace
 - Replacing first-party `eq_list` / solids orchestrator
+- Requiring creators to edit the website deploy repo to ship an app
