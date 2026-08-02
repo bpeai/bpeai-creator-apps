@@ -369,26 +369,26 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             or os.environ.get("NEXT_INTERNAL_BASE_URL")
             or "http://web:3000"
         ).rstrip("/")
+        # Token optional: Next internal route allows Docker-internal calls when unset.
         token = (
             os.environ.get("INTERNAL_API_TOKEN")
             or os.environ.get("CREATOR_INTERNAL_TOKEN")
             or os.environ.get("VENDOR_API_INTERNAL_TOKEN")
             or ""
         )
-        if not token:
-            self.status("DIR catalog DB persist skipped (no INTERNAL_API_TOKEN)")
-            return
         url = f"{base}/api/internal/knowledge-packs/{pack_key}/dir-menus"
         body = json.dumps({"menu": row}).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        if token:
+            headers["x-internal-token"] = token
         req = urllib.request.Request(
             url,
             data=body,
             method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "x-internal-token": token,
-                "Accept": "application/json",
-            },
+            headers=headers,
         )
         try:
             with urllib.request.urlopen(req, timeout=12) as resp:

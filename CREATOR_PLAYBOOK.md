@@ -119,7 +119,17 @@ Creator apps use **private knowledge packs** only (not platform seeds). Local YA
 | `pack.yaml` → `version` | Pack | Creator-facing semver |
 | Portal `releaseVersion` | Copied on upload | Shown on Test / Settings |
 | Portal upload counter | Auto-increment | How many times code/pack was replaced |
+| Pack `content_version` | Auto-increment | Bumps when DIR menus / pack content change on server — **download before local edit** |
 | `manifest.json` → `llm_model` / `llm_provider` | Optional | Local + portal per-app model (also settable in Settings) |
+
+**Cloud storage (Option B):** S3 holds app zips + pack snapshots; EC2 `creator_runtime` is a
+hot cache with LRU eviction. Packs are updated during Test/generate — pull current
+`content_version` via Knowledge → Download or:
+
+```powershell
+python py\tools\download_knowledge_pack.py --pack <slug-or-id> --out py\knowledge --zip
+python py\tools\download_app_bundle.py --app <app_id> --out py\apps   # backup only; apps not mutated at runtime
+```
 
 **Update loop**
 

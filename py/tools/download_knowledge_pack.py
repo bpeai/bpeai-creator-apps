@@ -34,6 +34,11 @@ def main() -> int:
         or os.environ.get("NEXT_PUBLIC_PLATFORM_URL")
         or "https://bpiplatform.bpeai.com",
     )
+    parser.add_argument(
+        "--zip",
+        action="store_true",
+        help="Download zip (download-zip) and extract into --out",
+    )
     args = parser.parse_args()
 
     cookie = (
@@ -45,10 +50,37 @@ def main() -> int:
         print("Set BPEAI_SESSION_COOKIE to your bpeai_session cookie value.", file=sys.stderr)
         return 2
 
+    cookie_header = cookie if "=" in cookie else f"bpeai_session={cookie}"
+
+    if args.zip:
+        import io
+        import zipfile
+
+        url = f"{args.base.rstrip('/')}/api/platform/knowledge-packs/{args.pack}/download-zip"
+        req = urllib.request.Request(
+            url,
+            headers={"Cookie": cookie_header, "Accept": "application/zip"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                raw = resp.read()
+                cv = resp.headers.get("X-BPEAI-Content-Version", "?")
+        except urllib.error.HTTPError as exc:
+            print(f"Download failed: HTTP {exc.code} {exc.read()[:500]!r}", file=sys.stderr)
+            return 1
+        out_root = Path(args.out)
+        out_root.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            zf.extractall(out_root)
+            for n in zf.namelist():
+                print(f"Wrote {out_root / n}")
+        print(f"Done. content_version={cv} under {out_root}")
+        return 0
+
     url = f"{args.base.rstrip('/')}/api/platform/knowledge-packs/{args.pack}/download"
     req = urllib.request.Request(
         url,
-        headers={"Cookie": cookie if "=" in cookie else f"bpeai_session={cookie}", "Accept": "application/json"},
+        headers={"Cookie": cookie_header, "Accept": "application/json"},
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:

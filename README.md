@@ -42,9 +42,11 @@ py/
   tools/
     local_chat.py
     upload_creator_bundle.py            ← primary ship path
-    download_knowledge_pack.py
+    download_knowledge_pack.py          ← pull current pack (use --zip)
+    download_app_bundle.py              ← backup restore (apps not mutated at runtime)
     sync_knowledge_pack.py
 ```
+
 
 ## Playbook (code → local test → upload)
 
