@@ -169,6 +169,8 @@ Manifest:
 2. Portal `/platform/sdk` shows `CREATOR_SDK_VERSION` + changelog excerpt.
 3. Major SDK bumps: email to users with creator access.
 4. See [`CHANGELOG.md`](../CHANGELOG.md) and [`CREATOR_PLAYBOOK.md`](../CREATOR_PLAYBOOK.md).
+5. Creator customization dials + UI capability matrix: [`EI_CREATOR_EXTENSIONS.md`](./EI_CREATOR_EXTENSIONS.md).
+6. Preferred onboarding: open this repo in Cursor → Agent → **Create my EI app** (`AGENTS.md` / `.cursor/skills/ei-creator-wizard`).
 
 ---
 

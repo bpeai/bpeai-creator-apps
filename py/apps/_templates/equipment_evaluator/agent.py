@@ -14,6 +14,13 @@ Creator checklist after copying this folder to ``py/apps/<your_id>/``:
   6. Leave EVALUATION_PROMPT / depth bar alone unless you are changing the
      deliverable contract; pack ``prompt_fragments.yaml`` is the SME dial.
   7. Review any ``draft_pending_sme_approval`` pack files before production use.
+  8. Optional Python helpers: ``creator_tools.py`` (see ``EXTENSIONS.md``).
+  9. Prefer Cursor Agent → "Create my EI app" over hand-editing this checklist.
+
+HANDSHAKE: comments tagged ``HANDSHAKE:`` mark links the generic web UI already
+understands (phases, ``status()`` → SSE, DIR / evaluation payloads). Do not invent
+new SSE events or UI chrome — creators do not edit hub/portal React.
+See ``docs/EI_CREATOR_EXTENSIONS.md`` and ``docs/EI_HANDSHAKE.md``.
 
 Local artifacts (gitignored ``./artifacts/``): markdown + PDF; optional PPTX.
 Portal hub stores ``datasheet_markdown`` as S3 ``.md`` only (no PDF/PPTX upload).
@@ -343,8 +350,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
 
     After copy: rename class, ``app_id``, ``knowledge_pack_id``, ``creator_display_name``.
     Missing packs / YAML components are LLM-bootstrapped as draft-for-approval.
+    Optional helpers: ``creator_tools.py`` (not imported by default).
     """
 
+    # HANDSHAKE: manifest.id / python_entrypoint / hub routing must match these ids.
     app_id = "equipment_evaluator"
     knowledge_pack_id = "mixing"
     # Hint for pack bootstrap when the pack folder does not exist yet.
@@ -400,12 +409,16 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             self.status(f"DIR catalog DB persist failed ({exc})")
 
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        # HANDSHAKE: UI / local_chat send phase, system_name, application, dir_code,
+        # deliverable, evaluation_result. Platform may inject knowledge_pack_payload
+        # and LLM overrides — never invent new required UI input keys here.
         system_name = str(inputs.get("system_name") or "Process Vessel").strip()
         application_raw = str(inputs.get("application") or "biopharmaceutical").strip()
         industry_raw = str(inputs.get("industry") or "").strip()
         variant_raw = str(inputs.get("equipment_system_variant") or "").strip()
         scenario_raw = str(inputs.get("scenario_id") or "").strip()
         dir_code = str(inputs.get("dir_code") or "").strip()
+        # HANDSHAKE: phase dispatch — dir | evaluate | pptx | generate_dir
         phase = str(inputs.get("phase") or "").strip().lower()
         deliverable = str(inputs.get("deliverable") or "evaluation").strip().lower()
 
@@ -414,6 +427,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         ).strip()
         py_root = repo_py_root()
         bootstrap_notes: List[str] = []
+        # HANDSHAKE: knowledge_pack_payload is platform-injected on portal/hub runs.
         pack_payload = inputs.get("knowledge_pack_payload")
         if isinstance(pack_payload, dict):
             pack = load_knowledge_pack(pack_id, py_root=py_root, payload=pack_payload)
@@ -495,6 +509,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             }
 
         if phase in {"dir", "dir_requirements"} or not dir_code:
+            # HANDSHAKE: return → SSE event "dir_requirements" (questionnaire UI).
             return self._dir_requirements(
                 pack,
                 menu,
@@ -503,6 +518,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 warning=combined_warning,
             )
 
+        # HANDSHAKE: evaluate path → SSE "evaluation" / "result" + equipment_selector_v1.
         result = self._evaluate(
             pack,
             menu,
@@ -517,6 +533,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             if md_path:
                 artifacts["markdown_path"] = str(md_path)
             try:
+                # HANDSHAKE: self.status(...) → SSE event "status" (progress line).
                 self.status("Writing PDF evaluation report…")
                 pdf_path = _write_pdf_artifact(result)
                 if pdf_path:
@@ -905,6 +922,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             entries = pack._normalize_common_codes(menu.common_codes)
         codes = [e["code"] for e in entries]
         example = codes[0] if codes else "-".join("1" for _ in (requirements or [1]))
+        # HANDSHAKE: phase=dir_requirements payload fields the generic UI renders.
         out: Dict[str, Any] = {
             "phase": "dir_requirements",
             "system_name": system_name,
@@ -1081,6 +1099,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 # Keep original if repair fails
                 pass
 
+        # HANDSHAKE: validated equipment_selector_v1 + phase=evaluation for hub/portal.
         validated = validate_output(raw)
         result = validated.model_dump()
         result["phase"] = "evaluation"

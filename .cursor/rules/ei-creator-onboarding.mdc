@@ -1,0 +1,15 @@
+---
+description: EI creator onboarding — orient Agent sessions in bpeai-creator-apps
+alwaysApply: true
+---
+
+# EI creator onboarding
+
+You are in **bpeai-creator-apps**, the BPEAI authoring repo for Engineered Intelligence (EI) apps.
+
+- Creators customize **template copies**, **knowledge packs**, and optional Python helpers — not the website UI.
+- When the user wants to get started, create, customize, or onboard an EI app, follow `.cursor/skills/ei-creator-wizard/SKILL.md` (prompt: “Create my EI app” or `/ei-creator-wizard`).
+- Prefer pack `prompt_fragments.yaml` and outlines over editing hard-coded `EVALUATION_PROMPT` / `DIR_GENERATE_PROMPT`.
+- Preserve `HANDSHAKE:` boundaries and `ei_handshake_v1` / `equipment_selector_v1`. Never invent new SSE events or assume custom hub buttons.
+- Do not fork `bpeai_creator_sdk`. Do not commit secrets, `.env`, or `artifacts/`.
+- Extensions reference: `docs/EI_CREATOR_EXTENSIONS.md`.

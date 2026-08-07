@@ -34,6 +34,11 @@ Runtime selection uses match-or-generate:
 
 ## Quick start
 
+**Preferred:** open this repo in Cursor → Agent chat → say **Create my EI app**
+(uses the in-repo wizard). See root `AGENTS.md` and `EXTENSIONS.md`.
+
+**Manual:**
+
 ```powershell
 Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\my_equipment_expert
 ```
@@ -41,6 +46,10 @@ Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\my_equipment_e
 Then rename class / `app_id` / manifest fields, set `knowledge_pack_id` /
 `equipment_system`, and point `manifest.json` `knowledge_pack` at a pack
 (platform seed, private portal pack slug, or let the agent draft a new one on first run).
+
+Customization dials: pack `prompt_fragments.yaml` (prompts), outlines/options
+(outputs), optional `creator_tools.py` (Python). Full matrix:
+`docs/EI_CREATOR_EXTENSIONS.md`.
 
 ## Local test
 

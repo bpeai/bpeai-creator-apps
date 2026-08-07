@@ -39,9 +39,21 @@ If they lack access → `/platform/forbidden`.
 
 Work in the dedicated GitHub repo: **[bpeai/bpeai-creator-apps](https://github.com/bpeai/bpeai-creator-apps)** (not the website deploy repo).
 
-**Platform note (templates):** EI apps use a **template family** (by deliverable) + **SME knowledge pack** + **shared SDK**. Start from `py/apps/_templates/equipment_evaluator`. See [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md).
+**Platform note (templates):** EI apps use a **template family** (by deliverable) + **SME knowledge pack** + **shared SDK**. Start from `py/apps/_templates/equipment_evaluator`. See [docs/EI_APP_TEMPLATE_DESIGN.md](./docs/EI_APP_TEMPLATE_DESIGN.md). Customization dials (prompts, outputs, optional tools, UI matrix): [docs/EI_CREATOR_EXTENSIONS.md](./docs/EI_CREATOR_EXTENSIONS.md).
 
 **Knowledge ownership:** Your pack content is **private to your apps** (portal-managed). Canonical platform seeds live in the **website deploy repo** (`bpeai/py/knowledge/`, e.g. `mixing`, `filtration`) — **not** in this repo. Clone a seed into a **private** pack if you need a starting point; creator apps cannot bind platform seeds at runtime. This repo only has `py/knowledge/_examples/` stubs for local SDK tests. Local creator packs under `py/knowledge/<id>/` and apps under `py/apps/<your_id>/` are **gitignored**. **Ship path:** portal zip upload or `py/tools/upload_creator_bundle.py` (see [docs/EI_HANDSHAKE.md](./docs/EI_HANDSHAKE.md)).
+
+### 1.0 Primary path — Cursor wizard
+
+1. Clone this repo (see §1.1).
+2. Open the folder in [Cursor](https://cursor.com) and **trust the workspace**.
+3. Open **Agent** chat and say **Create my EI app** (or `/ei-creator-wizard`).
+4. Follow the interview (app id, pack, prompts / outputs / optional Python tools).
+5. Continue with local test (§ below) and portal upload.
+
+The repo ships `AGENTS.md` and `.cursor/skills/ei-creator-wizard/` so Cursor
+guides you — you should not need to memorize the SDK. Manual copy steps in §1.1
+remain for creators who are not using Cursor.
 
 ### 1.1 Clone once, add apps over time
 
@@ -50,7 +62,11 @@ git clone https://github.com/bpeai/bpeai-creator-apps.git
 cd bpeai-creator-apps
 ```
 
-Keep one local clone. Pull regularly for SDK/template updates (`git pull`). For each new evaluator app:
+Keep one local clone. Pull regularly for SDK/template updates (`git pull`).
+
+**With Cursor:** open Agent → **Create my EI app** (preferred).
+
+**Manual:** for each new evaluator app:
 
 ```powershell
 Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\heat_exchanger_evaluator
