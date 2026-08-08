@@ -95,6 +95,50 @@ def test_load_mixing_stub(mixing_stub):
     assert "depth" in system.lower() or "EXAMPLE" in system or "example" in system.lower()
 
 
+def test_call_fragment_and_search_queries(mixing_stub):
+    # calls: may be empty on stub until seed is updated; API must not throw
+    assert mixing_stub.call_fragment("missing", "system", default="fallback") == "fallback"
+    dir_qs = mixing_stub.build_search_queries(
+        "dir_generate",
+        system_name="Media prep vessel",
+        application="biopharmaceutical",
+    )
+    assert dir_qs
+    assert any("media prep" in q.lower() or "media_prep" in q.lower() or "design" in q.lower() for q in dir_qs)
+    eval_qs = mixing_stub.build_search_queries(
+        "evaluate",
+        system_name="Media prep vessel",
+        application="biopharmaceutical",
+        decoded=[
+            {"label": "Working volume", "option_text": "500–1,000 L"},
+            {"label": "Vessel format", "option_text": "stainless CIP/SIP"},
+        ],
+    )
+    assert eval_qs
+    assert any("500" in q or "media prep" in q.lower() for q in eval_qs)
+
+
+def test_search_queries_fallback_without_file():
+    from bpeai_creator_sdk.sme.pack_loader import KnowledgePack
+    from pathlib import Path
+
+    pack = KnowledgePack(
+        pack_id="empty",
+        path=Path("<empty>"),
+        meta={"equipment_system": "filtration"},
+        dir_requirements={},
+        equipment_options={},
+        validation_rules={},
+    )
+    qs = pack.build_search_queries(
+        "evaluate",
+        system_name="Vent filter",
+        application="biopharma",
+    )
+    assert qs
+    assert all("Lightnin" not in q for q in qs)
+
+
 def test_pack_bootstrap_inventory(py_root: Path, examples_root: Path, tmp_path: Path):
     assert pack_is_loadable("mixing_stub", py_root=py_root, pack_root=examples_root)
     assert (

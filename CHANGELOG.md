@@ -1,5 +1,15 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.2 — 2026-08-08
+
+### SME AI handshakes (pack-owned prompts + search)
+
+- Documented every LLM/Serper call: `docs/EI_AI_HANDSHAKES.md`.
+- Pack dials: `prompt_fragments.yaml` → `calls.*` and new optional `search_queries.yaml`.
+- SDK `KnowledgePack.call_fragment` / `build_search_queries` with domain-neutral fallbacks.
+- `equipment_evaluator` agent uses pack dials; template keeps JSON schema contracts only.
+- Mixing seed + `mixing_stub` ship `search_queries.yaml` and `calls` (vendor queries moved out of agent.py).
+
 ## 0.2.1 — 2026-07-26
 
 ### Knowledge packs: examples only in this repo

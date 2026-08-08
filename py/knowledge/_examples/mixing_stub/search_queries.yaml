@@ -1,0 +1,27 @@
+# Serper query strategy for the mixing_stub example pack (local SDK tests).
+# See docs/EI_AI_HANDSHAKES.md — AI_HANDSHAKE: dir_search / evaluate_search.
+
+dir_generate:
+  templates:
+    - "{system_name} {equipment_system} design requirements {application}"
+    - "{application} {system_name} equipment specification DIR hygienic"
+    - "{equipment_system} {system_name} GMP design basis {application}"
+
+evaluate:
+  templates:
+    - "{system_name} {equipment_system} agitator {application} {working_volume}"
+    - "{application} media preparation vessel agitator impeller selection {vessel_format}"
+    - "sanitary {equipment_system} {solids_media} {duty} {application}"
+    - "biopharmaceutical powder dissolution agitator hydrofoil {working_volume}"
+    - "inline powder induction eductor media buffer preparation {powder_addition}"
+    - "aseptic magnetic bottom mixer biopharmaceutical {vessel_format}"
+  slots:
+    working_volume: ["working volume"]
+    vessel_format: ["vessel", "format", "tank"]
+    solids_media: ["media", "solids", "resin"]
+    duty: ["objective", "duty"]
+    powder_addition: ["powder", "addition"]
+  static:
+    - "Lightnin A310 A510 hydrofoil media preparation biopharmaceutical agitator"
+    - "Admix Fastfeed Silverson Flashmix powder induction biopharma"
+    - "Alfa Laval LeviMag magnetic mixer single use biopharmaceutical"

@@ -2,15 +2,28 @@
 
 | Goal | Safe dial (prefer) | Advanced (Python) | Do not touch |
 |------|--------------------|-------------------|--------------|
-| LLM prompts / SME voice | Pack `prompt_fragments.yaml` via `KnowledgePack.build_system_prompt()` | Light edits to pack-driven user messages | Hard-coded `DIR_GENERATE_PROMPT` / `EVALUATION_PROMPT` / `PPTX_SLIDE_PACK_PROMPT` unless changing deliverable contract |
+| LLM prompts / SME voice | Pack `prompt_fragments.yaml` → `fragments` + `calls` | Light edits to pack-driven user messages | Template JSON schema contracts in `agent.py` unless changing deliverable |
+| Web search queries | Pack `search_queries.yaml` (templates + static) | Custom Serper helpers in `creator_tools.py` | Hard-coding vendor queries in `agent.py` |
 | Outputs / report shape | `report_outline.yaml`, `equipment_options.yaml`, `validation_rules.yaml`, `dir_requirements.yaml` | Post-process validated `equipment_selector_v1` before return | New SSE events or hub schema fields without platform support |
 | Optional tools | SDK: `call_llm_json`, `serper_search`, `status()` | Helpers in `creator_tools.py` invoked from `run()` | Editing hub/portal React; assuming new UI buttons |
 
-## Prompt fragment keys
+## AI handshake pack files
+
+See `docs/EI_AI_HANDSHAKES.md` for the full when/why inventory (`dir_search`,
+`dir_generate`, `evaluate_search`, `evaluate`, `evaluate_repair`, `pptx`,
+`pack_bootstrap`).
+
+## Prompt fragment keys (`fragments`)
 
 `role`, `scope`, `application_default`, `evaluation_goals`, `workflow`, `output_style`, `depth_requirements`, `response_outline`, `exclusions_rule`
 
 Optional pack meta: `prompt_hooks.emphasize` (list).
+
+## Call keys (`calls`)
+
+`dir_generate.system` / `.instructions` · `evaluate.user_instructions` ·
+`evaluate_repair.instructions` · `pptx.system_extra` / `.instructions` ·
+`pack_bootstrap.system`
 
 ## Output contract
 

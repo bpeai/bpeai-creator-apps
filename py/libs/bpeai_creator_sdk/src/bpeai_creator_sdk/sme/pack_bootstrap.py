@@ -20,6 +20,7 @@ from .pack_loader import PACK_FILES, knowledge_root
 OPTIONAL_PACK_FILES = (
     "report_outline.yaml",
     "pptx_outline.yaml",
+    "search_queries.yaml",
     "README.md",
 )
 
@@ -181,7 +182,10 @@ def component_schema_hints() -> Dict[str, str]:
             "Mapping with fragments as a flat string map: {role, scope, "
             "evaluation_goals, application_default, workflow, output_style, "
             "depth_requirements, response_outline, exclusions_rule}. Each value is "
-            "a string (not nested objects with label/content)."
+            "a string (not nested objects with label/content). Optional calls: map for "
+            "per-handshake SME text: dir_generate.{system,instructions}, "
+            "evaluate.user_instructions, evaluate_repair.instructions, "
+            "pptx.{system_extra,instructions}, pack_bootstrap.system."
         ),
         "report_outline.yaml": (
             "Mapping with required_headings (list of section titles), sections "
@@ -190,6 +194,13 @@ def component_schema_hints() -> Dict[str, str]:
         "pptx_outline.yaml": (
             "Mapping with slide_count (7), title_prefix, slides ([{index, id, title, ...}]), "
             "style (fonts/colors), reference_decks (list of references/*.pptx paths), notes."
+        ),
+        "search_queries.yaml": (
+            "Mapping with dir_generate.templates (list of query strings with placeholders "
+            "{system_name}, {application}, {equipment_system}) and evaluate.templates, "
+            "evaluate.slots (placeholder→list of DIR label substrings), evaluate.static "
+            "(always-run vendor/domain queries). Domain-specific — do not copy mixing "
+            "vendor names into unrelated equipment systems."
         ),
         "README.md": (
             "Markdown describing the pack purpose, draft/approval status, and how to "

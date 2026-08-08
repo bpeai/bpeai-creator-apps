@@ -47,9 +47,10 @@ Then rename class / `app_id` / manifest fields, set `knowledge_pack_id` /
 `equipment_system`, and point `manifest.json` `knowledge_pack` at a pack
 (platform seed, private portal pack slug, or let the agent draft a new one on first run).
 
-Customization dials: pack `prompt_fragments.yaml` (prompts), outlines/options
-(outputs), optional `creator_tools.py` (Python). Full matrix:
-`docs/EI_CREATOR_EXTENSIONS.md`.
+Customization dials: pack `prompt_fragments.yaml` (`fragments` + `calls`),
+`search_queries.yaml` (Serper), outlines/options (outputs), optional
+`creator_tools.py` (Python). AI call inventory: `docs/EI_AI_HANDSHAKES.md`.
+Full matrix: `docs/EI_CREATOR_EXTENSIONS.md`.
 
 ## Local test
 

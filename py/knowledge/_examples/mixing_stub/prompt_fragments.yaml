@@ -17,3 +17,23 @@ fragments:
     Include design basis, options, and recommendation.
   exclusions_rule: >
     List do_not_specify items when relevant.
+
+# Per-handshake SME dials (see docs/EI_AI_HANDSHAKES.md). Optional; template fallbacks apply if omitted.
+calls:
+  dir_generate:
+    system: >
+      You are an EXAMPLE SME authoring a short DIR questionnaire. Return ONLY JSON.
+    instructions: >
+      Keep the questionnaire minimal for unit tests; still use numeric common_codes.
+  evaluate:
+    user_instructions: >
+      Keep evaluation concise for local stub tests.
+  evaluate_repair:
+    instructions: >
+      Expand thin stub sections just enough to satisfy required headings.
+  pptx:
+    system_extra: >
+      Prepare short slide-ready content for stub tests.
+  pack_bootstrap:
+    system: >
+      Draft minimal YAML pack components for local tests. Return ONLY JSON.

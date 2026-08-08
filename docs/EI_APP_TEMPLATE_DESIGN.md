@@ -89,7 +89,8 @@ This authoring repo only ships **example stubs**: [`py/knowledge/_examples/`](..
 | `dir_catalog.md` | Auto-generated Markdown review table for SMEs |
 | `equipment_options.yaml` | Allowed technology / option catalog |
 | `validation_rules.yaml` | Hard/soft rules for DIR codes and LLM field enums |
-| `prompt_fragments.yaml` | Injectable SME guidance |
+| `prompt_fragments.yaml` | Injectable SME guidance (`fragments` + optional `calls`) |
+| `search_queries.yaml` | Serper query templates / static domain queries (optional; see [EI_AI_HANDSHAKES.md](./EI_AI_HANDSHAKES.md)) |
 | `report_outline.yaml` / `pptx_outline.yaml` | Report / slide outlines |
 | `references/*.pptx` / `*.pdf` | Style stubs (any name; seeded from `py/knowledge/_templates/references/`) |
 

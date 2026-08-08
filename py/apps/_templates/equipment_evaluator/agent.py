@@ -11,8 +11,9 @@ Creator checklist after copying this folder to ``py/apps/<your_id>/``:
      an **initial draft** under ``py/knowledge/<id>/`` (pending approval).
   4. Update ``manifest.json`` (slug, label, equipment_system, optional knowledge_pack).
   5. Local test: ``python py/tools/local_chat.py --app <your_id>`` then DIR → pptx.
-  6. Leave EVALUATION_PROMPT / depth bar alone unless you are changing the
-     deliverable contract; pack ``prompt_fragments.yaml`` is the SME dial.
+  6. SME AI dials: ``prompt_fragments.yaml`` (fragments + calls) and
+     ``search_queries.yaml``. Leave JSON schema contracts in this file alone
+     unless changing the deliverable (see ``docs/EI_AI_HANDSHAKES.md``).
   7. Review any ``draft_pending_sme_approval`` pack files before production use.
   8. Optional Python helpers: ``creator_tools.py`` (see ``EXTENSIONS.md``).
   9. Prefer Cursor Agent → "Create my EI app" over hand-editing this checklist.
@@ -78,7 +79,10 @@ from bpeai_creator_sdk.sme import (
 from bpeai_creator_sdk.sme.dir_catalog import catalog_row_to_dir_menu
 from bpeai_creator_sdk.tools import enrich_search_hits_with_excerpts, format_search_context
 
-DIR_GENERATE_PROMPT = """Author a Design Input Requirements (DIR) questionnaire for this equipment case.
+# Template-owned JSON schema contracts (deliverable). SME voice/search live in the pack —
+# see docs/EI_AI_HANDSHAKES.md and prompt_fragments.yaml → calls / search_queries.yaml.
+
+DIR_GENERATE_SCHEMA_CONTRACT = """Author a Design Input Requirements (DIR) questionnaire for this equipment case.
 
 Return ONLY JSON:
 {
@@ -107,7 +111,7 @@ Rules:
 - Prefer industrially realistic options for life-science equipment selection.
 """
 
-PPTX_SLIDE_PACK_PROMPT = """Convert this mixing evaluation JSON into a presentation slide pack.
+PPTX_SLIDE_SCHEMA_CONTRACT = """Convert this evaluation JSON into a presentation slide pack.
 
 Return ONLY JSON with this shape:
 {
@@ -190,7 +194,7 @@ Rules:
   and 6 (recommendation) when the report supports it — but stay within length limits.
 """
 
-EVALUATION_PROMPT = """Run a full technology evaluation for the validated DIR code
+EVALUATION_SCHEMA_CONTRACT = """Run a full technology evaluation for the validated DIR code
 (equipment system = the knowledge pack's equipment_system).
 
 Return JSON matching equipment_selector_v1 WITH these GPT-parity fields populated:
@@ -265,50 +269,6 @@ def _suggest_tag(system_name: str, equipment_system: str) -> str:
         "cell_culture": "BR",
     }
     return f"{prefixes.get(equipment_system, 'EQ')}-101"
-
-
-def _dir_aware_queries(
-    *,
-    system_name: str,
-    application: str,
-    equipment_system: str,
-    decoded: List[Dict[str, Any]],
-) -> List[str]:
-    by_label = {
-        str(d.get("label") or "").lower(): str(d.get("option_text") or "")
-        for d in decoded
-    }
-    volume = by_label.get("working volume", "")
-    vessel = next((v for k, v in by_label.items() if "vessel" in k or "format" in k or "tank" in k), "")
-    solids = next(
-        (v for k, v in by_label.items() if "media" in k or "solids" in k or "resin" in k),
-        "",
-    )
-    duty = next((v for k, v in by_label.items() if "objective" in k or "duty" in k), "")
-    powder = next((v for k, v in by_label.items() if "powder" in k or "addition" in k), "")
-
-    queries = [
-        f"{system_name} {equipment_system} agitator {application} {volume}".strip(),
-        f"{application} media preparation vessel agitator impeller selection {vessel}".strip(),
-        f"sanitary {equipment_system} {solids} {duty} {application}".strip(),
-        f"biopharmaceutical powder dissolution agitator hydrofoil {volume}".strip(),
-        f"inline powder induction eductor media buffer preparation {powder}".strip(),
-        f"aseptic magnetic bottom mixer biopharmaceutical {vessel}".strip(),
-        # Vendor / product-line discovery (deeper citations)
-        f"Lightnin A310 A510 hydrofoil media preparation biopharmaceutical agitator",
-        f"Admix Fastfeed Silverson Flashmix powder induction biopharma",
-        f"Alfa Laval LeviMag magnetic mixer single use biopharmaceutical",
-    ]
-    # Deduplicate while preserving order.
-    seen: set[str] = set()
-    out: List[str] = []
-    for q in queries:
-        qn = " ".join(q.split())
-        if len(qn) < 12 or qn.lower() in seen:
-            continue
-        seen.add(qn.lower())
-        out.append(qn)
-    return out[:9]
 
 
 def _option_catalog_block(pack: KnowledgePack) -> str:
@@ -685,11 +645,12 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         py_root: Path,
     ) -> Dict[str, Any]:
         """LLM function: return JSON/YAML-mappable content for one pack file."""
+        # AI_HANDSHAKE: pack_bootstrap — authoring-time draft of missing pack YAML.
         hints = component_schema_hints()
         schema_hint = hints.get(filename, "Valid YAML mapping for this pack component.")
         reference = structure_example_snippet(filename, py_root=py_root)
         app_label = getattr(self, "app_id", "equipment_evaluator")
-        system = (
+        default_system = (
             "You are a senior life-science process / equipment SME authoring an "
             "initial draft knowledge pack for BPEAI equipment_evaluator apps. "
             "Return ONLY a JSON object that will be serialized to YAML — no markdown "
@@ -698,6 +659,24 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             "and real manufacturer families when known; do not invent SKUs. "
             "Never nest other filenames as top-level keys."
         )
+        system = default_system
+        # Prefer SME override from an already-written prompt_fragments.yaml if present.
+        try:
+            partial = load_knowledge_pack(pack_id, py_root=py_root)
+            system = partial.call_fragment("pack_bootstrap", "system", default=default_system) or default_system
+        except Exception:
+            frag_path = py_root / "knowledge" / pack_id / "prompt_fragments.yaml"
+            if frag_path.is_file():
+                try:
+                    import yaml as _yaml
+
+                    raw_pf = _yaml.safe_load(frag_path.read_text(encoding="utf-8")) or {}
+                    calls = (raw_pf.get("calls") or {}) if isinstance(raw_pf, dict) else {}
+                    boot = calls.get("pack_bootstrap") if isinstance(calls, dict) else {}
+                    if isinstance(boot, dict) and str(boot.get("system") or "").strip():
+                        system = str(boot["system"]).strip()
+                except Exception:
+                    pass
         user = (
             f"Create the knowledge-pack file `{filename}` for pack_id=`{pack_id}` "
             f"(equipment_system=`{equipment_system}`), used by app `{app_label}`.\n\n"
@@ -718,6 +697,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             "Recommended basis of design, Option evaluation, Do not specify, "
             "Preliminary specification, Manufacturers and references.\n"
             "- pptx_outline should define 7 slides with a domain-appropriate title_prefix.\n"
+            "- Include search_queries.yaml with domain-appropriate Serper templates "
+            "(no unrelated vendor brand names).\n"
             "- Mark draft intent via label/description wording where appropriate.\n"
         )
         raw = self.call_openai_json(system=system, user=user)
@@ -835,23 +816,28 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         )
         ind = resolve_industry(pack, industry=industry, application=application)
 
+        # AI_HANDSHAKE: dir_search — Serper before DIR questionnaire generation.
         self.status("Researching design inputs for DIR questionnaire…")
-        queries = [
-            f"{system_name} {pack.equipment_system} design requirements {application}",
-            f"{application} {system_name} equipment specification DIR hygienic",
-            f"{pack.equipment_system} {system_name} GMP design basis biopharmaceutical",
-        ]
+        queries = pack.build_search_queries(
+            "dir_generate",
+            system_name=system_name,
+            application=application,
+            equipment_system=pack.equipment_system,
+        )
         snippets: List[Dict[str, str]] = []
         for q in queries:
             for hit in self.serper_search(q, num=5):
                 snippets.append(hit)
         search_context = format_search_context(snippets, limit=12)
 
+        # AI_HANDSHAKE: dir_generate — LLM authors DIR menu JSON.
         self.status("Generating DIR questionnaire…")
-        system = (
+        default_dir_system = (
             "You are a senior life-science process/equipment SME authoring DIR "
             "questionnaires for equipment intelligence apps. Return ONLY JSON."
         )
+        system = pack.call_fragment("dir_generate", "system", default=default_dir_system) or default_dir_system
+        sme_dir_instructions = pack.call_fragment("dir_generate", "instructions")
         user = (
             f"System name: {system_name}\n"
             f"Application / industry: {application} / {ind}\n"
@@ -859,8 +845,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"Scenario id hint: {sid}\n"
             f"Variant hint: {variant}\n\n"
             f"Industrial search context:\n{search_context or '(none)'}\n\n"
-            f"{DIR_GENERATE_PROMPT}"
         )
+        if sme_dir_instructions:
+            user += f"{sme_dir_instructions}\n\n"
+        user += DIR_GENERATE_SCHEMA_CONTRACT
         raw = self.call_openai_json(system=system, user=user)
         if not isinstance(raw, dict):
             raise TypeError("DIR generation did not return a JSON object")
@@ -994,9 +982,11 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             )
 
         self.status(f"Validated DIR: {dir_code}")
+        # AI_HANDSHAKE: evaluate_search — Serper industrial references for evaluate.
         self.status("Searching industrial references…")
 
-        queries = _dir_aware_queries(
+        queries = pack.build_search_queries(
+            "evaluate",
             system_name=system_name,
             application=application,
             equipment_system=pack.equipment_system,
@@ -1023,10 +1013,12 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         search_context = format_search_context(enriched, limit=18)
 
         headings = pack.required_report_headings()
-        heading_block = ", ".join(headings) if headings else "(see EVALUATION_PROMPT)"
+        heading_block = ", ".join(headings) if headings else "(see EVALUATION_SCHEMA_CONTRACT)"
 
+        # AI_HANDSHAKE: evaluate — system from fragments; user includes SME calls + schema.
         self.status(f"Generating {pack.equipment_system} technology evaluation…")
         depth_block = pack.fragment("depth_requirements")
+        sme_eval_extra = pack.call_fragment("evaluate", "user_instructions")
         user_prompt = (
             f"System: {system_name}\n"
             f"Application: {application}\n"
@@ -1042,8 +1034,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"Depth requirements:\n{depth_block}\n\n"
             f"Industrial search references (snippets + page excerpts):\n"
             f"{search_context or '(no serper results — use engineering judgment)'}\n\n"
-            f"{EVALUATION_PROMPT}"
         )
+        if sme_eval_extra:
+            user_prompt += f"{sme_eval_extra}\n\n"
+        user_prompt += EVALUATION_SCHEMA_CONTRACT
         system_prompt = pack.build_system_prompt()
         raw = self.call_openai_json(system=system_prompt, user=user_prompt)
         raw = self._normalize_raw(raw, pack, system_name)
@@ -1078,16 +1072,25 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         missing = missing_report_headings(md_text, headings)
         thin = thin_report_sections(md_text, headings, min_chars=120)
         if missing or thin:
+            # AI_HANDSHAKE: evaluate_repair — deepen thin/missing report sections.
             self.status("Repairing evaluation report depth/sections…")
+            default_repair = (
+                "The previous JSON evaluation needs a deeper datasheet_markdown.\n"
+                "Also ensure failure_modes has >=3 items, each evaluation_options entry meets the "
+                "depth bar, and weave search citations (title + URL) into rationale and markdown.\n"
+                "Return the FULL corrected JSON object (same schema) with a complete "
+                "datasheet_markdown that includes ALL required headings."
+            )
+            repair_preamble = (
+                pack.call_fragment("evaluate_repair", "instructions", default=default_repair)
+                or default_repair
+            )
             repair_user = (
-                f"The previous JSON evaluation needs a deeper datasheet_markdown.\n"
+                f"{repair_preamble}\n"
                 f"Missing headings: {missing or 'none'}.\n"
                 f"Thin sections (expand to substantive multi-sentence engineering content): "
                 f"{thin or 'none'}.\n"
-                f"Also ensure failure_modes has >=3 items, each evaluation_options entry meets the "
-                f"depth bar, and weave search citations (title + URL) into rationale and markdown.\n"
-                f"Return the FULL corrected JSON object (same schema) with a complete "
-                f"datasheet_markdown that includes ALL required headings: {heading_block}.\n\n"
+                f"Required headings: {heading_block}.\n\n"
                 f"Industrial search references:\n{search_context[:20000]}\n\n"
                 f"Previous JSON:\n{json.dumps(raw)[:120000]}"
             )
@@ -1191,19 +1194,28 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 # Full report — preserve failure modes, decision logic, vendor lines
                 "datasheet_markdown": evaluation.get("datasheet_markdown") or "",
             }
+            # AI_HANDSHAKE: pptx — slide JSON from evaluation (schema contract in template).
+            default_pptx_extra = (
+                "You prepare presentation-ready engineering slide content. "
+                "Keep visual density high and wording concise. "
+                "Ground every claim in the evaluation JSON and datasheet_markdown; "
+                "do not invent unsupported claims."
+            )
+            pptx_extra = (
+                pack.call_fragment("pptx", "system_extra", default=default_pptx_extra)
+                or default_pptx_extra
+            )
+            pptx_instructions = pack.call_fragment("pptx", "instructions")
+            pptx_user = PPTX_SLIDE_SCHEMA_CONTRACT
+            if pptx_instructions:
+                pptx_user = f"{pptx_instructions}\n\n{pptx_user}"
+            pptx_user += (
+                "\n\nEvaluation JSON (includes full datasheet_markdown):\n"
+                + json.dumps(compact, ensure_ascii=False)[:180000]
+            )
             raw = self.call_openai_json(
-                system=(
-                    pack.fragment("role")
-                    + "\n\nYou prepare presentation-ready engineering slide content. "
-                    "Keep visual density high and wording concise. "
-                    "Ground every claim in the evaluation JSON and datasheet_markdown; "
-                    "do not invent unsupported claims."
-                ),
-                user=(
-                    PPTX_SLIDE_PACK_PROMPT
-                    + "\n\nEvaluation JSON (includes full datasheet_markdown):\n"
-                    + json.dumps(compact, ensure_ascii=False)[:180000]
-                ),
+                system=(pack.fragment("role") + "\n\n" + pptx_extra).strip(),
+                user=pptx_user,
             )
             if not isinstance(raw, dict) or not isinstance(raw.get("slides"), list):
                 return fallback

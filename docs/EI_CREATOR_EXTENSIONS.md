@@ -25,10 +25,11 @@ not in a hard-coded prompt string in `agent.py`.
 
 ---
 
-## 1. Prompt dial (prefer pack YAML)
+## 1. Prompt + search dial (prefer pack YAML)
 
-SME guidance is assembled by `KnowledgePack.build_system_prompt()` from
-`prompt_fragments.yaml` → `fragments`:
+**Full inventory** (when / why / which keys): [EI_AI_HANDSHAKES.md](./EI_AI_HANDSHAKES.md).
+
+### Evaluate system voice — `prompt_fragments.yaml` → `fragments`
 
 | Key | Role |
 |-----|------|
@@ -42,16 +43,24 @@ SME guidance is assembled by `KnowledgePack.build_system_prompt()` from
 | `response_outline` | Structural expectations for the report |
 | `exclusions_rule` | What belongs in `do_not_specify` |
 
-Optional pack meta `prompt_hooks.emphasize` (list) is appended as “SME emphasis”.
+Assembled by `KnowledgePack.build_system_prompt()`. Optional pack meta
+`prompt_hooks.emphasize` (list) is appended as “SME emphasis”.
 
-**Safe path:** edit these fragments (+ catalogs below).  
-**Advanced:** light edits to pack-driven user message assembly in your copied
-`agent.py`.  
-**Leave alone** unless changing the deliverable contract:
+### Per-call instructions — `prompt_fragments.yaml` → `calls`
 
-- `DIR_GENERATE_PROMPT`
-- `EVALUATION_PROMPT`
-- `PPTX_SLIDE_PACK_PROMPT`
+SME-owned system/instruction text for `dir_generate`, `evaluate`,
+`evaluate_repair`, `pptx`, `pack_bootstrap`. See AI handshakes doc for keys.
+
+### Web search — `search_queries.yaml`
+
+Serper query templates + static domain/vendor queries for `dir_generate` and
+`evaluate` phases. Non-mixing packs **must** replace mixing-oriented static
+queries.
+
+**Safe path:** edit `fragments`, `calls`, and `search_queries.yaml`.  
+**Template owns** JSON schema contracts in `agent.py` (`EVALUATION_PROMPT` /
+DIR / PPTX shape strings) — do not fork those unless changing the deliverable
+contract. Tag: `# AI_HANDSHAKE: <id>`.
 
 Model / provider: portal App Settings and/or local env
 (`CREATOR_LLM_PROVIDER`, `CREATOR_LLM_MODEL`, provider API keys). Not a pack file.

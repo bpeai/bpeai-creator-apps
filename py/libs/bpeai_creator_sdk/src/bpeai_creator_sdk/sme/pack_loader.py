@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from string import Formatter
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import yaml
 
@@ -15,6 +17,61 @@ PACK_FILES = (
     "validation_rules.yaml",
     "prompt_fragments.yaml",
 )
+
+# Domain-neutral Serper fallbacks when search_queries.yaml is missing/empty.
+_DEFAULT_DIR_SEARCH_TEMPLATES = (
+    "{system_name} {equipment_system} design requirements {application}",
+    "{application} {system_name} equipment specification DIR hygienic",
+    "{equipment_system} {system_name} GMP design basis {application}",
+)
+
+_DEFAULT_EVALUATE_SEARCH_TEMPLATES = (
+    "{system_name} {equipment_system} {application} {working_volume}",
+    "{application} {system_name} technology selection {vessel_format}",
+    "sanitary {equipment_system} {solids_media} {duty} {application}",
+)
+
+_DEFAULT_EVALUATE_SLOTS: Dict[str, List[str]] = {
+    "working_volume": ["working volume"],
+    "vessel_format": ["vessel", "format", "tank"],
+    "solids_media": ["media", "solids", "resin"],
+    "duty": ["objective", "duty"],
+    "powder_addition": ["powder", "addition"],
+}
+
+
+def _safe_format(template: str, mapping: Mapping[str, str]) -> str:
+    """Format with missing keys → empty string (SME templates may omit slots)."""
+    class _Default(dict):
+        def __missing__(self, key: str) -> str:  # type: ignore[override]
+            return ""
+
+    try:
+        return Formatter().vformat(template, (), _Default(**mapping)).strip()
+    except Exception:
+        return " ".join(str(mapping.get(k, "")) for k in ("system_name", "equipment_system", "application")).strip()
+
+
+def _slot_values_from_decoded(
+    decoded: Sequence[Mapping[str, Any]] | None,
+    slots: Mapping[str, Any],
+) -> Dict[str, str]:
+    by_label = {
+        str(d.get("label") or "").lower(): str(d.get("option_text") or "")
+        for d in (decoded or [])
+        if isinstance(d, Mapping)
+    }
+    out: Dict[str, str] = {}
+    for slot_name, needles in slots.items():
+        if not isinstance(needles, list):
+            continue
+        value = ""
+        for label, option_text in by_label.items():
+            if any(str(n).lower() in label for n in needles if n):
+                value = option_text
+                break
+        out[str(slot_name)] = value
+    return out
 
 APPROVED_LIFECYCLES = frozenset({"approved", "APPROVED"})
 
@@ -83,6 +140,7 @@ class KnowledgePack:
     prompt_fragments: Dict[str, Any] = field(default_factory=dict)
     report_outline: Dict[str, Any] = field(default_factory=dict)
     pptx_outline: Dict[str, Any] = field(default_factory=dict)
+    search_queries: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def equipment_system(self) -> str:
@@ -178,6 +236,17 @@ class KnowledgePack:
         value = fragments.get(key)
         return str(value).strip() if value is not None else default
 
+    def call_fragment(self, call_id: str, key: str, default: str = "") -> str:
+        """SME dial for per-handshake text under ``prompt_fragments.calls.<id>.<key>``."""
+        calls = self.prompt_fragments.get("calls") or {}
+        if not isinstance(calls, Mapping):
+            return default
+        block = calls.get(call_id) or {}
+        if not isinstance(block, Mapping):
+            return default
+        value = block.get(key)
+        return str(value).strip() if value is not None else default
+
     def required_report_headings(self) -> List[str]:
         headings = self.report_outline.get("required_headings") or []
         return [str(h) for h in headings] if isinstance(headings, list) else []
@@ -202,6 +271,72 @@ class KnowledgePack:
         if isinstance(emphasize, list) and emphasize:
             parts.append("SME emphasis:\n" + "\n".join(f"- {e}" for e in emphasize))
         return "\n\n".join(p for p in parts if p)
+
+    def search_phase_config(self, phase: str) -> Dict[str, Any]:
+        """Return ``search_queries.yaml`` block for ``dir_generate`` or ``evaluate``."""
+        block = self.search_queries.get(phase) or {}
+        return dict(block) if isinstance(block, Mapping) else {}
+
+    def build_search_queries(
+        self,
+        phase: str,
+        *,
+        system_name: str = "",
+        application: str = "",
+        equipment_system: str | None = None,
+        decoded: Sequence[Mapping[str, Any]] | None = None,
+    ) -> List[str]:
+        """Build Serper query strings from pack templates + static entries."""
+        eq = (equipment_system or self.equipment_system or "").strip()
+        cfg = self.search_phase_config(phase)
+        if phase == "dir_generate":
+            templates = cfg.get("templates") if isinstance(cfg.get("templates"), list) else None
+            if not templates:
+                templates = list(_DEFAULT_DIR_SEARCH_TEMPLATES)
+            slots_cfg: Mapping[str, Any] = {}
+            static = cfg.get("static") if isinstance(cfg.get("static"), list) else []
+        else:
+            # evaluate (default)
+            templates = cfg.get("templates") if isinstance(cfg.get("templates"), list) else None
+            if not templates:
+                templates = list(_DEFAULT_EVALUATE_SEARCH_TEMPLATES)
+            raw_slots = cfg.get("slots") if isinstance(cfg.get("slots"), Mapping) else None
+            slots_cfg = raw_slots if raw_slots is not None else _DEFAULT_EVALUATE_SLOTS
+            static = cfg.get("static") if isinstance(cfg.get("static"), list) else []
+
+        slot_vals = _slot_values_from_decoded(decoded, slots_cfg)
+        mapping = {
+            "system_name": (system_name or "").strip(),
+            "application": (application or "").strip(),
+            "equipment_system": eq,
+            **slot_vals,
+        }
+        # Ensure common slot keys exist even if slots_cfg omitted them
+        for k in _DEFAULT_EVALUATE_SLOTS:
+            mapping.setdefault(k, "")
+
+        out: List[str] = []
+        seen: set[str] = set()
+        for tmpl in templates:
+            q = _safe_format(str(tmpl), mapping)
+            qn = re.sub(r"\s+", " ", q).strip()
+            if len(qn) < 12:
+                continue
+            key = qn.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(qn)
+        for item in static:
+            qn = re.sub(r"\s+", " ", str(item or "")).strip()
+            if len(qn) < 12:
+                continue
+            key = qn.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(qn)
+        return out[:12]
 
     def _menu_payload(self, menu: Mapping[str, Any], scenario_id: str) -> DirMenu:
         scenario = self.scenario(scenario_id)
@@ -459,6 +594,7 @@ def knowledge_pack_from_dict(
         prompt_fragments = content.get("prompt_fragments") or payload.get("prompt_fragments") or {}
         report_outline = content.get("report_outline") or payload.get("report_outline") or {}
         pptx_outline = content.get("pptx_outline") or payload.get("pptx_outline") or {}
+        search_queries = content.get("search_queries") or payload.get("search_queries") or {}
         if content.get("meta") and isinstance(content["meta"], dict):
             meta = {**meta, **content["meta"]}
         # Prefer full uploaded dir_requirements (incl. dir_menus) from content blob
@@ -477,6 +613,7 @@ def knowledge_pack_from_dict(
         prompt_fragments = payload.get("prompt_fragments") or {}
         report_outline = payload.get("report_outline") or {}
         pptx_outline = payload.get("pptx_outline") or {}
+        search_queries = payload.get("search_queries") or {}
 
     # Normalize: if menus present but dir_menus empty, mirror for list-catalog matchers
     menus = dir_req.get("menus") if isinstance(dir_req.get("menus"), list) else []
@@ -496,6 +633,7 @@ def knowledge_pack_from_dict(
         prompt_fragments=prompt_fragments if isinstance(prompt_fragments, dict) else {},
         report_outline=report_outline if isinstance(report_outline, dict) else {},
         pptx_outline=pptx_outline if isinstance(pptx_outline, dict) else {},
+        search_queries=search_queries if isinstance(search_queries, dict) else {},
     )
 
 
@@ -557,6 +695,13 @@ def load_knowledge_pack(
         if isinstance(raw_pptx, dict):
             pptx_outline = raw_pptx
 
+    search_queries: Dict[str, Any] = {}
+    search_path = path / "search_queries.yaml"
+    if search_path.is_file():
+        raw_search = _load_yaml(search_path)
+        if isinstance(raw_search, dict):
+            search_queries = raw_search
+
     return KnowledgePack(
         pack_id=pid,
         path=path,
@@ -567,4 +712,5 @@ def load_knowledge_pack(
         prompt_fragments=fragments,
         report_outline=report_outline,
         pptx_outline=pptx_outline,
+        search_queries=search_queries,
     )
