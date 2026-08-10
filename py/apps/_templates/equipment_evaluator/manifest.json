@@ -12,7 +12,15 @@
   "app_kind": "creator",
   "output_schema_version": "equipment_selector_v1",
   "required_inputs": ["system_name"],
-  "route": "/engineering/equipment-intelligence/equipment-evaluator",
+  "catalog_profile": {
+    "discipline_label": "Equipment Selection",
+    "overview": "Evaluates requirements and recommends industry-proven technologies.",
+    "capabilities": ["Develop design input requirements", "Evaluate alternatives", "Generate evaluation report"],
+    "typical_applications": ["Media Preparation", "Buffer Preparation"],
+    "inputs_summary": ["Process or equipment system description"],
+    "outputs_summary": ["Technology recommendation", "Engineering evaluation report"]
+  },
+  "route": "/engineering/app/equipment-evaluator/run",
   "runtime": "server",
   "min_tier": "INDIVIDUAL",
   "status": "draft",
