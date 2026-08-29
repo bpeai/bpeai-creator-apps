@@ -44,9 +44,11 @@ See `manifest.schema.json`. Critical links:
 | `id` | Stable app id (`snake_case`) — runtime key |
 | `slug` | Hub URL segment |
 | `equipment_system` | Domain routing / taxonomy |
+| `template_family` | Deliverable family; defaults to `equipment_evaluator` for legacy manifests |
 | `knowledge_pack` | Local pack folder id (upload binds private pack) |
 | `python_entrypoint` | `apps.<id>.agent` module path |
 | `required_inputs` | UI + validation keys (`system_name`, …) |
+| `input_ports` / `output_ports` | Typed composition ports; additive to `required_inputs` |
 | `output_schema_version` | Currently `equipment_selector_v1` |
 | `handshake_protocol` | `ei_handshake_v1` (optional; defaulted by platform) |
 | `route` / `runtime` / `min_tier` / `status` | Hub visibility |
@@ -99,7 +101,33 @@ Platform injects (never trust client for these):
 | `error` | `{ "message" }` | Fatal |
 | `done` | `{ "run_id", "status", "protocol_version" }` | Terminal |
 
-### Result envelope extras (`_handshake`)
+### Generic result envelope
+
+Composition-aware consumers use `ei_result_manifest_v1`, whose `outputs[]`
+entries contain `port_id`, `schema_ref`, and `value`. For the evaluator,
+`result` and `equipment_selection.value` are the unchanged
+`equipment_selector_v1` object. Persisted envelopes also carry `run`, `inputs`,
+and `artifacts`.
+Bare `equipment_selector_v1` results remain valid. SDK adapters
+`wrap_evaluator_result` and `unwrap_evaluator_result` convert between forms, and
+`validate_output` accepts either form.
+
+```json
+{
+  "schema_version": "ei_result_manifest_v1",
+  "template_family": "equipment_evaluator",
+  "run": {},
+  "inputs": {},
+  "result": { "schema_version": "equipment_selector_v1" },
+  "outputs": [{
+    "port_id": "equipment_selection",
+    "schema_ref": "https://bpeai.com/schemas/equipment-selector/v1",
+    "value": { "schema_version": "equipment_selector_v1" }
+  }]
+}
+```
+
+### Result payload extras (`_handshake`)
 
 ```json
 {

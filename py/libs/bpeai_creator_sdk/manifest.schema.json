@@ -66,10 +66,26 @@
       }
     },
     "app_kind": { "type": "string", "enum": ["first_party", "creator"] },
+    "template_family": {
+      "type": "string",
+      "minLength": 1,
+      "default": "equipment_evaluator",
+      "description": "Deliverable family. Omitted legacy manifests are treated as equipment_evaluator."
+    },
     "output_schema_version": { "type": "string", "const": "equipment_selector_v1" },
     "required_inputs": {
       "type": "array",
       "items": { "type": "string" }
+    },
+    "input_ports": {
+      "type": "array",
+      "description": "Typed workflow inputs. Legacy required_inputs remains supported.",
+      "items": { "$ref": "#/$defs/port" }
+    },
+    "output_ports": {
+      "type": "array",
+      "description": "Typed workflow outputs carried by ei_result_manifest_v1.",
+      "items": { "$ref": "#/$defs/port" }
     },
     "route": { "type": "string" },
     "runtime": { "type": "string", "enum": ["server"] },
@@ -82,5 +98,26 @@
       "enum": ["draft", "review", "published", "deprecated"]
     },
     "python_entrypoint": { "type": "string" }
+  },
+  "$defs": {
+    "port": {
+      "type": "object",
+      "required": ["id", "label", "schema_ref"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "schema_ref": { "type": "string", "minLength": 1 },
+        "data_type": {
+          "type": "string",
+          "minLength": 1,
+          "default": "any",
+          "description": "Short compatibility key used when matching workflow ports."
+        },
+        "required": { "type": "boolean", "default": true },
+        "cardinality": { "type": "string", "enum": ["one", "many"], "default": "one" },
+        "kind": { "type": "string", "enum": ["value", "artifact"], "default": "value" }
+      },
+      "additionalProperties": false
+    }
   }
 }

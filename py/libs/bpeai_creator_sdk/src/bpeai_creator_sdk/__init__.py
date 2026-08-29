@@ -12,7 +12,7 @@ from .llm import complete_json
 from .local_format import format_result_text, format_selector_json, format_selector_text
 from .local_parse import parse_free_text, parse_inputs_heuristic
 from .local_run import load_agent_class, resolve_app_id, run_agent
-from .manifest import CreatorAppAuthor, CreatorAppManifest, EquipmentSystem
+from .manifest import CreatorAppAuthor, CreatorAppManifest, CreatorAppPort, EquipmentSystem
 from .handshake import (
     HANDSHAKE_PROTOCOL_VERSION,
     attach_handshake,
@@ -22,13 +22,21 @@ from .handshake import (
 )
 from .output import (
     CreatorAttribution,
+    EiResultManifest,
+    EiResultOutput,
     EquipmentSelectorOutput,
+    EI_RESULT_MANIFEST_VERSION,
+    EQUIPMENT_EVALUATOR_OUTPUT_PORT,
+    EQUIPMENT_SELECTOR_SCHEMA_REF,
     EvaluationOption,
     KeySpecValue,
     MixingOption,
     OUTPUT_SCHEMA_VERSION,
     output_to_equipment_row,
+    unwrap_evaluator_result,
     validate_output,
+    validate_result_manifest,
+    wrap_evaluator_result,
 )
 from .sme import (
     DirMenu,
@@ -47,10 +55,16 @@ __all__ = [
     "CreatorAppBase",
     "CreatorAppAuthor",
     "CreatorAppManifest",
+    "CreatorAppPort",
     "CreatorAttribution",
+    "EiResultManifest",
+    "EiResultOutput",
     "EquipmentSelectorOutput",
     "EvaluationOption",
     "EquipmentSystem",
+    "EI_RESULT_MANIFEST_VERSION",
+    "EQUIPMENT_EVALUATOR_OUTPUT_PORT",
+    "EQUIPMENT_SELECTOR_SCHEMA_REF",
     "HANDSHAKE_PROTOCOL_VERSION",
     "KeySpecValue",
     "MixingOption",
@@ -91,4 +105,7 @@ __all__ = [
     "thin_report_sections",
     "validate_dir_code",
     "validate_output",
+    "validate_result_manifest",
+    "wrap_evaluator_result",
+    "unwrap_evaluator_result",
 ]

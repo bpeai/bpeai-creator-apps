@@ -15,14 +15,26 @@ from .handshake import (
 # Re-export for callers that imported from output
 __all__ = [
     "OUTPUT_SCHEMA_VERSION",
+    "EI_RESULT_MANIFEST_VERSION",
+    "EQUIPMENT_SELECTOR_SCHEMA_REF",
+    "EQUIPMENT_EVALUATOR_OUTPUT_PORT",
     "CreatorAttribution",
     "KeySpecValue",
     "EvaluationMatrixRow",
     "EvaluationOption",
     "EquipmentSelectorOutput",
+    "EiResultOutput",
+    "EiResultManifest",
     "validate_output",
+    "validate_result_manifest",
+    "wrap_evaluator_result",
+    "unwrap_evaluator_result",
     "output_to_equipment_row",
 ]
+
+EI_RESULT_MANIFEST_VERSION = "ei_result_manifest_v1"
+EQUIPMENT_SELECTOR_SCHEMA_REF = "https://bpeai.com/schemas/equipment-selector/v1"
+EQUIPMENT_EVALUATOR_OUTPUT_PORT = "equipment_selection"
 
 
 class CreatorAttribution(BaseModel):
@@ -106,7 +118,81 @@ class EquipmentSelectorOutput(BaseModel):
         return data
 
 
-def validate_output(data: Dict[str, Any]) -> EquipmentSelectorOutput:
+class EiResultOutput(BaseModel):
+    """One typed value emitted by an EI app."""
+
+    port_id: str
+    schema_ref: str
+    value: Any
+    label: str = ""
+
+
+class EiResultManifest(BaseModel):
+    """Deliverable-neutral result envelope used for EI app composition."""
+
+    schema_version: Literal["ei_result_manifest_v1"] = "ei_result_manifest_v1"
+    template_family: str = "equipment_evaluator"
+    run: Dict[str, Any] = Field(default_factory=dict)
+    inputs: Dict[str, Any] = Field(default_factory=dict)
+    result: Any = None
+    outputs: List[EiResultOutput] = Field(default_factory=list)
+    artifacts: Dict[str, Any] = Field(default_factory=dict)
+
+
+def validate_result_manifest(data: Dict[str, Any]) -> EiResultManifest:
+    return EiResultManifest.model_validate(data)
+
+
+def wrap_evaluator_result(
+    data: Dict[str, Any] | EquipmentSelectorOutput,
+    *,
+    output_port_id: str = EQUIPMENT_EVALUATOR_OUTPUT_PORT,
+    run: Dict[str, Any] | None = None,
+    inputs: Dict[str, Any] | None = None,
+) -> EiResultManifest:
+    """Wrap equipment_selector_v1 without changing its payload contract."""
+    output = data if isinstance(data, EquipmentSelectorOutput) else validate_output(data)
+    payload = output.model_dump()
+    return EiResultManifest(
+        template_family="equipment_evaluator",
+        run=run or {},
+        inputs=inputs or {},
+        result=payload,
+        outputs=[
+            EiResultOutput(
+                port_id=output_port_id,
+                label="Equipment selection",
+                schema_ref=EQUIPMENT_SELECTOR_SCHEMA_REF,
+                value=payload,
+            )
+        ],
+        artifacts=output.artifacts,
+    )
+
+
+def unwrap_evaluator_result(
+    data: Dict[str, Any] | EiResultManifest | EquipmentSelectorOutput,
+) -> EquipmentSelectorOutput:
+    """Read either a generic envelope or the legacy bare evaluator payload."""
+    if isinstance(data, EquipmentSelectorOutput):
+        return data
+    manifest = data if isinstance(data, EiResultManifest) else validate_result_manifest(data)
+    if isinstance(manifest.result, dict):
+        return EquipmentSelectorOutput.model_validate(manifest.result)
+    for item in manifest.outputs:
+        if (
+            item.port_id == EQUIPMENT_EVALUATOR_OUTPUT_PORT
+            or item.schema_ref == EQUIPMENT_SELECTOR_SCHEMA_REF
+        ):
+            if not isinstance(item.value, dict):
+                raise ValueError("equipment evaluator output value must be an object")
+            return EquipmentSelectorOutput.model_validate(item.value)
+    raise ValueError("result manifest has no equipment_selector_v1 output")
+
+
+def validate_output(data: Dict[str, Any] | EiResultManifest) -> EquipmentSelectorOutput:
+    if isinstance(data, EiResultManifest) or data.get("schema_version") == EI_RESULT_MANIFEST_VERSION:
+        return unwrap_evaluator_result(data)
     payload = dict(data or {})
     normalize_options_fields(payload)
     return EquipmentSelectorOutput.model_validate(payload)

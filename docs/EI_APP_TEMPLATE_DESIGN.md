@@ -159,8 +159,41 @@ bpeai_creator_sdk/
 
 Manifest:
 
+- optional `template_family` — deliverable contract family; legacy manifests default to `equipment_evaluator`
 - `equipment_system` — portal / hub enum
 - optional `knowledge_pack` — defaults to `equipment_system` when omitted
+- `input_ports[]` / `output_ports[]` — typed workflow connections (`id`, `label`,
+  `schema_ref`, short compatibility `data_type`, `required`, `cardinality`, `kind`)
+- `required_inputs` remains supported; the SDK derives value input ports for old
+  manifests that do not declare `input_ports`
+
+### Generic result contract
+
+New composition-aware runtimes may wrap template payloads in
+`ei_result_manifest_v1`:
+
+```json
+{
+  "schema_version": "ei_result_manifest_v1",
+  "template_family": "equipment_evaluator",
+  "run": {},
+  "inputs": {},
+  "result": { "schema_version": "equipment_selector_v1" },
+  "outputs": [{
+    "port_id": "equipment_selection",
+    "label": "Equipment selection",
+    "schema_ref": "https://bpeai.com/schemas/equipment-selector/v1",
+    "value": { "schema_version": "equipment_selector_v1" }
+  }],
+  "artifacts": {}
+}
+```
+
+`result` (and the typed output value when present) remains the complete
+`equipment_selector_v1` payload. The SDK
+`wrap_evaluator_result` / `unwrap_evaluator_result` adapters bridge wrapped and
+bare results; `validate_output` accepts both. Existing agents may continue to
+return bare payloads.
 
 ---
 

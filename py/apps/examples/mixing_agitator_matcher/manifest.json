@@ -10,8 +10,31 @@
     "display_name": "BPEAI"
   },
   "app_kind": "first_party",
+  "template_family": "equipment_evaluator",
   "output_schema_version": "equipment_selector_v1",
   "required_inputs": ["system_name"],
+  "input_ports": [
+    {
+      "id": "system_name",
+      "label": "System name",
+      "schema_ref": "https://bpeai.com/schemas/value/string/v1",
+      "data_type": "string",
+      "required": true,
+      "cardinality": "one",
+      "kind": "value"
+    }
+  ],
+  "output_ports": [
+    {
+      "id": "equipment_selection",
+      "label": "Equipment selection",
+      "schema_ref": "https://bpeai.com/schemas/equipment-selector/v1",
+      "data_type": "equipment_selection_v1",
+      "required": true,
+      "cardinality": "one",
+      "kind": "value"
+    }
+  ],
   "route": "/engineering/equipment-intelligence/mixing-agitator-matcher",
   "runtime": "server",
   "min_tier": "INDIVIDUAL",
