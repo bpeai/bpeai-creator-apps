@@ -265,7 +265,10 @@ class KnowledgePack:
             "When producing structured JSON output, follow equipment_selector_v1 exactly "
             "and populate all GPT-parity fields (design_basis, objectives, failure_modes, "
             "evaluation_matrix, alternate_basis, do_not_specify, preliminary_specs, "
-            "mixing_options, datasheet_markdown).",
+            "mixing_options, datasheet_markdown). "
+            "preliminary_specs, objectives, failure_modes, do_not_specify, and manufacturers "
+            'must be arrays of strings (e.g. "Material: 316L stainless"); '
+            "never emit {key, value} objects except in key_specs.",
         ]
         emphasize = (self.meta.get("prompt_hooks") or {}).get("emphasize") or []
         if isinstance(emphasize, list) and emphasize:

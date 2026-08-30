@@ -45,7 +45,9 @@ import json
 import re
 from typing import Any, Dict, List
 
-from bpeai_creator_sdk import CreatorAppBase, validate_output
+from pydantic import ValidationError
+
+from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate_output
 from bpeai_creator_sdk.artifacts import (
     build_evaluation_pdf,
     build_evaluation_pptx,
@@ -215,7 +217,7 @@ Return JSON matching equipment_selector_v1 WITH these GPT-parity fields populate
   "recommended_basis": "One-line recommended basis of design",
   "alternate_basis": "One-line alternate / backup",
   "do_not_specify": ["…"],
-  "preliminary_specs": ["…"],
+  "preliminary_specs": ["Material: 316L stainless", "Cleaning: CIP/SIP capable"],
   "evaluation_matrix": [
     {"option": "…", "technical_fit": "Best|Strong|…", "gmp": "High|…",
      "scale_up_risk": "Low|…", "cost_schedule": "Best|…", "reliability": "High|…", "rank": 1}
@@ -239,6 +241,9 @@ Return JSON matching equipment_selector_v1 WITH these GPT-parity fields populate
 NOTE: evaluation_options is canonical for all equipment systems. mixing_options may
 be returned as an empty array or omitted; the platform mirrors evaluation_options
 into mixing_options for older clients.
+NOTE: key_specs is the only field that uses {"key", "value"} objects.
+preliminary_specs, objectives, failure_modes, do_not_specify, and manufacturers
+MUST be arrays of strings (e.g. "Material: 316L stainless"), never objects.
 
 Requirements (depth bar — do not produce thin one-line sections):
 - Use the decoded DIR; do not invent a different volume/vessel/duty.
@@ -248,6 +253,7 @@ Requirements (depth bar — do not produce thin one-line sections):
 - Include qualitative scale-up / performance reasoning appropriate to the equipment system.
 - Weave industrial search citations into rationale and datasheet_markdown as (title + URL).
 - Include alternate_basis, do_not_specify, preliminary_specs, evaluation_matrix.
+- preliminary_specs must be strings like "Material: 316L", not {key, value} objects.
 - Prefer SME catalog option names and manufacturer product-line hints when appropriate.
 - datasheet_markdown MUST include ALL required headings supplied in the user message
   (from the knowledge pack report_outline) with SUBSTANTIVE multi-sentence bodies
@@ -1103,7 +1109,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 pass
 
         # HANDSHAKE: validated equipment_selector_v1 + phase=evaluation for hub/portal.
-        validated = validate_output(raw)
+        validated = self._validate_evaluation_json(raw, pack, system_name, system_prompt)
         result = validated.model_dump()
         result["phase"] = "evaluation"
         result["dir_code"] = dir_code
@@ -1135,6 +1141,35 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             result["source_basis"] = basis
         return result
 
+    def _validate_evaluation_json(
+        self,
+        raw: Dict[str, Any],
+        pack: KnowledgePack,
+        system_name: str,
+        system_prompt: str,
+    ):
+        """Validate equipment_selector_v1; one LLM repair pass on schema errors."""
+        try:
+            return validate_output(raw)
+        except ValidationError as exc:
+            self.status("Repairing evaluation JSON schema…")
+            repair_user = (
+                "The previous JSON failed equipment_selector_v1 validation.\n"
+                "Return the FULL corrected JSON object using the same schema.\n"
+                "preliminary_specs, objectives, failure_modes, do_not_specify, and "
+                "manufacturers MUST be arrays of strings "
+                '(e.g. "Material: 316L stainless"). Never emit {key, value} objects '
+                "except in key_specs.\n"
+                f"Validation errors:\n{exc}\n\n"
+                f"Previous JSON:\n{json.dumps(raw)[:120000]}"
+            )
+            try:
+                repaired = self.call_openai_json(system=system_prompt, user=repair_user)
+                repaired = self._normalize_raw(repaired, pack, system_name)
+                return validate_output(repaired)
+            except Exception:
+                raise exc
+
     def _normalize_raw(
         self,
         raw: Dict[str, Any],
@@ -1157,10 +1192,16 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             raw["rationale"] = str(raw["recommended_basis"])
         if not raw.get("selected_model") and raw.get("recommended_basis"):
             raw["selected_model"] = str(raw["recommended_basis"])
-        # Coerce list-ish fields
-        for key in ("objectives", "failure_modes", "do_not_specify", "preliminary_specs", "manufacturers"):
-            if isinstance(raw.get(key), str):
-                raw[key] = [raw[key]]
+        for key in (
+            "objectives",
+            "failure_modes",
+            "do_not_specify",
+            "preliminary_specs",
+            "manufacturers",
+            "source_basis",
+        ):
+            if key in raw and raw[key] is not None:
+                raw[key] = coerce_string_list_items(raw[key])
         return raw
 
     def _build_pptx_slide_pack(self, pack: KnowledgePack, evaluation: Dict[str, Any]) -> Dict[str, Any]:

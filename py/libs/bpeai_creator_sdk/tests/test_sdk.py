@@ -5,6 +5,7 @@ from bpeai_creator_sdk import (
     EI_RESULT_MANIFEST_VERSION,
     EquipmentSelectorOutput,
     KeySpecValue,
+    coerce_string_list_items,
     output_to_equipment_row,
     unwrap_evaluator_result,
     validate_output,
@@ -24,6 +25,47 @@ def test_validate_output_minimal():
     }
     out = validate_output(data)
     assert out.equipment_tag == "MX-101"
+
+
+def test_coerce_string_list_items_key_value_dicts():
+    assert coerce_string_list_items(
+        [
+            {"key": "Material", "value": "316L stainless steel construction"},
+            {"key": "Flow Rate", "value": 200, "unit": "L/h"},
+            "Recipe-driven automation",
+        ]
+    ) == [
+        "Material: 316L stainless steel construction",
+        "Flow Rate: 200 L/h",
+        "Recipe-driven automation",
+    ]
+    assert coerce_string_list_items("316L") == ["316L"]
+    assert coerce_string_list_items({"key": "Cleaning", "value": "CIP/SIP capable"}) == [
+        "Cleaning: CIP/SIP capable"
+    ]
+
+
+def test_validate_output_coerces_key_value_preliminary_specs():
+    data = {
+        "schema_version": "equipment_selector_v1",
+        "equipment_tag": "TF-101",
+        "selected_model": "Stainless UF/DF TFF skid",
+        "equipment_system": "tangential_flow_filtration",
+        "key_specs": [{"key": "scale", "value": "6-40 m2"}],
+        "rationale": "Commercial stainless UF/DF with CIP/SIP.",
+        "creator_attribution": {"display_name": "TFF System Expert", "app_id": "tff_system"},
+        "preliminary_specs": [
+            {"key": "Material", "value": "316L stainless steel construction"},
+            {"key": "Membrane", "value": "cassette and hollow fiber"},
+            {"key": "Cleaning", "value": "CIP/SIP capable"},
+        ],
+    }
+    out = validate_output(data)
+    assert out.preliminary_specs == [
+        "Material: 316L stainless steel construction",
+        "Membrane: cassette and hollow fiber",
+        "Cleaning: CIP/SIP capable",
+    ]
 
 
 def test_output_to_equipment_row():

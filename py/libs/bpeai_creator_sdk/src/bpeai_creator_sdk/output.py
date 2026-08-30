@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from typing import Any, Dict, List, Literal, Union
 
 from pydantic import BaseModel, Field, model_validator
@@ -30,6 +31,7 @@ __all__ = [
     "wrap_evaluator_result",
     "unwrap_evaluator_result",
     "output_to_equipment_row",
+    "coerce_string_list_items",
 ]
 
 EI_RESULT_MANIFEST_VERSION = "ei_result_manifest_v1"
@@ -71,6 +73,69 @@ class EvaluationOption(BaseModel):
 
 # Backward-compat alias name used in older TS / prompts
 MixingOption = EvaluationOption
+
+# LLM-facing string arrays that are often emitted as {key, value} objects.
+_STRING_LIST_FIELDS = (
+    "objectives",
+    "failure_modes",
+    "do_not_specify",
+    "preliminary_specs",
+    "manufacturers",
+    "source_basis",
+)
+
+
+def _coerce_string_list_item(item: Any) -> str:
+    """Turn a list item into a display string.
+
+    Models frequently copy the key_specs {key, value, unit?} shape onto
+    preliminary_specs and other string arrays.
+    """
+    if item is None:
+        return ""
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, Mapping):
+        key = item.get("key")
+        value = item.get("value")
+        unit = item.get("unit")
+        if key is not None or value is not None:
+            label = str(key or "").strip()
+            val = "" if value is None else str(value).strip()
+            unit_s = str(unit).strip() if unit not in (None, "") else ""
+            if unit_s:
+                val = f"{val} {unit_s}".strip() if val else unit_s
+            if label and val:
+                return f"{label}: {val}"
+            return val or label
+        parts = []
+        for k, v in item.items():
+            if v is None:
+                continue
+            parts.append(f"{k}: {v}")
+        return ", ".join(parts)
+    return str(item).strip()
+
+
+def coerce_string_list_items(items: Any) -> list[str]:
+    """Coerce a string, dict, or list (including {key, value} objects) to List[str]."""
+    if items is None:
+        return []
+    if isinstance(items, str):
+        text = items.strip()
+        return [text] if text else []
+    if isinstance(items, Mapping):
+        text = _coerce_string_list_item(items)
+        return [text] if text else []
+    if not isinstance(items, list):
+        text = str(items).strip()
+        return [text] if text else []
+    out: list[str] = []
+    for item in items:
+        text = _coerce_string_list_item(item)
+        if text:
+            out.append(text)
+    return out
 
 
 class EquipmentSelectorOutput(BaseModel):
@@ -115,6 +180,9 @@ class EquipmentSelectorOutput(BaseModel):
             )
         data.setdefault("handshake_protocol", "ei_handshake_v1")
         data.setdefault("schema_version", OUTPUT_SCHEMA_VERSION)
+        for field in _STRING_LIST_FIELDS:
+            if field in data:
+                data[field] = coerce_string_list_items(data[field])
         return data
 
 
