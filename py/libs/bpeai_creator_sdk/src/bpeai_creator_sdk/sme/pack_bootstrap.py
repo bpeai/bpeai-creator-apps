@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 import yaml
 
-from .pack_loader import PACK_FILES, knowledge_root
+from .pack_loader import PACK_FILES, knowledge_root, unwrap_loaded_component
 
 # Core files required by load_knowledge_pack; outlines are strongly recommended.
 OPTIONAL_PACK_FILES = (
@@ -35,6 +35,36 @@ DRAFT_BANNER = (
     "# DRAFT — initial version pending SME / platform approval.\n"
     "# Do not treat as production-validated content until approved.\n"
 )
+
+
+class _RoundTripDumper(yaml.SafeDumper):
+    """Dump strings so ``safe_load`` can always parse them.
+
+    PyYAML's default plain scalars wrap at ``width`` and then fail to round-trip
+    when the text contains ``: `` (e.g. ``Material: 316L stainless``).
+    """
+
+
+def _represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.Node:
+    if "\n" in data or ": " in data or data.startswith("{") or data.startswith("["):
+        style = "|" if ("\n" in data or ": " in data) else '"'
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+_RoundTripDumper.add_representer(str, _represent_str)
+
+
+def _dump_yaml(content: Mapping[str, Any]) -> str:
+    return yaml.dump(
+        dict(content),
+        Dumper=_RoundTripDumper,
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
+        width=100,
+    )
+
 
 _FIT_ALLOWED = ["best", "strong", "conditional", "limited", "add-on", "special-case"]
 
@@ -105,13 +135,7 @@ def write_pack_file(
         return target
 
     if isinstance(content, Mapping):
-        body = yaml.safe_dump(
-            dict(content),
-            sort_keys=False,
-            allow_unicode=True,
-            default_flow_style=False,
-            width=100,
-        )
+        body = _dump_yaml(content)
         text = (DRAFT_BANNER if draft and not filename.endswith(".md") else "") + body
     else:
         text = str(content)
@@ -225,7 +249,9 @@ def structure_example_snippet(filename: str, *, py_root: Path | None = None) -> 
 
 def unwrap_component_payload(filename: str, payload: Mapping[str, Any]) -> Dict[str, Any]:
     """Unwrap LLM mistakes that nest content under the target filename key."""
-    data = dict(payload)
+    data = unwrap_loaded_component(filename, dict(payload))
+    if not isinstance(data, dict):
+        return {}
     if filename in data and isinstance(data[filename], Mapping):
         inner = dict(data[filename])
         other = {
@@ -447,6 +473,9 @@ def normalize_bootstrapped_component(
         return data
 
     if filename == "pptx_outline.yaml":
+        # Don't replace a still-wrapped LLM string with placeholder slides.
+        if filename in data and isinstance(data.get(filename), str):
+            return data
         data.setdefault("slide_count", 7)
         if not isinstance(data.get("slides"), list):
             data["slides"] = [
@@ -548,7 +577,10 @@ def repair_existing_pack_components(
         path = root / filename
         if not path.is_file():
             continue
-        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        try:
+            raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
         if not isinstance(raw, Mapping):
             continue
         before_issues = component_payload_issues(filename, raw)

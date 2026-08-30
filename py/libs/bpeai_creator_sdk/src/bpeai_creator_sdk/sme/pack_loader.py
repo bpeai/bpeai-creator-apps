@@ -82,11 +82,52 @@ def knowledge_root(py_root: Path | None = None) -> Path:
     return (root / "knowledge").resolve()
 
 
+def unwrap_loaded_component(filename: str, data: Any) -> Any:
+    """Unwrap LLM dumps that nest the real mapping under the target filename key.
+
+    Handles both ``{ "search_queries.yaml": { ... } }`` and
+    ``{ "search_queries.yaml": "<yaml string>" }``. Sibling ``*.yaml`` / ``*.md``
+    keys belong in other files and are not merged.
+    """
+    if not isinstance(data, dict):
+        return {} if data is None else data
+    if filename not in data:
+        return data
+    inner_raw = data[filename]
+    if isinstance(inner_raw, str):
+        try:
+            parsed = yaml.safe_load(inner_raw)
+        except yaml.YAMLError:
+            return data
+        if not isinstance(parsed, dict):
+            return data
+        inner = parsed
+    elif isinstance(inner_raw, Mapping):
+        inner = dict(inner_raw)
+    else:
+        return data
+    others = {k: v for k, v in data.items() if k != filename}
+    mergeable = {
+        k: v
+        for k, v in others.items()
+        if not (isinstance(k, str) and (k.endswith(".yaml") or k.endswith(".md")))
+    }
+    if not mergeable:
+        return inner
+    merged = dict(inner)
+    for key, value in mergeable.items():
+        if key not in merged:
+            merged[key] = value
+    return merged
+
+
 def _load_yaml(path: Path) -> Any:
     if not path.is_file():
         raise FileNotFoundError(f"Knowledge pack file missing: {path}")
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return data if data is not None else {}
+    if data is None:
+        return {}
+    return unwrap_loaded_component(path.name, data)
 
 
 def _norm(s: str) -> str:

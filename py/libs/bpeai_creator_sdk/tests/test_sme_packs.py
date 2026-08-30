@@ -204,6 +204,89 @@ def test_normalize_bootstrapped_validation_rules_and_pack_unwrap():
     assert isinstance(pack["prompt_hooks"], dict)
 
 
+def test_write_pack_file_round_trips_colon_in_strings(tmp_path: Path):
+    """PyYAML plain scalars with ': ' must not be written — they fail safe_load."""
+    payload = {
+        "fragments": {"role": "TFF SME"},
+        "calls": {
+            "evaluate": {
+                "user_instructions": (
+                    'Emit preliminary_specs as strings '
+                    '(e.g. "Material: 316L stainless", "Cleaning: CIP/SIP capable"), '
+                    "never {key, value} objects."
+                )
+            }
+        },
+    }
+    path = write_pack_file(
+        "colon_pack",
+        "prompt_fragments.yaml",
+        payload,
+        py_root=tmp_path,
+        draft=True,
+    )
+    import yaml
+
+    reloaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert reloaded["calls"]["evaluate"]["user_instructions"] == payload["calls"]["evaluate"][
+        "user_instructions"
+    ]
+
+
+def test_unwrap_filename_yaml_string_payload():
+    from bpeai_creator_sdk.sme.pack_bootstrap import unwrap_component_payload
+
+    inner = (
+        "dir_generate:\n"
+        "  templates:\n"
+        '    - "{system_name} TFF DIR {application}"\n'
+        "evaluate:\n"
+        "  templates:\n"
+        '    - "{system_name} TFF skid {application}"\n'
+    )
+    unwrapped = unwrap_component_payload(
+        "search_queries.yaml",
+        {"search_queries.yaml": inner},
+    )
+    assert "search_queries.yaml" not in unwrapped
+    assert unwrapped["dir_generate"]["templates"][0].endswith("TFF DIR {application}")
+
+
+def test_load_unwraps_filename_string_envelope(py_root: Path, mixing_stub, tmp_path: Path):
+    import shutil
+
+    from bpeai_creator_sdk.sme.pack_loader import unwrap_loaded_component
+
+    dest = tmp_path / "mixing_stub"
+    shutil.copytree(mixing_stub.path, dest)
+    wrapped = (
+        'search_queries.yaml: |\n'
+        "  dir_generate:\n"
+        "    templates:\n"
+        '      - "{system_name} wrapped DIR {application}"\n'
+        "  evaluate:\n"
+        "    templates:\n"
+        '      - "{system_name} wrapped eval {application}"\n'
+    )
+    (dest / "search_queries.yaml").write_text(wrapped, encoding="utf-8")
+    pack = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
+    qs = pack.build_search_queries(
+        "dir_generate",
+        system_name="Media prep vessel",
+        application="biopharmaceutical",
+    )
+    assert any("wrapped DIR" in q for q in qs)
+    envelope = unwrap_loaded_component(
+        "report_outline.yaml",
+        {
+            "report_outline.yaml": "required_headings:\n  - Design basis\n",
+            "min_counts": {"sections": 1},
+        },
+    )
+    assert envelope["required_headings"] == ["Design basis"]
+    assert envelope["min_counts"]["sections"] == 1
+
+
 def test_thin_report_sections():
     from bpeai_creator_sdk.sme import thin_report_sections
 

@@ -39,6 +39,7 @@ from .pack_loader import (
     resolve_industry,
     resolve_scenario_id,
     resolve_variant_id,
+    unwrap_loaded_component,
 )
 from .report import missing_report_headings, thin_report_sections
 from .validate import (
@@ -92,6 +93,7 @@ __all__ = [
     "synthesize_common_codes",
     "template_references_root",
     "thin_report_sections",
+    "unwrap_loaded_component",
     "validate_dir_code",
     "write_dir_catalog_markdown",
     "write_pack_file",
