@@ -692,9 +692,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"do not copy website/platform pack content):\n"
             f"{reference}\n\n"
             "Rules:\n"
-            "- Prefer dir_menus list catalog with 5–7 DIR requirements and 2+ numeric "
-            "common_codes (hyphenated indexes + captions; not SIP/IT tags) "
-            "when writing dir_requirements.yaml.\n"
+            "- For dir_requirements.yaml emit dir_menus only (5–7 DIR requirements "
+            "and 2+ numeric common_codes with hyphenated indexes + captions; not "
+            "SIP/IT tags). Do not include menus or scenarios keys.\n"
             "- Include at least 5 equipment options when writing equipment_options.yaml.\n"
             "- fit_enum.allowed must include best, strong, conditional, limited, "
             "add-on, special-case.\n"
@@ -757,8 +757,15 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             # If legacy came from dir_catalog via resolve_dir_menu, use it.
             if legacy.source == "dir_catalog":
                 return legacy, notes
-            # If pack already has a usable legacy questionnaire for this scenario, reuse.
-            if legacy.requirements and legacy.source in {"menu", "scenario_fallback"}:
+            authored_legacy = bool(pack.menus) or bool(
+                pack.dir_requirements.get("scenarios")
+            )
+            # Reuse only YAML-authored menus/scenarios — not synthesized dir_menus copies.
+            if (
+                authored_legacy
+                and legacy.requirements
+                and legacy.source in {"menu", "scenario_fallback"}
+            ):
                 # Prefer authored pack questionnaires (scenarios / menus) over LLM
                 # regenerate. List-catalog miss alone must not invent a parallel DIR
                 # when fingerprint aliases already resolved a real scenario.

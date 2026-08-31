@@ -8,25 +8,33 @@ from urllib.parse import urlparse
 
 import requests
 
+from .credential_errors import raise_if_http_failed, raise_missing_key
+
 _TAG_RE = re.compile(r"<[^>]+>")
 _SCRIPT_RE = re.compile(r"(?is)<(script|style|noscript|svg)[^>]*>.*?</\1>")
 _WS_RE = re.compile(r"\s+")
 
 
 def serper_search(query: str, *, num: int = 8) -> list[dict[str, Any]]:
-    api_key = (os.getenv("SERPER_API_KEY") or "").strip()
+    api_key = (os.getenv("SERPER_API_KEY") or os.getenv("SERPER_DEV_API_KEY") or "").strip()
     if not api_key:
-        return []
+        raise_missing_key("serper", "SERPER_API_KEY", source="creator_sdk.serper_search")
 
     url = "https://google.serper.dev/search"
     headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
     payload = {"q": query, "num": min(max(num, 1), 10)}
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        raise_if_http_failed("serper", resp, source="creator_sdk.serper_search")
         resp.raise_for_status()
         data = resp.json()
-    except Exception:
-        return []
+    except requests.RequestException as exc:
+        from .credential_errors import ProviderCredentialError, wrap_exception
+
+        wrapped = wrap_exception("serper", exc, source="creator_sdk.serper_search")
+        if isinstance(wrapped, ProviderCredentialError):
+            raise wrapped
+        raise RuntimeError(f"serper search failed: {exc}") from exc
 
     results: list[dict[str, Any]] = []
     for item in data.get("organic", []) or []:

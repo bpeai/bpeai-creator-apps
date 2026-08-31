@@ -204,6 +204,63 @@ def test_normalize_bootstrapped_validation_rules_and_pack_unwrap():
     assert isinstance(pack["prompt_hooks"], dict)
 
 
+def test_bootstrap_dir_requirements_emits_dir_menus_only():
+    dual = {
+        "dir_menus": [
+            {
+                "menu_id": "demo__general__biopharmaceuticals",
+                "scenario_id": "demo",
+                "requirements": [
+                    {"index": 1, "label": "Duty", "options": [{"index": 1, "text": "A"}]}
+                ],
+                "common_codes": ["1"],
+            }
+        ],
+        "menus": [{"scenario_id": "demo", "label": "legacy index"}],
+        "scenarios": {
+            "demo": {
+                "label": "legacy copy",
+                "requirements": [
+                    {"index": 1, "label": "Duty", "options": [{"index": 1, "text": "A"}]}
+                ],
+            }
+        },
+    }
+    fixed = prepare_bootstrapped_component(
+        "dir_requirements.yaml",
+        dual,
+        pack_id="demo",
+        equipment_system="demo",
+    )
+    assert "dir_menus" in fixed
+    assert "menus" not in fixed
+    assert "scenarios" not in fixed
+    assert fixed["dir_menus"][0]["scenario_id"] == "demo"
+    assert fixed["dir_menus"][0]["common_codes"][0]["code"] == "1"
+
+
+def test_bootstrap_dir_requirements_promotes_legacy_scenarios():
+    legacy_only = {
+        "scenarios": {
+            "demo": {
+                "label": "Legacy",
+                "requirements": [
+                    {"index": 1, "label": "Duty", "options": ["Low", "High"]}
+                ],
+            }
+        }
+    }
+    fixed = prepare_bootstrapped_component(
+        "dir_requirements.yaml",
+        legacy_only,
+        pack_id="demo",
+        equipment_system="demo",
+    )
+    assert "scenarios" not in fixed
+    assert fixed["dir_menus"][0]["scenario_id"] == "demo"
+    assert fixed["dir_menus"][0]["requirements"][0]["options"][0]["text"] == "Low"
+
+
 def test_write_pack_file_round_trips_colon_in_strings(tmp_path: Path):
     """PyYAML plain scalars with ': ' must not be written — they fail safe_load."""
     payload = {

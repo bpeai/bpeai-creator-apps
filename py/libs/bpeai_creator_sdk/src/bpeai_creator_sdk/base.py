@@ -76,5 +76,6 @@ class CreatorAppBase(ABC):
     def serper_search(self, query: str, *, num: int = 8) -> list[dict[str, Any]]:
         from .tools import serper_search
 
+        hits = serper_search(query, num=num)
         self._usage["serper_calls"] += 1
-        return serper_search(query, num=num)
+        return hits

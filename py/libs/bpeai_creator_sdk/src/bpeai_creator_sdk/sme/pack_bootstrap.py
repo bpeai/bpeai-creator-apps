@@ -178,7 +178,9 @@ def component_schema_hints() -> Dict[str, str]:
             "(list), prompt_hooks as an object {system_role: string, emphasize: [strings]}."
         ),
         "dir_requirements.yaml": (
-            "Prefer SME-readable list catalog: dir_menus: ["
+            "Emit dir_menus only (list catalog). Do NOT include legacy menus or "
+            "scenarios maps — the loader synthesizes those from dir_menus. "
+            "dir_menus: ["
             "{menu_id, status (approved|draft_generated), scenario_id, "
             "equipment_system_variant, industry, system_examples, label, summary, "
             "common_codes: [{code, caption}], requirements: [{index, label, "
@@ -186,7 +188,6 @@ def component_schema_hints() -> Dict[str, str]:
             "common_codes MUST be hyphen-separated numeric DIR starters that match "
             "requirement length (e.g. 2-1-3), each with a one-line caption — "
             "not mnemonic tags like SIP. "
-            "Legacy scenarios/menus maps are still accepted. "
             "DIR code = hyphen-separated 1-based option indexes."
         ),
         "equipment_options.yaml": (
@@ -275,6 +276,104 @@ def _as_mapping(value: Any, default: Dict[str, Any]) -> Dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else dict(default)
 
 
+def _normalize_dir_requirement_rows(reqs_in: Any) -> List[Dict[str, Any]]:
+    reqs_out: List[Dict[str, Any]] = []
+    if not isinstance(reqs_in, list):
+        return reqs_out
+    for i, req in enumerate(reqs_in):
+        if not isinstance(req, Mapping):
+            continue
+        r = dict(req)
+        r.setdefault("index", i + 1)
+        opts_in = r.get("options") or []
+        opts_out: List[Dict[str, Any]] = []
+        if isinstance(opts_in, list):
+            for j, opt in enumerate(opts_in):
+                if isinstance(opt, str):
+                    opts_out.append({"index": j + 1, "text": opt})
+                elif isinstance(opt, Mapping):
+                    o = dict(opt)
+                    o.setdefault("index", j + 1)
+                    if "text" not in o:
+                        o["text"] = str(
+                            o.get("label") or o.get("name") or o.get("value") or ""
+                        )
+                    opts_out.append(o)
+        r["options"] = opts_out
+        reqs_out.append(r)
+    return reqs_out
+
+
+def _normalize_common_codes(codes: Any) -> List[Dict[str, Any]]:
+    if not isinstance(codes, list):
+        return []
+    norm_codes: List[Dict[str, Any]] = []
+    for item in codes:
+        if isinstance(item, str):
+            norm_codes.append({"code": item, "caption": ""})
+        elif isinstance(item, Mapping) and item.get("code"):
+            c = dict(item)
+            if "caption" not in c and "relevance" in c:
+                c["caption"] = c.get("relevance")
+            norm_codes.append(c)
+    return norm_codes
+
+
+def _normalize_dir_menu_row(
+    row: Mapping[str, Any], *, default_sid: str = ""
+) -> Dict[str, Any]:
+    m = dict(row)
+    if "requirements" not in m and isinstance(m.get("dir_requirements"), list):
+        m["requirements"] = m.pop("dir_requirements")
+    m["requirements"] = _normalize_dir_requirement_rows(m.get("requirements") or [])
+    m["common_codes"] = _normalize_common_codes(m.get("common_codes") or [])
+    if default_sid:
+        m.setdefault("scenario_id", default_sid)
+    return m
+
+
+def dir_requirements_dir_menus_only(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Collapse bootstrap/legacy shapes to a single ``dir_menus`` catalog."""
+    menus_out: List[Dict[str, Any]] = []
+    raw_menus = data.get("dir_menus")
+    if isinstance(raw_menus, list) and raw_menus:
+        for row in raw_menus:
+            if isinstance(row, Mapping):
+                menus_out.append(_normalize_dir_menu_row(row))
+    elif isinstance(data.get("scenarios"), Mapping) and data["scenarios"]:
+        for sid, scen in data["scenarios"].items():
+            if isinstance(scen, Mapping):
+                menus_out.append(_normalize_dir_menu_row(scen, default_sid=str(sid)))
+    elif isinstance(data.get("menus"), list) and data["menus"]:
+        for row in data["menus"]:
+            if isinstance(row, Mapping):
+                menus_out.append(_normalize_dir_menu_row(row))
+    data["dir_menus"] = menus_out
+    data.pop("menus", None)
+    data.pop("scenarios", None)
+    return data
+
+
+def scenario_ids_from_dir_req(dir_req: Mapping[str, Any]) -> List[str]:
+    """Scenario ids from ``dir_menus`` first, then leftover ``scenarios`` keys."""
+    ids: List[str] = []
+    menus = dir_req.get("dir_menus")
+    if isinstance(menus, list):
+        for row in menus:
+            if not isinstance(row, Mapping):
+                continue
+            sid = str(row.get("scenario_id") or "").strip()
+            if sid and sid not in ids:
+                ids.append(sid)
+    scenarios = dir_req.get("scenarios") or {}
+    if isinstance(scenarios, Mapping):
+        for key in scenarios.keys():
+            sid = str(key).strip()
+            if sid and sid not in ids:
+                ids.append(sid)
+    return ids
+
+
 def _normalize_fragment_value(value: Any) -> str:
     if isinstance(value, str):
         return value
@@ -355,55 +454,7 @@ def normalize_bootstrapped_component(
         return data
 
     if filename == "dir_requirements.yaml":
-        scenarios = data.get("scenarios")
-        if isinstance(scenarios, Mapping):
-            fixed: Dict[str, Any] = {}
-            for sid, scen in scenarios.items():
-                if not isinstance(scen, Mapping):
-                    continue
-                s = dict(scen)
-                if "requirements" not in s and isinstance(s.get("dir_requirements"), list):
-                    s["requirements"] = s.pop("dir_requirements")
-                reqs_in = s.get("requirements") or []
-                reqs_out: List[Dict[str, Any]] = []
-                if isinstance(reqs_in, list):
-                    for i, req in enumerate(reqs_in):
-                        if not isinstance(req, Mapping):
-                            continue
-                        r = dict(req)
-                        r.setdefault("index", i + 1)
-                        opts_in = r.get("options") or []
-                        opts_out: List[Dict[str, Any]] = []
-                        if isinstance(opts_in, list):
-                            for j, opt in enumerate(opts_in):
-                                if isinstance(opt, str):
-                                    opts_out.append({"index": j + 1, "text": opt})
-                                elif isinstance(opt, Mapping):
-                                    o = dict(opt)
-                                    o.setdefault("index", j + 1)
-                                    if "text" not in o:
-                                        o["text"] = str(
-                                            o.get("label") or o.get("name") or o.get("value") or ""
-                                        )
-                                    opts_out.append(o)
-                        r["options"] = opts_out
-                        reqs_out.append(r)
-                s["requirements"] = reqs_out
-                codes = s.get("common_codes") or []
-                if isinstance(codes, list):
-                    norm_codes = []
-                    for item in codes:
-                        if isinstance(item, str):
-                            norm_codes.append({"code": item, "caption": ""})
-                        elif isinstance(item, Mapping) and item.get("code"):
-                            c = dict(item)
-                            if "caption" not in c and "relevance" in c:
-                                c["caption"] = c.get("relevance")
-                            norm_codes.append(c)
-                    s["common_codes"] = norm_codes
-                fixed[str(sid)] = s
-            data["scenarios"] = fixed
-        return data
+        return dir_requirements_dir_menus_only(data)
 
     if filename == "equipment_options.yaml":
         if "options" not in data and isinstance(data.get("equipment_options"), list):
@@ -507,23 +558,23 @@ def component_payload_issues(filename: str, payload: Mapping[str, Any]) -> List[
         if not isinstance(fit, Mapping) or not isinstance(fit.get("allowed"), list):
             issues.append("validation_rules.yaml.fit_enum.allowed must be a list")
     elif filename == "dir_requirements.yaml":
-        scenarios = payload.get("scenarios")
-        if not isinstance(scenarios, Mapping) or not scenarios:
-            issues.append("dir_requirements.yaml.scenarios must be a non-empty mapping")
+        menus = payload.get("dir_menus")
+        if not isinstance(menus, list) or not menus:
+            issues.append("dir_requirements.yaml.dir_menus must be a non-empty list")
         else:
-            for sid, scen in scenarios.items():
-                if not isinstance(scen, Mapping):
-                    issues.append(f"scenario '{sid}' must be a mapping")
+            for i, row in enumerate(menus):
+                if not isinstance(row, Mapping):
+                    issues.append(f"dir_menus[{i}] must be a mapping")
                     continue
-                reqs = scen.get("requirements")
+                reqs = row.get("requirements")
                 if not isinstance(reqs, list) or not reqs:
-                    issues.append(f"scenario '{sid}' needs requirements[]")
+                    issues.append(f"dir_menus[{i}] needs requirements[]")
                     continue
                 first = reqs[0]
                 if not isinstance(first, Mapping) or not isinstance(first.get("options"), list):
-                    issues.append(f"scenario '{sid}' requirements need options[]")
+                    issues.append(f"dir_menus[{i}] requirements need options[]")
                 elif first.get("options") and not isinstance(first["options"][0], Mapping):
-                    issues.append(f"scenario '{sid}' options must be {{index, text}} objects")
+                    issues.append(f"dir_menus[{i}] options must be {{index, text}} objects")
     elif filename == "equipment_options.yaml":
         opts = payload.get("options")
         if not isinstance(opts, list) or not opts:
@@ -741,11 +792,10 @@ def align_pack_meta_with_scenarios(
     dir_req = yaml.safe_load(dir_path.read_text(encoding="utf-8")) or {}
     if not isinstance(meta, Mapping) or not isinstance(dir_req, Mapping):
         return False
-    scenarios = dir_req.get("scenarios") or {}
-    if not isinstance(scenarios, Mapping) or not scenarios:
+    scenario_ids = scenario_ids_from_dir_req(dir_req)
+    if not scenario_ids:
         return False
-    # Preserve YAML order (first scenario is the preferred default).
-    scenario_ids = [str(k) for k in scenarios.keys()]
+    # Preserve YAML order (first dir_menus scenario is the preferred default).
     scenario_set = set(scenario_ids)
     changed = False
     meta_out = dict(meta)

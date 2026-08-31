@@ -85,7 +85,7 @@ This authoring repo only ships **example stubs**: [`py/knowledge/_examples/`](..
 | File | Purpose |
 |------|---------|
 | `pack.yaml` | Pack metadata: expertise, alignment, coverage, industries, aliases |
-| `dir_requirements.yaml` | SME-readable **list catalog** `dir_menus[]` (+ optional legacy scenarios/menus) |
+| `dir_requirements.yaml` | SME-readable **list catalog** `dir_menus[]` (legacy `menus`/`scenarios` accepted at load time only) |
 | `dir_catalog.md` | Auto-generated Markdown review table for SMEs |
 | `equipment_options.yaml` | Allowed technology / option catalog |
 | `validation_rules.yaml` | Hard/soft rules for DIR codes and LLM field enums |

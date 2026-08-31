@@ -600,19 +600,34 @@ def resolve_dir_menu(
                     continue
                 return pack._menu_payload(m, sid)
 
-    # Legacy scenario fallback (treated as approved for local/filesystem seeds)
-    scenario = pack.scenario(sid)
+    # Authored YAML scenarios only — do not reuse synthesized dir_menus copies.
+    raw_scenarios = pack.dir_requirements.get("scenarios")
+    if isinstance(raw_scenarios, Mapping):
+        scenario = raw_scenarios.get(sid)
+        if isinstance(scenario, Mapping):
+            return DirMenu(
+                scenario_id=sid,
+                equipment_system_variant=variant,
+                industry=ind,
+                label=str(scenario.get("label") or sid),
+                lifecycle="approved",
+                requirements=[
+                    r for r in (scenario.get("requirements") or []) if isinstance(r, dict)
+                ],
+                common_codes=list(scenario.get("common_codes") or [])
+                if isinstance(scenario.get("common_codes"), list)
+                else [],
+                source="scenario_fallback",
+            )
     return DirMenu(
         scenario_id=sid,
         equipment_system_variant=variant,
         industry=ind,
-        label=str(scenario.get("label") or sid),
-        lifecycle="approved",
-        requirements=[r for r in (scenario.get("requirements") or []) if isinstance(r, dict)],
-        common_codes=list(scenario.get("common_codes") or [])
-        if isinstance(scenario.get("common_codes"), list)
-        else [],
-        source="scenario_fallback",
+        label=sid,
+        lifecycle="pending",
+        requirements=[],
+        common_codes=[],
+        source="unresolved",
     )
 
 
