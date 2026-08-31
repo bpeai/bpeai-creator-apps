@@ -23,7 +23,6 @@ Packs live in `py/knowledge/<pack_id>/` (see `docs/EI_APP_TEMPLATE_DESIGN.md`).
 ```text
 py/apps/_templates/equipment_evaluator/   ← start here (DIR → evaluate + knowledge pack)
 py/knowledge/mixing/                      ← SME pack (shared)
-py/apps/examples/mixing_agitator_matcher/ ← LEGACY — do not copy
 ```
 
 ```powershell

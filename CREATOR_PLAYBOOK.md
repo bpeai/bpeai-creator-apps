@@ -103,8 +103,6 @@ py/apps/<your_id>/
   README.md         # optional
 ```
 
-**Do not copy** `py/apps/examples/mixing_agitator_matcher/` — that example is **legacy** (in-code DIR, not pack-backed).
-
 ### 1.3 Recommended order
 
 1. **Code first** — copy template, rename class / `app_id` / `knowledge_pack_id`, local test.

@@ -48,7 +48,6 @@ py/
   knowledge/<your_pack>/                ← your pack drafts (local/gitignored)
   apps/
     _templates/equipment_evaluator/     ← copy this to start (DIR → evaluate)
-    examples/mixing_agitator_matcher/   ← LEGACY — do not copy (historical only)
     <your_id>/                          ← your app (local/gitignored; folder = app id)
   tools/
     local_chat.py
