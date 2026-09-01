@@ -1,5 +1,12 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.4 — 2026-09-01
+
+### PPTX slide 3 objective cards
+
+- Widen the four process-step cards and wrap/auto-fit titles and details so text no longer clips at 22 characters.
+- Template slide-pack contract: process-step titles ≤ 5 words; details ≤ 14 words.
+
 ## 0.2.3 — 2026-09-01
 
 ### Wizard vs local_chat (pack bootstrap)

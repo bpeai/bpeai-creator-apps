@@ -191,7 +191,8 @@ Rules:
 - Exactly 7 slides in that order/ids.
 - Keep text dense but slide-ready (short labels, no walls of text).
 - HARD length limits: title_lines ≤ 4 words each; subtitle ≤ 18 words;
-  card values ≤ 8 words; failure_modes ≤ 12 words each; option notes ≤ 12 words;
+  card values ≤ 8 words; process_steps titles ≤ 5 words; process_steps details ≤ 14 words;
+  failure_modes ≤ 12 words each; option notes ≤ 12 words;
   recommended_why / cons ≤ 14 words each; decision_logic ≤ 35 words.
 - Align strictly with the evaluation content (DIR, options, recommendation).
 - Use project-team summary tone similar to a professional engineering deck.

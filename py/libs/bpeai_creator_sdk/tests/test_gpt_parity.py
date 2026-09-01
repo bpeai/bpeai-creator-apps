@@ -103,6 +103,49 @@ def test_build_evaluation_pptx_smoke(tmp_path: Path, mixing_pack):
     assert abs(prs.slide_width.inches - 13.333) < 0.01
 
 
+def test_slide3_objective_cards_keep_long_titles(tmp_path: Path):
+    """Slide 3 titles must wrap in the card, not hard-clip at 22 characters."""
+    fixture = {
+        "system_name": "MF Harvest Clarification Skid",
+        "dir_code": "3-3-3-3-3-3-3",
+        "selected_model": "Closed MF-TFF harvest skid",
+        "recommended_basis": "Closed MF-TFF harvest skid",
+        "objectives": ["Clarify harvest", "Operate at target flux"],
+        "failure_modes": ["TMP runaway", "Turbidity breakthrough"],
+    }
+    slide_pack = build_slide_pack_from_evaluation(fixture)
+    slide_pack["slides"][2]["process_steps"] = [
+        {"n": 1, "title": "Clarify harvest", "detail": "5,000–10,000 L in ≤8 h; ≥95% recovery."},
+        {"n": 2, "title": "Operate at target flux", "detail": "100–155 LMH via constant-flux with TMP limit."},
+        {
+            "n": 3,
+            "title": "Manage hydraulics",
+            "detail": "Crossflow 300–600 L/m²/h; TMP 0.8–2.0 bar controlled.",
+        },
+        {
+            "n": 4,
+            "title": "Maintain thermal consistency",
+            "detail": "≤2 °C temperature rise across skid at design conditions.",
+        },
+    ]
+    path = build_evaluation_pptx(
+        fixture,
+        outline=None,
+        output_path=tmp_path / "slide3.pptx",
+        slide_pack=slide_pack,
+    )
+    prs = Presentation(str(path))
+    texts = []
+    for shape in prs.slides[2].shapes:
+        if shape.has_text_frame:
+            texts.append(shape.text_frame.text)
+    joined = "\n".join(texts)
+    assert "Maintain thermal consistency" in joined
+    assert "cons…" not in joined
+    assert "design conditions" in joined
+    assert "bar controlled" in joined
+
+
 def test_build_evaluation_pdf_and_reference_decks(tmp_path: Path, mixing_pack):
     from bpeai_creator_sdk import build_evaluation_pdf, list_reference_decks
 

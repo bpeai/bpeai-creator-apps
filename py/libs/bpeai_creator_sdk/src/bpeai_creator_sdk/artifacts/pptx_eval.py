@@ -24,6 +24,10 @@ PANEL_RIGHT = "F7FAFC"
 FONT_DISPLAY = "Aptos Display"
 FONT_BODY = "Aptos"
 
+# python-pptx default insets are 0.1" per side and clip small card boxes.
+_TF_MARGIN_LR = 27432  # 0.03"
+_TF_MARGIN_TB = 18288  # 0.02"
+
 
 def _rgb(hex_color: str):
     from pptx.dml.color import RGBColor
@@ -52,6 +56,18 @@ def _emu_to_inches(emu: int) -> float:
     return float(emu) / 914400.0
 
 
+def _prepare_text_frame(shape) -> None:
+    """Tight insets + wrap so small cards do not clip or overflow."""
+    from pptx.util import Emu
+
+    tf = shape.text_frame
+    tf.word_wrap = True
+    tf.margin_left = Emu(_TF_MARGIN_LR)
+    tf.margin_right = Emu(_TF_MARGIN_LR)
+    tf.margin_top = Emu(_TF_MARGIN_TB)
+    tf.margin_bottom = Emu(_TF_MARGIN_TB)
+
+
 def _fit_font_pt(
     text: str,
     *,
@@ -68,11 +84,11 @@ def _fit_font_pt(
     size = float(preferred_pt)
     para_count = max(1, paragraphs)
     while size > min_pt:
-        width_in = max(0.2, _emu_to_inches(width_emu))
-        height_in = max(0.15, _emu_to_inches(height_emu))
-        # Aptos-ish average glyph width ≈ 0.52em
-        chars_per_line = max(6, int(width_in * 72.0 / (size * 0.52)))
-        line_height_in = (size / 72.0) * 1.2
+        width_in = max(0.15, _emu_to_inches(max(1, width_emu - 2 * _TF_MARGIN_LR)))
+        height_in = max(0.12, _emu_to_inches(max(1, height_emu - 2 * _TF_MARGIN_TB)))
+        # Aptos-ish average glyph width; 0.56em is conservative for bold titles
+        chars_per_line = max(6, int(width_in * 72.0 / (size * 0.56)))
+        line_height_in = (size / 72.0) * 1.22
         max_lines = max(1, int(height_in / line_height_in))
         # Reserve one line per paragraph, then remaining for wrap
         if para_count > max_lines:
@@ -141,7 +157,7 @@ def _fill_textbox(
         size = max(min_pt, size - 1.0)
 
     tf = shape.text_frame
-    tf.word_wrap = True
+    _prepare_text_frame(shape)
     for i, line in enumerate(lines):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         if center:
@@ -306,7 +322,7 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
 
     process_steps = []
     for i, obj in enumerate(_as_list(result.get("objectives"))[:4], start=1):
-        process_steps.append({"n": i, "title": _truncate(obj, 28), "detail": _truncate(obj, 40)})
+        process_steps.append({"n": i, "title": _truncate(obj, 40), "detail": _truncate(obj, 80)})
     if not process_steps:
         process_steps = [
             {"n": 1, "title": "Charge", "detail": "Controlled liquid charge"},
@@ -620,31 +636,55 @@ def build_evaluation_pptx(
         str(t3.get("heading") or "Mixing objectives, constraints and failure modes"),
     )
     steps = [x for x in (t3.get("process_steps") or []) if isinstance(x, Mapping)][:4]
-    step_lefts = [658368, 3218688, 5779008, 8339328]
+    card_w = 2560320  # 2.80" — was 2.15", which clipped 14pt titles
+    card_h = 1417320  # 1.55"
+    card_gap = 137160
+    card_top = 1874520
+    pad = 100584
+    badge = 292608
+    step_lefts = [658368 + i * (card_w + card_gap) for i in range(4)]
     for left, step in zip(step_lefts, steps):
-        _add_rect(s3, left, 2057400, 1965960, 1143000, CARD_FILL)
-        # number circle (approx with rounded rect)
-        _add_rect(s3, left + 109728, 2258568, 329184, 329184, TEAL)
-        num = _add_textbox(s3, left + 219456, 2331720, 109728, 109728)
+        _add_rect(s3, left, card_top, card_w, card_h, CARD_FILL)
+        badge_l = left + pad
+        badge_t = card_top + 146304
+        _add_rect(s3, badge_l, badge_t, badge, badge, TEAL)
+        num = _add_textbox(s3, badge_l, badge_t, badge, badge)
+        _prepare_text_frame(num)
         num.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
-        _set_run(num.text_frame.paragraphs[0], str(step.get("n") or ""), size_pt=10, bold=True, color=WHITE, font_name=FONT_BODY)
-        title = _add_textbox(s3, left + 530352, 2240280, 1325880, 219456)
         _set_run(
-            title.text_frame.paragraphs[0],
-            _truncate(step.get("title") or "", 22),
-            size_pt=14,
+            num.text_frame.paragraphs[0],
+            str(step.get("n") or ""),
+            size_pt=11,
+            bold=True,
+            color=WHITE,
+            font_name=FONT_BODY,
+        )
+        title_l = badge_l + badge + 64008
+        title_w = left + card_w - pad - title_l
+        title_h = 438912  # two wrapped lines
+        title = _add_textbox(s3, title_l, card_top + 127728, title_w, title_h)
+        _fill_textbox(
+            title,
+            _truncate(step.get("title") or "", 42),
+            width_emu=title_w,
+            height_emu=title_h,
+            preferred_pt=13,
+            min_pt=9,
             bold=True,
             color=NAVY,
             font_name=FONT_BODY,
         )
-        detail = _add_textbox(s3, left + 530352, 2587752, 1325880, 480000)
+        detail_t = card_top + 620000
+        detail_w = card_w - 2 * pad
+        detail_h = card_top + card_h - detail_t - pad
+        detail = _add_textbox(s3, left + pad, detail_t, detail_w, detail_h)
         _fill_textbox(
             detail,
-            _truncate(step.get("detail") or "", 48),
-            width_emu=1325880,
-            height_emu=480000,
+            _truncate(step.get("detail") or "", 96),
+            width_emu=detail_w,
+            height_emu=detail_h,
             preferred_pt=11,
-            min_pt=9,
+            min_pt=8,
             bold=False,
             color=GRAY,
             font_name=FONT_BODY,
