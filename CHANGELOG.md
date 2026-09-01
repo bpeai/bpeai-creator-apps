@@ -2,6 +2,12 @@
 
 ## 0.2.3 — 2026-09-01
 
+### Wizard vs local_chat (pack bootstrap)
+
+- Cursor wizard copies/edits `py/apps/<id>/` only. It must **not** write knowledge-pack YAML.
+- First `python py/tools/local_chat.py --app <id>` LLM-bootstraps `py/knowledge/<id>/` with the creator’s `.env` keys.
+- `local_chat` startup reminds the creator to drop optional SME files in `references/content/` and to enter `system name, application` (e.g. `CIP return pump, biopharmaceutical`).
+
 ### Creator app ↔ knowledge pack 1:1 + creator-content RAG
 
 - Creator EI apps use a **private pack with the same id** (`py/apps/<id>/` ↔ `py/knowledge/<id>/`).

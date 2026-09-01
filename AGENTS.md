@@ -14,6 +14,9 @@ edit hub/portal React.
 
 Follow the project skill **`.cursor/skills/ei-creator-wizard/SKILL.md`**
 (also invokable as `/ei-creator-wizard` or by the user saying **Create my EI app**).
+The wizard copies/edits the app template only. Knowledge-pack YAML is
+LLM-bootstrapped when the creator runs `python py/tools/local_chat.py --app <id>`
+(their `.env` keys) — do not write pack YAML in Cursor.
 
 Prefer pack YAML (`prompt_fragments.yaml`, outlines, options) over forking
 hard-coded evaluation contract prompts. Optional Python helpers:

@@ -7,11 +7,12 @@ Creator checklist after copying this folder to ``py/apps/<your_id>/``:
   2. Set ``creator_display_name`` (hub attribution).
   3. Set ``knowledge_pack_id`` to the **same** ``app_id`` (1:1 private pack).
      ``equipment_system`` is taxonomy (mixing, filtration, …), not the pack name.
-     If the pack is missing locally, this agent LLM-bootstraps a draft under
-     ``py/knowledge/<app_id>/`` and asks you to add optional SME files to
-     ``references/content/``.
+     If the pack is missing locally, the first ``local_chat`` run LLM-bootstraps
+     a draft under ``py/knowledge/<app_id>/`` using the creator’s ``.env`` keys
+     (not Cursor). Optional SME files go in ``references/content/``.
   4. Update ``manifest.json`` (slug, label, equipment_system, knowledge_pack = app id).
-  5. Local test: ``python py/tools/local_chat.py --app <your_id>`` then DIR → pptx.
+  5. Local test: ``python py/tools/local_chat.py --app <your_id>``.
+     First line: system name and application, e.g. ``CIP return pump, biopharmaceutical``.
   6. SME AI dials: ``prompt_fragments.yaml`` (fragments + calls) and
      ``search_queries.yaml``. Leave JSON schema contracts in this file alone
      unless changing the deliverable (see ``docs/EI_AI_HANDSHAKES.md``).

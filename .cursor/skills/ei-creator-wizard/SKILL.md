@@ -28,6 +28,7 @@ Full docs: `docs/EI_CREATOR_EXTENSIONS.md`, `docs/EI_HANDSHAKE.md`, `CREATOR_PLA
 - Do not fork `py/libs/bpeai_creator_sdk/`.
 - Do not commit secrets, `.env`, `artifacts/`, or treat gitignored apps as platform seeds.
 - Platform seed packs cannot be bound at runtime — a creator app uses a **private pack with the same id** as the app.
+- **Do not write knowledge-pack YAML in Cursor.** The pack is LLM-bootstrapped when the creator runs `local_chat.py` in PowerShell, using **their** `.env` keys (`OPENAI_API_KEY`, `SERPER_API_KEY`). Do not copy `py/knowledge/_examples/mixing_stub/` as a starter pack. Do not run `local_chat.py` for them.
 
 ## Interview (one decision at a time)
 
@@ -38,17 +39,18 @@ Ask briefly; wait for answers before scaffolding.
    - slug, label, creator display name
    - `equipment_system` (taxonomy only: mixing, filtration, heat_transfer, … — **not** the pack name)
 
-2. **Starting knowledge pack** (always `py/knowledge/<same app id>/`)
-   - Let the template LLM-bootstrap a draft on first `local_chat` run, **or**
-   - Copy/adapt `py/knowledge/_examples/mixing_stub/` into `py/knowledge/<id>/` and set `pack_id` to `<id>`
-   - Ask whether the creator has technical PDFs/docs. If yes, they go in `py/knowledge/<id>/references/content/` (optional). Style PPTX shells live in `references/style/`.
+2. **SME documents** (optional; indexed later by Python, not by this wizard)
+   - Ask whether the creator has technical PDFs/docs (`.pdf`, `.md`, `.txt`, `.csv` — not `.docx`).
+   - If yes, they go in `py/knowledge/<id>/references/content/` **before or after** the first local run. Style PPTX shells live in `references/style/`.
 
-3. **Customization depth** (user may pick more than one)
+3. **Customization depth after the first Python run** (user may pick more than one)
    - **SME dial (prompts)** — edit `prompt_fragments.yaml` (+ light catalog touch)
    - **Outputs** — `report_outline.yaml`, options, validation within `equipment_selector_v1`
    - **Optional Python tools** — wire `creator_tools.py` inside existing phases; show HANDSHAKE constraints
 
-## Execute
+   Record the choice. Do **not** author pack files now — wait until Python has generated the draft.
+
+## Execute (app only)
 
 1. Copy template (PowerShell example):
 
@@ -56,22 +58,30 @@ Ask briefly; wait for answers before scaffolding.
    Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\<id>
    ```
 
-2. Rewrite in `py/apps/<id>/`:
+2. Rewrite in `py/apps/<id>/` only:
    - Class name + `app_id` + `knowledge_pack_id` (**same as `app_id`**) + `equipment_system` + `creator_display_name` in `agent.py`
    - `manifest.json`: `id`, `slug`, `label`, `equipment_system`, `knowledge_pack` (**same as `id`**), `python_entrypoint` (`apps.<id>.agent`), `route`, keep `output_schema_version: equipment_selector_v1`
    - Point out `HANDSHAKE:` comments and `EXTENSIONS.md`
+   - Optionally create empty `py/knowledge/<id>/references/content/` so they have a drop folder. **Do not** write `pack.yaml` or other pack YAML.
 
-3. Pack work (per chosen depth):
-   - Prompts → `prompt_fragments.yaml` keys listed in customization-map
-   - Outputs → outlines / options / validation
-   - Tools → keep `creator_tools.py`; show example import + call inside `dir` / `evaluate` only
-   - After first local run, remind the creator to drop SME files into `references/content/` if they have any, then re-run to index them
-
-4. Local verify:
+3. Stop. Instruct the creator to generate the pack themselves in a **PowerShell** terminal (their `.env` keys). Give this block and wait for feedback:
 
    ```powershell
    python py\tools\local_chat.py --app <id>
    ```
+
+   Tell them:
+
+   - First run LLM-bootstraps `py/knowledge/<id>/` (draft pending SME approval).
+   - Optional SME files: copy into `py/knowledge/<id>/references/content/`, then re-run to index.
+   - At the `>` prompt, enter **system name and application/domain**, for example: `CIP return pump, biopharmaceutical`
+   - Then reply with a DIR code to evaluate; `pptx` after evaluation for a deck.
+   - Ask them to paste status lines or questions here when the first run finishes.
+
+4. **After** they confirm the pack exists, help with the chosen depth:
+   - Prompts → `prompt_fragments.yaml` keys listed in customization-map
+   - Outputs → outlines / options / validation
+   - Tools → keep `creator_tools.py`; show example import + call inside `dir` / `evaluate` only
 
 5. Ship path (do not edit the website repo):
 
@@ -81,4 +91,4 @@ Ask briefly; wait for answers before scaffolding.
 
 ## After scaffolding
 
-Summarize what changed, which files are the “dials”, and the next command to run locally. Offer to deepen prompts, outputs, or optional tools next.
+Summarize the app folder that was copied/edited, remind them **not** to expect pack YAML until Python has run, and repeat the `local_chat.py` command plus the `system name, application` example. Offer to deepen prompts, outputs, or optional tools **after** that first run.

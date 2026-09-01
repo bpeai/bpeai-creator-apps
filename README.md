@@ -71,13 +71,17 @@ py/
 4. Rename the agent class and set `app_id` / `knowledge_pack_id` to match your pack.
 5. Edit `manifest.json` (slug, label, description, `equipment_system`, `knowledge_pack`,
    optional `handshake_protocol: "ei_handshake_v1"`).
-6. Author your private pack under `py/knowledge/<pack_id>/` (DIR menus, options, prompts).
-   Prefer `prompt_fragments.yaml` + outlines; see [docs/EI_CREATOR_EXTENSIONS.md](./docs/EI_CREATOR_EXTENSIONS.md).
-7. **Local test**:
+6. **First local run generates the knowledge pack** (creator `.env` keys — OpenAI / Serper).
+   Do not hand-author pack YAML before this. Optional SME files go in
+   `py/knowledge/<your_id>/references/content/`.
 
    ```powershell
    python py\tools\local_chat.py --app <your_id>
+   # > CIP return pump, biopharmaceutical
    ```
+
+7. After the draft pack exists, edit `prompt_fragments.yaml` + outlines; see
+   [docs/EI_CREATOR_EXTENSIONS.md](./docs/EI_CREATOR_EXTENSIONS.md).
 
 8. **Upload** (preferred):
 

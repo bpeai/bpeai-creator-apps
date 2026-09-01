@@ -8,7 +8,7 @@ Optional personal OPENAI_API_KEY via .env.
 Examples (PowerShell):
 
   python py/tools/local_chat.py --app equipment_evaluator
-  # > Media prep vessel, biopharma
+  # > CIP return pump, biopharmaceutical
   # > 2-1-2-3-1-1
   # > pptx
 """
@@ -42,6 +42,24 @@ from bpeai_creator_sdk.base import default_creator_model, default_creator_provid
 
 def _status(message: str) -> None:
     print(message, file=sys.stderr)
+
+
+def _print_run_instructions(app_id: str) -> None:
+    """Tell the creator how to seed SME files and how to start a DIR turn."""
+    content = f"py/knowledge/{app_id}/references/content/"
+    print(
+        "Optional SME files (.pdf / .md / .txt / .csv — not .docx): copy into "
+        f"{content} if needed, then re-run this command to index them. "
+        "Style PPTX/PDF shells go in references/style/. "
+        "Empty content/ is valid; first run also LLM-bootstraps a draft pack "
+        "with your .env keys when YAML is missing.",
+        file=sys.stderr,
+    )
+    print(
+        "Enter system name and application/domain, for example: "
+        "CIP return pump, biopharmaceutical",
+        file=sys.stderr,
+    )
 
 
 def _is_pptx_request(text: str) -> bool:
@@ -156,8 +174,9 @@ def _interactive(app_id: str, *, as_json: bool) -> int:
         f"(set CREATOR_LLM_PROVIDER / CREATOR_LLM_MODEL or OPENAI_CREATOR_MODEL in .env)",
         file=sys.stderr,
     )
+    _print_run_instructions(app_id)
     print(
-        "Type plain English, then a DIR code (e.g. 2-1-2-3-1-1). "
+        "Type system name and application first, then a DIR code (e.g. 2-1-2-3-1-1). "
         "After evaluation, reply pptx (or y) for a 7-slide deck. "
         "Commands: quit / exit / blank line to leave.",
         file=sys.stderr,
@@ -218,6 +237,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.once is not None:
+        _print_run_instructions(app_id)
         try:
             return _run_once(app_id, args.once, as_json=args.json, session={})
         except Exception as exc:  # noqa: BLE001

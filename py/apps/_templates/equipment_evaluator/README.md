@@ -44,8 +44,9 @@ Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\my_equipment_e
 ```
 
 Then rename class / `app_id` / manifest fields, set `knowledge_pack_id` /
-`equipment_system`, and point `manifest.json` `knowledge_pack` at a pack
-(platform seed, private portal pack slug, or let the agent draft a new one on first run).
+`equipment_system`, and point `manifest.json` `knowledge_pack` at the **same**
+app id. Do not author pack YAML in Cursor — the first `local_chat` run
+LLM-bootstraps `py/knowledge/<your_id>/` with the creator’s `.env` keys.
 
 Customization dials: pack `prompt_fragments.yaml` (`fragments` + `calls`),
 `search_queries.yaml` (Serper), outlines/options (outputs), optional
@@ -56,7 +57,7 @@ Full matrix: `docs/EI_CREATOR_EXTENSIONS.md`.
 
 ```powershell
 python py\tools\local_chat.py --app equipment_evaluator
-# > Media prep vessel, biopharma
+# > CIP return pump, biopharmaceutical
 # > 2-1-1
 # > pptx
 ```

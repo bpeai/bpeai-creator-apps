@@ -63,9 +63,11 @@ CREATOR_CONTENT_GUIDANCE = (
 
 CONTENT_FOLDER_PROMPT = (
     "If you have creator technical PDFs or documents, copy them into "
-    "`py/knowledge/{pack_id}/references/content/` (optional; empty is valid), "
-    "then re-run so they are indexed as supplemental LLM context. "
-    "Style PPTX/PDF shells belong in `references/style/`."
+    "`py/knowledge/{pack_id}/references/content/` (optional; empty is valid; "
+    ".pdf / .md / .txt / .csv — not .docx), then re-run so they are indexed "
+    "as supplemental LLM context. Style PPTX/PDF shells belong in "
+    "`references/style/`. At the local_chat prompt enter system name and "
+    "application/domain, for example: CIP return pump, biopharmaceutical."
 )
 
 

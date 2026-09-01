@@ -193,8 +193,11 @@ In template / app Python, mark UI-visible boundaries:
 
 1. Copy `equipment_evaluator` → `py/apps/<your_id>/` (or use the Cursor wizard).
 2. Set identity in `agent.py` + `manifest.json`.
-3. Author / bind a private knowledge pack (prompts + catalogs + outlines).
-4. Local test: `python py/tools/local_chat.py --app <your_id>`.
+3. Local test: `python py/tools/local_chat.py --app <your_id>` — first run
+   LLM-bootstraps `py/knowledge/<your_id>/` with your `.env` keys. At the prompt
+   enter system name and application, e.g. `CIP return pump, biopharmaceutical`.
+   Optional SME files: `py/knowledge/<your_id>/references/content/`.
+4. Review / edit the draft pack (prompts + catalogs + outlines).
 5. Optionally add `creator_tools.py` helpers inside existing phases.
 6. Upload → portal Test → Submit → admin Publish.
 

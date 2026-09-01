@@ -159,12 +159,16 @@ python py\tools\download_app_bundle.py --app <app_id> --out py\apps   # backup o
 
 ```powershell
 python py\tools\local_chat.py --app <your_id>
-# > Media prep vessel, biopharma
+# > CIP return pump, biopharmaceutical
 # > 2-1-2-3-1-1
 # > pptx
 ```
 
-- Type plain English, then a DIR code; recommendation prints as readable text
+Startup prints a reminder: optional SME files in
+`py/knowledge/<your_id>/references/content/`, then enter **system name and
+application/domain**. First run LLM-bootstraps a missing pack using your `.env`
+keys (`OPENAI_API_KEY`, `SERPER_API_KEY`) — do not have Cursor write that YAML.
+- Type system name and application, then a DIR code; recommendation prints as readable text
 - After evaluation, reply `pptx` / `y` for a 7-slide deck (local artifact)
 - Artifacts write under `./artifacts/` (gitignored): markdown + PDF report; optional PPTX
 - Optional: copy `.env.example` → `.env` and set personal `OPENAI_API_KEY` (never commit)
