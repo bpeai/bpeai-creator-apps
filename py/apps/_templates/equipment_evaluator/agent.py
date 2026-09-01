@@ -816,11 +816,12 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         sid = (scenario_id or "").strip() or resolve_scenario_id(
             pack, system_name, application=application
         )
-        # Unique-ish scenario for unknown systems so catalogs grow per case
+        # Mint a scenario id from the system name so catalogs grow per case.
+        # Use the slug as-is (bioreactor), not a "_dir" suffix.
         if not scenario_id and sid == pack.default_scenario:
             slug = re.sub(r"[^a-z0-9]+", "_", system_name.strip().lower()).strip("_")
             if slug and slug not in {"process_vessel", "process"}:
-                sid = f"{slug}_dir"
+                sid = slug
         variant = resolve_variant_id(
             pack,
             system_name,

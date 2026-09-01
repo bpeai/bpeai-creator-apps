@@ -574,6 +574,8 @@ def test_equipment_evaluator_generates_dir_on_catalog_miss(mixing_stub, tmp_path
     )
     assert menu.lifecycle == "draft_generated"
     assert menu.source == "generated"
+    assert menu.scenario_id == "chromatography_resin_slurry_tank"
+    assert not str(menu.scenario_id).endswith("_dir")
     assert len(menu.requirements) >= 5
     assert any("Generated draft DIR" in n for n in notes)
     reloaded = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
