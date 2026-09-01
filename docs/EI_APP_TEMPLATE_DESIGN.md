@@ -30,8 +30,8 @@ Day-to-day edits for templates/SDK/seeds land first in **bpeai-creator-apps**, t
 ### Ownership (locked)
 
 - **Creator packs are private** to that creator’s EI apps only (not a marketplace).
-- One creator may bind **one pack to many of their apps**.
-- **Platform seeds** (e.g. `mixing`) are BPEAI-owned; creators **clone** into a private pack (creator apps cannot bind seeds at runtime).
+- **Creator apps are 1:1 with a private pack of the same name** (`py/apps/<id>/` ↔ `py/knowledge/<id>/`).
+- **Platform seeds** (e.g. `mixing`) are BPEAI-owned; first-party apps may share them. Creators **do not** bind seeds — they bootstrap a private pack named after the app.
 - **Python agent code** ships via **portal zip upload** / `upload_creator_bundle.py` (primary). See [EI_HANDSHAKE.md](./EI_HANDSHAKE.md).
 
 ---
@@ -92,7 +92,8 @@ This authoring repo only ships **example stubs**: [`py/knowledge/_examples/`](..
 | `prompt_fragments.yaml` | Injectable SME guidance (`fragments` + optional `calls`) |
 | `search_queries.yaml` | Serper query templates / static domain queries (optional; see [EI_AI_HANDSHAKES.md](./EI_AI_HANDSHAKES.md)) |
 | `report_outline.yaml` / `pptx_outline.yaml` | Report / slide outlines |
-| `references/*.pptx` / `*.pdf` | Style stubs (any name; seeded from `py/knowledge/_templates/references/`) |
+| `references/content/*` | Optional creator SME PDFs/md/txt (LLM input; indexed to `content_index.yaml`) |
+| `references/style/*.pptx` / `*.pdf` | Style shells (seeded from `py/knowledge/_templates/references/`) |
 
 Creators manage private packs on the portal. If a pack is missing locally, the
 `equipment_evaluator` template may LLM-bootstrap a draft under `py/knowledge/<id>/`
@@ -160,8 +161,8 @@ bpeai_creator_sdk/
 Manifest:
 
 - optional `template_family` — deliverable contract family; legacy manifests default to `equipment_evaluator`
-- `equipment_system` — portal / hub enum
-- optional `knowledge_pack` — defaults to `equipment_system` when omitted
+- `equipment_system` — portal / hub enum (taxonomy; not the pack name)
+- `knowledge_pack` — must match `id` / `app_id` for creator apps
 - `input_ports[]` / `output_ports[]` — typed workflow connections (`id`, `label`,
   `schema_ref`, short compatibility `data_type`, `required`, `cardinality`, `kind`)
 - `required_inputs` remains supported; the SDK derives value input ports for old

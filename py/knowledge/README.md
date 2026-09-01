@@ -14,8 +14,9 @@
   (LLM bootstrap → runtime DIR generate/append → SME review/approval).
 - Do not copy website pack YAML into a creator pack unless that creator originally owned it.
 - Shared **style templates** (`_templates/references/*.pptx` / `*.pdf`) seed into each new
-  pack’s `references/` on bootstrap. Filenames are not required to be standardized — any
-  `*.pptx`/`*.pdf` in the shared folder (or pack `references/`) counts. Override with
+  pack’s `references/style/` on bootstrap. Creator technical PDFs/docs belong in
+  `references/content/` (indexed for LLM as a supplement to web search). Filenames
+  are not required to be standardized. Override style source with
   `BPEAI_TEMPLATE_REFERENCES_ROOT` or replace per pack via `manage_pptx_reference.py`.
 - Creator apps under `py/apps/<your_id>/` (copies of `_templates/equipment_evaluator`) are
   also gitignored — open PRs only when BPEAI’s publish process explicitly asks for app code.

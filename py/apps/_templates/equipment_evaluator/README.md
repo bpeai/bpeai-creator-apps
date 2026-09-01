@@ -80,15 +80,18 @@ Artifacts (markdown + PDF + optional PPTX) write under `./artifacts/` (gitignore
 - Hub / portal: `datasheet_markdown` → S3 `.md` only
 - Local: also writes styled PDF; PPTX is local authoring unless product adds binary upload
 
-## Reference PPTX management
+## Reference PPTX and creator content
 
 Shared style shells live in `py/knowledge/_templates/references/` (any `*.pptx` /
-`*.pdf` name). Bootstrap copies them into each new pack’s `references/`.
+`*.pdf` name). Bootstrap copies them into each new pack’s `references/style/`.
+Optional SME PDFs and notes go in `references/content/` — they are indexed and
+used as **supplemental** LLM context next to Serper web search (they do not replace it).
+
 Replace private decks in a local (gitignored) pack:
 
 ```powershell
-python py\tools\manage_pptx_reference.py --pack filtration list
-python py\tools\manage_pptx_reference.py --pack filtration replace --src path\to\deck.pptx --name my_vent_filter_style.pptx
+python py\tools\manage_pptx_reference.py --pack <app_id> list
+python py\tools\manage_pptx_reference.py --pack <app_id> replace --src path\to\deck.pptx --name my_style.pptx
 ```
 
 ## Reference

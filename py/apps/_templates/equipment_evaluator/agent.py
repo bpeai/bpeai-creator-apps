@@ -5,11 +5,12 @@ from __future__ import annotations
 Creator checklist after copying this folder to ``py/apps/<your_id>/``:
   1. Rename this class and set ``app_id`` to match folder / manifest ``id``.
   2. Set ``creator_display_name`` (hub attribution).
-  3. Set ``knowledge_pack_id`` (and optional ``equipment_system``) to a platform
-     or portal pack id. Canonical seeds live in the bpeai deploy repo; private
-     packs are portal-managed. If missing locally, this agent may LLM-bootstrap
-     an **initial draft** under ``py/knowledge/<id>/`` (pending approval).
-  4. Update ``manifest.json`` (slug, label, equipment_system, optional knowledge_pack).
+  3. Set ``knowledge_pack_id`` to the **same** ``app_id`` (1:1 private pack).
+     ``equipment_system`` is taxonomy (mixing, filtration, …), not the pack name.
+     If the pack is missing locally, this agent LLM-bootstraps a draft under
+     ``py/knowledge/<app_id>/`` and asks you to add optional SME files to
+     ``references/content/``.
+  4. Update ``manifest.json`` (slug, label, equipment_system, knowledge_pack = app id).
   5. Local test: ``python py/tools/local_chat.py --app <your_id>`` then DIR → pptx.
   6. SME AI dials: ``prompt_fragments.yaml`` (fragments + calls) and
      ``search_queries.yaml``. Leave JSON schema contracts in this file alone
@@ -55,12 +56,16 @@ from bpeai_creator_sdk.artifacts import (
 )
 from bpeai_creator_sdk.local_run import repo_py_root
 from bpeai_creator_sdk.sme import (
+    CONTENT_FOLDER_PROMPT,
     DirMenu,
     KnowledgePack,
+    align_pack_to_app,
     append_dir_menu,
+    build_content_index,
     check_application,
     check_equipment_option_names,
     component_schema_hints,
+    creator_content_prompt_block,
     ensure_creator_pack_assets,
     list_missing_pack_files,
     load_knowledge_pack,
@@ -235,7 +240,7 @@ Return JSON matching equipment_selector_v1 WITH these GPT-parity fields populate
   "mixing_options": [],
   "manufacturers": ["…"],
   "datasheet_markdown": "FULL sectioned markdown report (see required headings)",
-  "source_basis": ["user_inputs", "knowledge_pack", "serper_search", "industry_references"],
+  "source_basis": ["user_inputs", "knowledge_pack", "serper_search", "industry_references", "creator_references"],
   "handshake_protocol": "ei_handshake_v1"
 }
 NOTE: evaluation_options is canonical for all equipment systems. mixing_options may
@@ -314,14 +319,15 @@ def _write_pdf_artifact(result: Dict[str, Any]) -> Path | None:
 class EquipmentEvaluatorAgent(CreatorAppBase):
     """Pack-backed DIR → evaluate template (custom-GPT parity).
 
-    After copy: rename class, ``app_id``, ``knowledge_pack_id``, ``creator_display_name``.
+    After copy: rename class, ``app_id``, ``knowledge_pack_id`` (same as ``app_id``),
+    ``creator_display_name``.
     Missing packs / YAML components are LLM-bootstrapped as draft-for-approval.
     Optional helpers: ``creator_tools.py`` (not imported by default).
     """
 
     # HANDSHAKE: manifest.id / python_entrypoint / hub routing must match these ids.
     app_id = "equipment_evaluator"
-    knowledge_pack_id = "mixing"
+    knowledge_pack_id = "equipment_evaluator"
     # Hint for pack bootstrap when the pack folder does not exist yet.
     equipment_system = "mixing"
     creator_display_name = "Your Name"
@@ -374,6 +380,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         except Exception as exc:
             self.status(f"DIR catalog DB persist failed ({exc})")
 
+    def _creator_content_block(self, pack: KnowledgePack, *query_parts: Any) -> str:
+        """Retrieve indexed creator PDFs/docs as a prompt supplement (does not replace Serper)."""
+        return creator_content_prompt_block(getattr(pack, "content_index", None), query_parts)
+
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         # HANDSHAKE: UI / local_chat send phase, system_name, application, dir_code,
         # deliverable, evaluation_result. Platform may inject knowledge_pack_payload
@@ -389,7 +399,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         deliverable = str(inputs.get("deliverable") or "evaluation").strip().lower()
 
         pack_id = str(
-            inputs.get("knowledge_pack") or self.knowledge_pack_id or "mixing"
+            inputs.get("knowledge_pack")
+            or self.knowledge_pack_id
+            or getattr(self, "app_id", "")
+            or ""
         ).strip()
         py_root = repo_py_root()
         bootstrap_notes: List[str] = []
@@ -520,10 +533,20 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         """Load pack; LLM-create any missing YAML/README as draft-for-approval.
 
         Creator-owned pack content is drafted locally (not copied from website packs).
-        Shared PPTX/PDF style templates may be seeded from website ``references/``.
+        Style PPTX/PDF shells seed into ``references/style/``. Optional SME documents
+        go in ``references/content/`` and are indexed as supplemental LLM context.
         """
-        eq = (equipment_system or pack_id).strip() or pack_id
         notes: List[str] = []
+        app_id = str(getattr(self, "app_id", "") or pack_id).strip() or pack_id
+        aligned = align_pack_to_app(app_id, py_root=py_root, pack_id=pack_id)
+        pack_id = aligned.pack_id
+        notes.extend(aligned.notes)
+        if aligned.collision:
+            self.status(
+                f"Knowledge pack name collision for '{app_id}' — using pack '{pack_id}'."
+            )
+
+        eq = (equipment_system or getattr(self, "equipment_system", "") or pack_id).strip() or pack_id
         repaired, seeded = ensure_creator_pack_assets(
             pack_id, py_root=py_root, equipment_system=eq
         )
@@ -534,65 +557,76 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             self.status(f"Repaired draft pack files for '{pack_id}': {', '.join(repaired)}")
         if seeded:
             notes.append(
-                f"Seeded style template references into '{pack_id}/references' "
+                f"Seeded style templates into '{pack_id}/references/style' "
                 f"({', '.join(seeded)}). Editable in this workspace."
             )
             self.status(
-                f"Seeded template references for '{pack_id}': {', '.join(seeded)}"
+                f"Seeded style templates for '{pack_id}': {', '.join(seeded)}"
             )
 
         missing = list_missing_pack_files(pack_id, py_root=py_root, include_optional=True)
-        if not missing:
-            return load_knowledge_pack(pack_id, py_root=py_root), notes
-
-        self.status(
-            f"Knowledge pack '{pack_id}' incomplete ({len(missing)} file(s) missing) — "
-            "bootstrapping initial draft components…"
-        )
         created: List[str] = []
-        for filename in missing:
-            try:
-                self._bootstrap_pack_component(
-                    pack_id,
-                    filename,
-                    equipment_system=eq,
-                    py_root=py_root,
-                )
-                created.append(filename)
-            except Exception as exc:
-                notes.append(f"Failed to bootstrap {filename}: {exc}")
-                self.status(f"Bootstrap failed for {filename}: {exc}")
-
-        still_missing_core = list_missing_pack_files(
-            pack_id, py_root=py_root, include_optional=False
-        )
-        if still_missing_core:
-            raise FileNotFoundError(
-                f"Knowledge pack '{pack_id}' still missing required files after "
-                f"bootstrap: {', '.join(still_missing_core)}. "
-                f"Prior errors: {'; '.join(notes) if notes else 'none'}"
-            )
-
-        _, seeded_after = ensure_creator_pack_assets(
-            pack_id, py_root=py_root, equipment_system=eq
-        )
-        if seeded_after:
-            notes.append(
-                f"Seeded style template references into '{pack_id}/references' "
-                f"({', '.join(seeded_after)})."
-            )
-
-        if created:
-            notes.append(
-                f"Initial draft knowledge pack components written for '{pack_id}' "
-                f"({', '.join(created)}). Subject to SME/platform approval "
-                f"(approval_status=draft_pending_sme_approval)."
-            )
+        if missing:
             self.status(
-                f"Wrote draft pack files for '{pack_id}': {', '.join(created)} "
-                "(pending approval)."
+                f"Knowledge pack '{pack_id}' incomplete ({len(missing)} file(s) missing) — "
+                "bootstrapping initial draft components…"
             )
-        return load_knowledge_pack(pack_id, py_root=py_root), notes
+            for filename in missing:
+                try:
+                    self._bootstrap_pack_component(
+                        pack_id,
+                        filename,
+                        equipment_system=eq,
+                        py_root=py_root,
+                    )
+                    created.append(filename)
+                except Exception as exc:
+                    notes.append(f"Failed to bootstrap {filename}: {exc}")
+                    self.status(f"Bootstrap failed for {filename}: {exc}")
+
+            still_missing_core = list_missing_pack_files(
+                pack_id, py_root=py_root, include_optional=False
+            )
+            if still_missing_core:
+                raise FileNotFoundError(
+                    f"Knowledge pack '{pack_id}' still missing required files after "
+                    f"bootstrap: {', '.join(still_missing_core)}. "
+                    f"Prior errors: {'; '.join(notes) if notes else 'none'}"
+                )
+
+            _, seeded_after = ensure_creator_pack_assets(
+                pack_id, py_root=py_root, equipment_system=eq
+            )
+            if seeded_after:
+                notes.append(
+                    f"Seeded style templates into '{pack_id}/references/style' "
+                    f"({', '.join(seeded_after)})."
+                )
+
+            if created:
+                notes.append(
+                    f"Initial draft knowledge pack components written for '{pack_id}' "
+                    f"({', '.join(created)}). Subject to SME/platform approval "
+                    f"(approval_status=draft_pending_sme_approval)."
+                )
+                self.status(
+                    f"Wrote draft pack files for '{pack_id}': {', '.join(created)} "
+                    "(pending approval)."
+                )
+                hint = CONTENT_FOLDER_PROMPT.format(pack_id=pack_id)
+                notes.append(hint)
+                self.status(hint)
+
+        index = build_content_index(pack_id, py_root=py_root)
+        pack = load_knowledge_pack(pack_id, py_root=py_root)
+        pack.content_index = index or pack.content_index
+        n_files = len((index or {}).get("files") or [])
+        if n_files:
+            self.status(
+                f"Indexed {n_files} creator content file(s) from "
+                f"'{pack_id}/references/content' (supplemental to web search)."
+            )
+        return pack, notes
 
     def _bootstrap_pack_component(
         self,
@@ -843,6 +877,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             for hit in self.serper_search(q, num=5):
                 snippets.append(hit)
         search_context = format_search_context(snippets, limit=12)
+        creator_block = self._creator_content_block(
+            pack, system_name, application, pack.equipment_system, sid, variant
+        )
 
         # AI_HANDSHAKE: dir_generate — LLM authors DIR menu JSON.
         self.status("Generating DIR questionnaire…")
@@ -860,6 +897,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"Variant hint: {variant}\n\n"
             f"Industrial search context:\n{search_context or '(none)'}\n\n"
         )
+        if creator_block:
+            user += f"{creator_block}\n\n"
         if sme_dir_instructions:
             user += f"{sme_dir_instructions}\n\n"
         user += DIR_GENERATE_SCHEMA_CONTRACT
@@ -1025,6 +1064,14 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         self.status("Fetching page excerpts for top industrial references…")
         enriched = enrich_search_hits_with_excerpts(deduped)
         search_context = format_search_context(enriched, limit=18)
+        creator_block = self._creator_content_block(
+            pack,
+            system_name,
+            application,
+            pack.equipment_system,
+            dir_code,
+            json.dumps(dir_check.decoded),
+        )
 
         headings = pack.required_report_headings()
         heading_block = ", ".join(headings) if headings else "(see EVALUATION_SCHEMA_CONTRACT)"
@@ -1049,6 +1096,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"Industrial search references (snippets + page excerpts):\n"
             f"{search_context or '(no serper results — use engineering judgment)'}\n\n"
         )
+        if creator_block:
+            user_prompt += f"{creator_block}\n\n"
         if sme_eval_extra:
             user_prompt += f"{sme_eval_extra}\n\n"
         user_prompt += EVALUATION_SCHEMA_CONTRACT
@@ -1106,8 +1155,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 f"{thin or 'none'}.\n"
                 f"Required headings: {heading_block}.\n\n"
                 f"Industrial search references:\n{search_context[:20000]}\n\n"
-                f"Previous JSON:\n{json.dumps(raw)[:120000]}"
             )
+            if creator_block:
+                repair_user += f"{creator_block[:12000]}\n\n"
+            repair_user += f"Previous JSON:\n{json.dumps(raw)[:120000]}"
             try:
                 repaired = self.call_openai_json(system=system_prompt, user=repair_user)
                 repaired = self._normalize_raw(repaired, pack, system_name)
@@ -1128,6 +1179,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         result["industry"] = menu.industry
         result["equipment_system_variant"] = menu.equipment_system_variant
         result["decoded_dir"] = dir_check.decoded
+        basis = list(result.get("source_basis") or [])
+        if creator_block and "creator_references" not in basis:
+            basis.append("creator_references")
+            result["source_basis"] = basis
         warnings = [w for w in [app_warning, *opt_check.warnings] if w]
         still_missing = missing_report_headings(
             str(result.get("datasheet_markdown") or ""),

@@ -211,17 +211,23 @@ def default_reference_path(pack_path: Path | None = None) -> Path | None:
     """Resolve a style-reference PPTX. Names are not required to be standardized.
 
     Preference:
-      1. First ``*.pptx`` under ``<pack>/references/`` (sorted)
-      2. Historical mixing example names under the pack (if present)
-      3. Committed ``py/knowledge/_templates/references/*.pptx``
-      4. Legacy ``knowledge/mixing/references`` fallbacks
+      1. First ``*.pptx`` under ``<pack>/references/style/`` (sorted)
+      2. Legacy ``*.pptx`` directly under ``<pack>/references/``
+      3. Historical mixing example names under the pack (if present)
+      4. Committed ``py/knowledge/_templates/references/*.pptx``
+      5. Legacy ``knowledge/mixing/references`` fallbacks
     """
     candidates: list[Path] = []
     if pack_path is not None:
         ref_root = Path(pack_path) / "references"
+        style_root = ref_root / "style"
+        if style_root.is_dir():
+            candidates.extend(sorted(style_root.glob("*.pptx")))
         if ref_root.is_dir():
             candidates.extend(sorted(ref_root.glob("*.pptx")))
         # Historical names (optional continuity)
+        candidates.append(style_root / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
+        candidates.append(style_root / "media_preparation_vessel_mixing_evaluation.pptx")
         candidates.append(ref_root / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
         candidates.append(ref_root / "media_preparation_vessel_mixing_evaluation.pptx")
     here = Path(__file__).resolve()

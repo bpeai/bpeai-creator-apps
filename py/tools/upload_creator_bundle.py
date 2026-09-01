@@ -6,11 +6,12 @@ From a bpeai-creator-apps (or website) clone:
   set BPEAI_PLATFORM_URL=https://bpiplatform.bpeai.com
   set BPEAI_SESSION_COOKIE=name=value   # logged-in portal session cookie
   python py/tools/upload_creator_bundle.py
-  python py/tools/upload_creator_bundle.py --apps vent_filter_expert --packs vent-filter-expert
+  python py/tools/upload_creator_bundle.py --apps vent_filter_expert
+  python py/tools/upload_creator_bundle.py --apps vent_filter_expert --packs vent_filter_expert
   python py/tools/upload_creator_bundle.py --zip-only -o bundle.zip
 
 Discovers py/apps/*/agent.py (skips _templates) and py/knowledge/*/pack.yaml
-(skips _examples). Folder names may differ from manifest ids.
+(skips _examples). `--apps <id>` without `--packs` includes the same-named pack.
 """
 
 from __future__ import annotations
@@ -146,7 +147,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Upload local EI apps/packs to bpiplatform")
     parser.add_argument("--root", type=Path, default=None, help="Repo root (default: auto)")
     parser.add_argument("--apps", nargs="*", default=None, help="Only these app folder names")
-    parser.add_argument("--packs", nargs="*", default=None, help="Only these knowledge folder names")
+    parser.add_argument(
+        "--packs",
+        nargs="*",
+        default=None,
+        help="Only these knowledge folder names (default: packs matching --apps)",
+    )
     parser.add_argument("--zip-only", action="store_true", help="Write zip; do not upload")
     parser.add_argument("-o", "--output", type=Path, default=None, help="Zip output path")
     parser.add_argument(
@@ -157,7 +163,23 @@ def main() -> int:
 
     root = (args.root or _repo_root()).resolve()
     apps = discover_apps(root, args.apps)
-    packs = discover_packs(root, args.packs)
+    pack_filter = args.packs
+    if pack_filter is None and args.apps:
+        pack_filter = list(args.apps)
+    elif pack_filter is None and apps:
+        pack_filter = [a.name for a in apps]
+    packs = discover_packs(root, pack_filter)
+    leftover = []
+    if pack_filter is None:
+        leftover = []
+    else:
+        all_packs = discover_packs(root, None)
+        leftover = [p.name for p in all_packs if p.name not in {x.name for x in packs}]
+    if leftover and args.packs is None:
+        print(
+            "Skipping pack folders that do not match an app id: " + ", ".join(leftover),
+            file=sys.stderr,
+        )
     if not apps and not packs:
         print(
             f"No apps/packs found under {root / 'py'}. "

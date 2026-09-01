@@ -99,7 +99,7 @@ Full wire protocol: [EI_HANDSHAKE.md](./EI_HANDSHAKE.md) (`ei_handshake_v1`).
 | `id` | Stable app id = folder name = `app_id` |
 | `slug` | Hub URL segment |
 | `equipment_system` | Taxonomy / routing |
-| `knowledge_pack` | Pack folder / bound private pack |
+| `knowledge_pack` | Pack folder / bound private pack — **same as `id`** for creator apps |
 | `python_entrypoint` | `apps.<id>.agent` |
 | `required_inputs` | UI + validation keys (e.g. `system_name`) |
 | `output_schema_version` | `equipment_selector_v1` |

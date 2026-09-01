@@ -121,11 +121,11 @@ You *can* create the portal draft first, but module/class must still match the c
 | Portal **Slug** | `heat-exchanger-evaluator` | URL segment; shown read-only on Settings after create |
 | Portal **Python module** | `apps.heat_exchanger_evaluator.agent` | Runtime import path |
 | Portal **Agent class** | `HeatExchangerEvaluatorAgent` | Exact class name in `agent.py` |
-| Knowledge pack | `mixing` (or your pack id) | Portal bind/clone; platform seeds in website `py/knowledge/`; manifest `knowledge_pack` optional |
+| Knowledge pack | **same as app id** | `py/knowledge/<id>/` + `pack.yaml` `pack_id` + `manifest.knowledge_pack` + `agent.knowledge_pack_id` |
 
 ### 1.5 Local ≈ web (private packs + versions)
 
-Creator apps use **private knowledge packs** only (not platform seeds). Local YAML under `py/knowledge/<pack_id>/` must be uploaded with the app so Test/hub runs use the same `pack.yaml` + DIR menus.
+**Cutover (existing apps):** delete the old private pack on the portal and local `py/knowledge/<old>/`, then run `python py/tools/local_chat.py --app <id>` to generate `py/knowledge/<id>/`. Optional SME files go in `references/content/`; re-run to index, then upload the app+pack pair.
 
 | Field | Where | Meaning |
 |-------|--------|---------|
@@ -148,7 +148,7 @@ python py\tools\download_app_bundle.py --app <app_id> --out py\apps   # backup o
 **Update loop**
 
 1. Edit locally; bump semver in `manifest.json` / `pack.yaml` when shipping a meaningful change.
-2. Upload zip (portal `/apps/upload` or `python py/tools/upload_creator_bundle.py --apps <id> --packs <pack>`).
+2. Upload zip (portal `/apps/upload` or `python py/tools/upload_creator_bundle.py --apps <id>`).
 3. Confirm Test page shows your **private** pack (not a platform seed) + release versions.
 4. Optional pull: `python py/tools/download_knowledge_pack.py --pack <slug-or-id> --out py/knowledge`
 5. Submit → admin publish.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 Agents call LLM to fill missing files; this module handles filesystem inventory,
 shape normalization for draft LLM output, shared structure examples, and seeding
-of visual template references (PPTX/PDF) into creator packs.
+of visual template references (PPTX/PDF) into pack ``references/style/``.
 """
 
 import os
@@ -131,6 +131,7 @@ def write_pack_file(
     root = pack_dir(pack_id, py_root=py_root)
     root.mkdir(parents=True, exist_ok=True)
     target = root / filename
+    target.parent.mkdir(parents=True, exist_ok=True)
     if target.is_file() and not overwrite:
         return target
 
@@ -218,7 +219,7 @@ def component_schema_hints() -> Dict[str, str]:
         ),
         "pptx_outline.yaml": (
             "Mapping with slide_count (7), title_prefix, slides ([{index, id, title, ...}]), "
-            "style (fonts/colors), reference_decks (list of references/*.pptx paths), notes."
+            "style (fonts/colors), reference_decks (list of references/style/*.pptx paths), notes."
         ),
         "search_queries.yaml": (
             "Mapping with dir_generate.templates (list of query strings with placeholders "
@@ -229,7 +230,7 @@ def component_schema_hints() -> Dict[str, str]:
         ),
         "README.md": (
             "Markdown describing the pack purpose, draft/approval status, and how to "
-            "edit YAML / replace reference PPTX."
+            "edit YAML / add SME PDFs under references/content/ / replace style PPTX in references/style/."
         ),
     }
 
@@ -723,16 +724,16 @@ def seed_template_references(
     py_root: Path | None = None,
     template_root: Path | None = None,
 ) -> List[str]:
-    """Copy shared style PPTX/PDF templates into ``<pack>/references/`` when missing.
+    """Copy shared style PPTX/PDF templates into ``<pack>/references/style/`` when missing.
 
     Copies every ``*.pptx`` / ``*.pdf`` from :func:`template_references_root`.
     Filenames are preserved and need not follow a fixed naming convention.
     Does not overwrite creator-edited files. Returns relative paths that were copied.
     """
-    root = pack_dir(pack_id, py_root=py_root)
-    root.mkdir(parents=True, exist_ok=True)
-    dest = root / "references"
-    dest.mkdir(parents=True, exist_ok=True)
+    from .pack_content import ensure_nested_references, style_dir
+
+    root = ensure_nested_references(pack_id, py_root=py_root)
+    dest = style_dir(root)
 
     src_root = Path(template_root) if template_root else template_references_root(py_root)
     if src_root is None or not src_root.is_dir():
@@ -745,7 +746,7 @@ def seed_template_references(
             if target.is_file():
                 continue
             shutil.copy2(src, target)
-            copied.append(f"references/{src.name}")
+            copied.append(f"references/style/{src.name}")
 
     # Register PPTX decks in pptx_outline.yaml when present.
     outline_path = root / "pptx_outline.yaml"
@@ -838,13 +839,19 @@ def ensure_creator_pack_assets(
     py_root: Path | None = None,
     equipment_system: str = "",
 ) -> Tuple[List[str], List[str]]:
-    """Repair draft YAML shapes and seed template references.
+    """Repair draft YAML shapes, nest references/, and seed style templates.
 
     Returns ``(repaired_files, seeded_reference_paths)``.
     """
+    from .pack_content import ensure_nested_references, migrate_legacy_references
+
+    ensure_nested_references(pack_id, py_root=py_root)
+    migrated = migrate_legacy_references(pack_id, py_root=py_root)
     repaired = repair_existing_pack_components(
         pack_id, py_root=py_root, equipment_system=equipment_system
     )
+    if migrated:
+        repaired.extend(migrated)
     if align_pack_meta_with_scenarios(pack_id, py_root=py_root):
         if "pack.yaml" not in repaired:
             repaired.append("pack.yaml")

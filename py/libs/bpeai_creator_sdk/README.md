@@ -9,7 +9,7 @@ Load system-specific DIR questionnaires and option catalogs:
 ```python
 from bpeai_creator_sdk import load_knowledge_pack, resolve_scenario_id, validate_dir_code
 
-pack = load_knowledge_pack("mixing")
+pack = load_knowledge_pack("my_app_id")
 scenario = resolve_scenario_id(pack, "Media Prep Vessel")
 check = validate_dir_code(pack, scenario, "2-1-2-3-1-1")
 ```
@@ -22,15 +22,15 @@ Packs live in `py/knowledge/<pack_id>/` (see `docs/EI_APP_TEMPLATE_DESIGN.md`).
 
 ```text
 py/apps/_templates/equipment_evaluator/   ← start here (DIR → evaluate + knowledge pack)
-py/knowledge/mixing/                      ← SME pack (shared)
+py/knowledge/<your_app_id>/               ← private pack (same name as the app)
 ```
 
 ```powershell
 Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\<your_slug>
 ```
 
-Rename the agent class and `app_id`, and edit `manifest.json`. Set `equipment_system`
-and optional `knowledge_pack` to an existing pack under `py/knowledge/`.
+Rename the agent class and `app_id`, and edit `manifest.json`. Set `knowledge_pack`
+to the **same** `app_id`. `equipment_system` is taxonomy only (mixing, filtration, …).
 
 ### 2. Implement `run(inputs)`
 

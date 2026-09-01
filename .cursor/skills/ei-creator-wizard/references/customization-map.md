@@ -4,6 +4,7 @@
 |------|--------------------|-------------------|--------------|
 | LLM prompts / SME voice | Pack `prompt_fragments.yaml` → `fragments` + `calls` | Light edits to pack-driven user messages | Template JSON schema contracts in `agent.py` unless changing deliverable |
 | Web search queries | Pack `search_queries.yaml` (templates + static) | Custom Serper helpers in `creator_tools.py` | Hard-coding vendor queries in `agent.py` |
+| Creator PDF/docs | Pack `references/content/` (indexed; supplements Serper) | — | Replacing web search with pack files only |
 | Outputs / report shape | `report_outline.yaml`, `equipment_options.yaml`, `validation_rules.yaml`, `dir_requirements.yaml` | Post-process validated `equipment_selector_v1` before return | New SSE events or hub schema fields without platform support |
 | Optional tools | SDK: `call_llm_json`, `serper_search`, `status()` | Helpers in `creator_tools.py` invoked from `run()` | Editing hub/portal React; assuming new UI buttons |
 

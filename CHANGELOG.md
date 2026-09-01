@@ -1,5 +1,16 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.3 — 2026-09-01
+
+### Creator app ↔ knowledge pack 1:1 + creator-content RAG
+
+- Creator EI apps use a **private pack with the same id** (`py/apps/<id>/` ↔ `py/knowledge/<id>/`).
+- Local Python auto-aligns pack folder / `pack.yaml` / manifest / `agent.py` when the pairing is unambiguous; collision leaves both folders.
+- Pack `references/` is nested: `content/` (SME PDFs/docs) and `style/` (PPTX/PDF shells).
+- Creator files are extracted into `references/content_index.yaml` and injected as a **supplement** to Serper (does not replace web search).
+- Upload CLI `--apps <id>` includes the matching pack by default.
+- Existing apps: delete old packs and regenerate locally (no YAML migrate).
+
 ## 0.2.2 — 2026-08-08
 
 ### SME AI handshakes (pack-owned prompts + search)

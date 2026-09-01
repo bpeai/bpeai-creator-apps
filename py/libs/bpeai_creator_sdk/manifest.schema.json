@@ -34,7 +34,7 @@
     },
     "knowledge_pack": {
       "type": "string",
-      "description": "Local pack folder id under py/knowledge/<id>/ (uploaded + bound as a private pack). Defaults to equipment_system when omitted."
+      "description": "Local pack folder id under py/knowledge/<id>/ (uploaded + bound as a private pack). For creator apps this must match manifest id / app_id."
     },
     "handshake_protocol": {
       "type": "string",

@@ -14,7 +14,7 @@ and which pack keys the SME owns. Look for `# AI_HANDSHAKE: <id>` in
 |-------------------------------|------------------------------|
 | Expert voice (`prompt_fragments.yaml` → `fragments`) | JSON output contracts (`equipment_selector_v1`, DIR menu JSON shape, PPTX slide schema) |
 | Per-call instructions (`prompt_fragments.yaml` → `calls`) | Wire protocol `ei_handshake_v1` / UI SSE |
-| Search strategy (`search_queries.yaml`) | Excerpt fetch plumbing after Serper |
+| Search strategy (`search_queries.yaml`) | Excerpt fetch plumbing after Serper; creator-content retrieval from `references/content/` |
 
 Do **not** put schema field lists into pack YAML — keep those as template contracts
 so the hub stays compatible.
@@ -25,6 +25,7 @@ so the hub stays compatible.
 |----|------|-----|---------|----------|
 | `pack_bootstrap` | Missing pack YAML on first local/portal draft | Author draft pack files | LLM | `calls.pack_bootstrap.system` (optional; authoring-time) |
 | `dir_search` | DIR catalog miss / `generate_dir` | Research before questionnaire | Serper | `search_queries.yaml` → `dir_generate.templates` |
+| `creator_content` | DIR generate + evaluate | Supplemental SME PDFs/docs | Pack index | `references/content/` (does **not** replace Serper) |
 | `dir_generate` | DIR catalog miss / `generate_dir` | Author DIR questionnaire JSON | LLM | `calls.dir_generate.system` + `calls.dir_generate.instructions` |
 | `evaluate_search` | Valid DIR → evaluate | Industrial references | Serper | `search_queries.yaml` → `evaluate.*` |
 | `evaluate` | Valid DIR → evaluate | Full `equipment_selector_v1` | LLM | `fragments.*` (system) + `calls.evaluate.user_instructions` |
@@ -103,6 +104,7 @@ run()
   │    └─ miss → dir_search (Serper) → dir_generate (LLM)
   ├─ no dir_code → return dir_requirements (no LLM)
   ├─ evaluate_search (Serper) → excerpts
+  ├─ creator content retrieve (references/content index; supplemental)
   ├─ evaluate (LLM)  system=build_system_prompt()
   ├─ maybe evaluate_repair (LLM)
   └─ pptx (LLM) when requested
@@ -116,7 +118,10 @@ run()
    leave mixing vendor strings in a filtration pack).
 4. Keep `report_outline.yaml` / options / DIR catalogs aligned with the report
    the evaluate call must produce.
-5. Local test: `python py/tools/local_chat.py --app <id>`.
+5. Optional: add SME PDFs/md/txt to `py/knowledge/<id>/references/content/` and re-run
+   `local_chat` so they are indexed. Creator files **supplement** web search; they do
+   not replace Serper.
+6. Local test: `python py/tools/local_chat.py --app <id>`.
 
 ## Cursor wizard
 

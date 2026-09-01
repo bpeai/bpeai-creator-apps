@@ -1,8 +1,9 @@
 """SME/creator helpers for managing knowledge-pack reference PPTX decks.
 
-Reference decks under ``py/knowledge/<pack>/references/`` are visual style guides.
-The evaluator renderer recreates that look in code; replacing a reference PPTX lets
-SMEs update the target visual system and keep pack docs in sync.
+Style decks live under ``py/knowledge/<pack>/references/style/`` (legacy files
+may still sit directly in ``references/``). The evaluator renderer recreates that
+look in code; replacing a reference PPTX lets SMEs update the target visual
+system and keep pack docs in sync.
 """
 
 from __future__ import annotations
@@ -16,6 +17,10 @@ def references_dir(pack_path: Path | str) -> Path:
     return Path(pack_path) / "references"
 
 
+def style_references_dir(pack_path: Path | str) -> Path:
+    return references_dir(pack_path) / "style"
+
+
 def list_reference_decks(
     pack_path: Path | str,
     *,
@@ -24,10 +29,12 @@ def list_reference_decks(
     """List reference PPTX files for a knowledge pack.
 
     Prefer ``pptx_outline.yaml`` ``reference_decks`` entries when present; also
-    include any extra ``*.pptx`` found under ``references/``.
+    include any extra ``*.pptx`` found under ``references/style/`` and legacy
+    ``references/*.pptx``.
     """
     root = Path(pack_path)
     ref_root = references_dir(root)
+    style_root = style_references_dir(root)
     declared: List[str] = []
     if isinstance(outline, Mapping):
         raw = outline.get("reference_decks") or []
@@ -45,10 +52,12 @@ def list_reference_decks(
         path = root / rel if not Path(rel).is_absolute() else Path(rel)
         # Allow "references/foo.pptx" or bare "foo.pptx"
         if not path.is_file() and not rel.startswith("references/"):
-            alt = ref_root / Path(rel).name
-            if alt.is_file():
-                path = alt
-                rel = f"references/{alt.name}"
+            for folder in (style_root, ref_root):
+                alt = folder / Path(rel).name
+                if alt.is_file():
+                    path = alt
+                    rel = str(alt.relative_to(root)).replace("\\", "/")
+                    break
         out.append(
             {
                 "relative_path": rel.replace("\\", "/"),
@@ -62,6 +71,9 @@ def list_reference_decks(
     for rel in declared:
         _add(rel, declared_entry=True)
 
+    if style_root.is_dir():
+        for pptx in sorted(style_root.glob("*.pptx")):
+            _add(f"references/style/{pptx.name}", declared_entry=False)
     if ref_root.is_dir():
         for pptx in sorted(ref_root.glob("*.pptx")):
             _add(f"references/{pptx.name}", declared_entry=False)
@@ -89,9 +101,12 @@ def resolve_reference_deck(
             if path.is_file():
                 return path
     # Direct path under references/
-    candidate = references_dir(pack_path) / Path(needle).name
+    candidate = style_references_dir(pack_path) / Path(needle).name
     if candidate.is_file():
         return candidate.resolve()
+    legacy = references_dir(pack_path) / Path(needle).name
+    if legacy.is_file():
+        return legacy.resolve()
     raise FileNotFoundError(f"Reference PPTX not found: {name_or_path}")
 
 
@@ -103,7 +118,7 @@ def replace_reference_deck(
     outline_path: Path | str | None = None,
     register_in_outline: bool = True,
 ) -> Path:
-    """Copy ``source_pptx`` into the pack ``references/`` folder (replace if present).
+    """    Copy ``source_pptx`` into the pack ``references/style/`` folder (replace if present).
 
     Optionally appends the new relative path to ``pptx_outline.yaml`` ``reference_decks``.
     """
@@ -114,7 +129,7 @@ def replace_reference_deck(
         raise ValueError("Source must be a .pptx file")
 
     root = Path(pack_path)
-    ref_root = references_dir(root)
+    ref_root = style_references_dir(root)
     ref_root.mkdir(parents=True, exist_ok=True)
     name = dest_name or src.name
     if not name.lower().endswith(".pptx"):
@@ -125,7 +140,7 @@ def replace_reference_deck(
     if register_in_outline:
         yaml_path = Path(outline_path) if outline_path else root / "pptx_outline.yaml"
         if yaml_path.is_file():
-            _ensure_outline_lists_deck(yaml_path, f"references/{name}")
+            _ensure_outline_lists_deck(yaml_path, f"references/style/{name}")
 
     return dest.resolve()
 

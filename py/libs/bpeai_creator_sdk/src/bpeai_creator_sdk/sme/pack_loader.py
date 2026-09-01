@@ -182,6 +182,7 @@ class KnowledgePack:
     report_outline: Dict[str, Any] = field(default_factory=dict)
     pptx_outline: Dict[str, Any] = field(default_factory=dict)
     search_queries: Dict[str, Any] = field(default_factory=dict)
+    content_index: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def equipment_system(self) -> str:
@@ -654,6 +655,7 @@ def knowledge_pack_from_dict(
         report_outline = content.get("report_outline") or payload.get("report_outline") or {}
         pptx_outline = content.get("pptx_outline") or payload.get("pptx_outline") or {}
         search_queries = content.get("search_queries") or payload.get("search_queries") or {}
+        content_index = content.get("content_index") or payload.get("content_index") or {}
         if content.get("meta") and isinstance(content["meta"], dict):
             meta = {**meta, **content["meta"]}
         # Prefer full uploaded dir_requirements (incl. dir_menus) from content blob
@@ -673,6 +675,7 @@ def knowledge_pack_from_dict(
         report_outline = payload.get("report_outline") or {}
         pptx_outline = payload.get("pptx_outline") or {}
         search_queries = payload.get("search_queries") or {}
+        content_index = payload.get("content_index") or {}
 
     # Normalize: if menus present but dir_menus empty, mirror for list-catalog matchers
     menus = dir_req.get("menus") if isinstance(dir_req.get("menus"), list) else []
@@ -693,6 +696,7 @@ def knowledge_pack_from_dict(
         report_outline=report_outline if isinstance(report_outline, dict) else {},
         pptx_outline=pptx_outline if isinstance(pptx_outline, dict) else {},
         search_queries=search_queries if isinstance(search_queries, dict) else {},
+        content_index=content_index if isinstance(content_index, dict) else {},
     )
 
 
@@ -761,6 +765,13 @@ def load_knowledge_pack(
         if isinstance(raw_search, dict):
             search_queries = raw_search
 
+    content_index: Dict[str, Any] = {}
+    index_path = path / "references" / "content_index.yaml"
+    if index_path.is_file():
+        raw_index = _load_yaml(index_path)
+        if isinstance(raw_index, dict):
+            content_index = raw_index
+
     return KnowledgePack(
         pack_id=pid,
         path=path,
@@ -772,4 +783,5 @@ def load_knowledge_pack(
         report_outline=report_outline,
         pptx_outline=pptx_outline,
         search_queries=search_queries,
+        content_index=content_index,
     )

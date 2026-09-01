@@ -66,5 +66,5 @@
   "min_tier": "INDIVIDUAL",
   "status": "draft",
   "python_entrypoint": "apps._templates.equipment_evaluator.agent",
-  "knowledge_pack": "mixing"
+  "knowledge_pack": "equipment_evaluator"
 }

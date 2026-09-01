@@ -72,9 +72,10 @@ def test_committed_style_templates_preferred(py_root: Path, monkeypatch: pytest.
         copied = seed_template_references("_test_seed_pack_tmp", py_root=py_root)
         assert any(p.endswith(".pptx") for p in copied)
         assert any(p.endswith(".pdf") for p in copied)
-        assert (dest_root / "references").is_dir()
-        assert list((dest_root / "references").glob("*.pptx"))
-        assert list((dest_root / "references").glob("*.pdf"))
+        assert all("/style/" in p.replace("\\", "/") for p in copied)
+        assert (dest_root / "references" / "style").is_dir()
+        assert list((dest_root / "references" / "style").glob("*.pptx"))
+        assert list((dest_root / "references" / "style").glob("*.pdf"))
         # Second seed must not overwrite / re-copy.
         assert seed_template_references("_test_seed_pack_tmp", py_root=py_root) == []
     finally:
@@ -651,3 +652,121 @@ def test_format_dir_text():
     assert format_result_text({"phase": "dir_requirements", "requirements": []}).startswith(
         "Design Input"
     )
+
+
+def test_align_pack_to_app_renames_folder_and_rewrites_pointers(tmp_path: Path):
+    from bpeai_creator_sdk.sme import align_pack_to_app
+
+    app_id = "vent_filter_expert"
+    app_dir = tmp_path / "apps" / app_id
+    app_dir.mkdir(parents=True)
+    (app_dir / "manifest.json").write_text(
+        '{"id": "vent_filter_expert", "knowledge_pack": "filtration"}\n',
+        encoding="utf-8",
+    )
+    (app_dir / "agent.py").write_text(
+        'class Agent:\n    app_id = "vent_filter_expert"\n    knowledge_pack_id = "filtration"\n',
+        encoding="utf-8",
+    )
+    old_pack = tmp_path / "knowledge" / "filtration"
+    old_pack.mkdir(parents=True)
+    (old_pack / "pack.yaml").write_text("pack_id: filtration\nequipment_system: filtration\n")
+
+    result = align_pack_to_app(app_id, py_root=tmp_path, pack_id="filtration")
+    assert result.pack_id == app_id
+    assert not result.collision
+    assert (tmp_path / "knowledge" / app_id / "pack.yaml").is_file()
+    assert not (tmp_path / "knowledge" / "filtration").exists()
+    meta = (tmp_path / "knowledge" / app_id / "pack.yaml").read_text(encoding="utf-8")
+    assert "pack_id: vent_filter_expert" in meta
+    manifest = (app_dir / "manifest.json").read_text(encoding="utf-8")
+    assert '"knowledge_pack": "vent_filter_expert"' in manifest
+    agent = (app_dir / "agent.py").read_text(encoding="utf-8")
+    assert 'knowledge_pack_id = "vent_filter_expert"' in agent
+
+
+def test_align_pack_to_app_collision_keeps_both_folders(tmp_path: Path):
+    from bpeai_creator_sdk.sme import align_pack_to_app
+
+    app_id = "heat_exchanger_evaluator"
+    app_dir = tmp_path / "apps" / app_id
+    app_dir.mkdir(parents=True)
+    (app_dir / "manifest.json").write_text(
+        '{"id": "heat_exchanger_evaluator", "knowledge_pack": "heat_transfer"}\n',
+        encoding="utf-8",
+    )
+    dest = tmp_path / "knowledge" / app_id
+    dest.mkdir(parents=True)
+    (dest / "pack.yaml").write_text(f"pack_id: {app_id}\n")
+    other = tmp_path / "knowledge" / "heat_transfer"
+    other.mkdir(parents=True)
+    (other / "pack.yaml").write_text("pack_id: heat_transfer\n")
+
+    result = align_pack_to_app(app_id, py_root=tmp_path, pack_id="heat_transfer")
+    assert result.collision
+    assert result.pack_id == app_id
+    assert dest.is_dir()
+    assert other.is_dir()
+
+
+def test_migrate_legacy_references_and_content_index(tmp_path: Path):
+    from bpeai_creator_sdk.sme import (
+        build_content_index,
+        creator_content_prompt_block,
+        knowledge_pack_from_dict,
+        migrate_legacy_references,
+        retrieve_creator_chunks,
+        seed_template_references,
+    )
+    from bpeai_creator_sdk.sme.pack_bootstrap import pack_dir
+
+    pack_id = "demo_content_pack"
+    root = pack_dir(pack_id, py_root=tmp_path)
+    ref = root / "references"
+    ref.mkdir(parents=True)
+    (ref / "style_deck.pptx").write_bytes(b"PK")
+    (ref / "sme_notes.md").write_text(
+        "Sterile vent filters for hold tanks require hydrophobic PTFE membranes "
+        "and SIP-capable housings for biopharmaceutical buffer prep.",
+        encoding="utf-8",
+    )
+
+    moved = migrate_legacy_references(pack_id, py_root=tmp_path)
+    assert "references/style/style_deck.pptx" in moved
+    assert "references/content/sme_notes.md" in moved
+    assert (root / "references" / "style" / "style_deck.pptx").is_file()
+    assert (root / "references" / "content" / "sme_notes.md").is_file()
+
+    index = build_content_index(pack_id, py_root=tmp_path)
+    assert index["chunks"]
+    again = build_content_index(pack_id, py_root=tmp_path)
+    assert again["files"][0]["sha256"] == index["files"][0]["sha256"]
+
+    query = "sterile vent filter hold tank PTFE biopharmaceutical"
+    hits = retrieve_creator_chunks(index, query)
+    assert hits
+    assert "PTFE" in hits[0]["text"] or "ptfe" in hits[0]["text"].lower()
+    block = creator_content_prompt_block(index, [query])
+    assert "Creator reference content" in block
+    assert "supplemental SME" in block
+
+    hydrated = knowledge_pack_from_dict(
+        pack_id,
+        {"meta": {"pack_id": pack_id}, "content": {"content_index": index}},
+    )
+    assert hydrated.content_index.get("chunks")
+
+
+def test_seed_does_not_clobber_nested_style(tmp_path: Path, py_root: Path, monkeypatch: pytest.MonkeyPatch):
+    from bpeai_creator_sdk.sme import seed_template_references, template_references_root
+
+    monkeypatch.delenv("BPEAI_TEMPLATE_REFERENCES_ROOT", raising=False)
+    monkeypatch.delenv("BPEAI_REFERENCES_ROOT", raising=False)
+    shared = template_references_root(py_root)
+    assert shared is not None
+    copied = seed_template_references("_nested_seed_tmp", py_root=tmp_path, template_root=shared)
+    dest = tmp_path / "knowledge" / "_nested_seed_tmp" / "references" / "style"
+    assert copied
+    assert dest.is_dir()
+    assert list(dest.glob("*.pptx"))
+    assert seed_template_references("_nested_seed_tmp", py_root=tmp_path, template_root=shared) == []

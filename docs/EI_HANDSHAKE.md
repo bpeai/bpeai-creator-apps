@@ -45,7 +45,7 @@ See `manifest.schema.json`. Critical links:
 | `slug` | Hub URL segment |
 | `equipment_system` | Domain routing / taxonomy |
 | `template_family` | Deliverable family; defaults to `equipment_evaluator` for legacy manifests |
-| `knowledge_pack` | Local pack folder id (upload binds private pack) |
+| `knowledge_pack` | Same as app `id` (creator 1:1 private pack) |
 | `python_entrypoint` | `apps.<id>.agent` module path |
 | `required_inputs` | UI + validation keys (`system_name`, …) |
 | `input_ports` / `output_ports` | Typed composition ports; additive to `required_inputs` |
