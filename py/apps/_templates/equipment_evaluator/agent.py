@@ -766,7 +766,13 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         industry: str | None,
         force_generate: bool = False,
     ) -> tuple[DirMenu, List[str]]:
-        """Reuse catalog match, or Serper+LLM generate and append a draft menu."""
+        """Reuse a catalog fingerprint hit, or Serper+LLM generate a draft menu.
+
+        Local filesystem packs and website DB payloads share this path: match
+        ``dir_menus`` (aliases / system_examples / explicit scenario) then
+        generate on miss. Do not treat ``default_scenario`` or mirrored
+        ``menus[]`` as a hit — that made hydrate vs YAML diverge.
+        """
         notes: List[str] = []
         if not force_generate:
             hit = match_dir_menu(
@@ -780,36 +786,21 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             )
             if hit is not None:
                 return hit, notes
-            # Legacy resolve (menus[] / scenarios) when list catalog has no hit
-            legacy = resolve_dir_menu(
-                pack,
-                system_name=system_name,
-                scenario_id=scenario_id,
-                equipment_system_variant=equipment_system_variant,
-                industry=industry,
-                application=application,
-                require_approved=False,
-            )
-            # If legacy came from dir_catalog via resolve_dir_menu, use it.
-            if legacy.source == "dir_catalog":
-                return legacy, notes
-            authored_legacy = bool(pack.menus) or bool(
-                pack.dir_requirements.get("scenarios")
-            )
-            # Reuse only YAML-authored menus/scenarios — not synthesized dir_menus copies.
-            if (
-                authored_legacy
-                and legacy.requirements
-                and legacy.source in {"menu", "scenario_fallback"}
-            ):
-                # Prefer authored pack questionnaires (scenarios / menus) over LLM
-                # regenerate. List-catalog miss alone must not invent a parallel DIR
-                # when fingerprint aliases already resolved a real scenario.
-                if legacy.source == "scenario_fallback":
-                    return legacy, notes
-                if legacy.scenario_id and legacy.scenario_id not in {"", "default"}:
-                    return legacy, notes
-                if not pack.dir_menus:
+            # Legacy packs with no list catalog: reuse authored menus/scenarios.
+            if not pack.dir_menus:
+                legacy = resolve_dir_menu(
+                    pack,
+                    system_name=system_name,
+                    scenario_id=scenario_id,
+                    equipment_system_variant=equipment_system_variant,
+                    industry=industry,
+                    application=application,
+                    require_approved=False,
+                )
+                if (
+                    legacy.requirements
+                    and legacy.source in {"menu", "scenario_fallback", "dir_catalog"}
+                ):
                     return legacy, notes
 
         try:

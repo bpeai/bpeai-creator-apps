@@ -32,6 +32,16 @@ def format_dir_text(result: Mapping[str, Any]) -> str:
         if suggested:
             lines.append(f"Try code:   {suggested}")
 
+    warnings = result.get("sme_warnings") or []
+    if isinstance(warnings, list) and warnings:
+        lines.append("")
+        lines.append("SME warnings")
+        lines.append("─" * 40)
+        for warning in warnings:
+            text = str(warning).strip()
+            if text:
+                lines.append(f"  • {text}")
+
     message = (result.get("message") or "").strip()
     if message:
         lines.append("")

@@ -48,6 +48,14 @@ def test_parse_inputs_heuristic_media_prep_biopharma():
     assert "raw_text" in inputs
 
 
+def test_parse_inputs_heuristic_trailing_application_phrase():
+    inputs = parse_inputs_heuristic(
+        "Crystallizer, vessel mixing, Pharmaceutical Small Molecule"
+    )
+    assert inputs["system_name"] == "Crystallizer"
+    assert inputs["application"] == "Pharmaceutical Small Molecule"
+
+
 def test_parse_inputs_heuristic_sterile_nitrogen():
     inputs = parse_inputs_heuristic("buffer tank sterile nitrogen vent")
     assert "Buffer" in inputs["system_name"] or "Tank" in inputs["system_name"]

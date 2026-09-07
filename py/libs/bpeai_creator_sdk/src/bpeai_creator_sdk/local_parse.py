@@ -57,6 +57,17 @@ def parse_inputs_heuristic(text: str) -> Dict[str, Any]:
     if application:
         inputs["application"] = application
 
+    # Website sends application as its own field. Local chat uses
+    # "system name, application" (optional extra middle tokens). Prefer the
+    # trailing comma segment over a short regex label so
+    # "Crystallizer, vessel mixing, Pharmaceutical Small Molecule" keeps the
+    # full domain instead of collapsing to "pharmaceutical".
+    parts = [p.strip() for p in re.split(r"[,;]", raw) if p.strip()]
+    if len(parts) >= 2:
+        trailing = parts[-1]
+        if not application or len(trailing) > len(application):
+            inputs["application"] = trailing
+
     fluid: Optional[str] = None
     for pattern, label in _FLUID_PATTERNS:
         if pattern.search(raw):

@@ -111,11 +111,14 @@ Fingerprint:
 
 `(equipment_system_variant × industry × scenario_id)` plus `system_name` / `application` aliases
 
+Local `local_chat` and website runs use this same path when inputs and model
+are the same. Pack YAML/DB content may diverge after runs until download/upload.
+
 Flow:
 
 1. Lookup `dir_menus[]` (approved first, then prior `draft_generated` for same fingerprint)
 2. On miss → Serper research + LLM questionnaire (5–8 requirements, numeric starter codes)
-3. Append draft to the local pack catalog + refresh `dir_catalog.md`
+3. Append draft to the pack catalog (`dir_catalog.md` locally; Postgres on website)
 4. Present DIR to the user; evaluate may use `draft_generated` for that local run
 5. SME reviews the catalog and promotes `status: approved` for reuse
 

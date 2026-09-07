@@ -632,6 +632,18 @@ def resolve_dir_menu(
     )
 
 
+def _normalize_dir_catalog_shape(dir_req: Mapping[str, Any]) -> Dict[str, Any]:
+    """Keep ``dir_menus`` and ``menus`` mirrored so filesystem and DB hydrates match."""
+    data = dict(dir_req) if isinstance(dir_req, Mapping) else {}
+    menus = data.get("menus") if isinstance(data.get("menus"), list) else []
+    dir_menus = data.get("dir_menus") if isinstance(data.get("dir_menus"), list) else []
+    if menus and not dir_menus:
+        data["dir_menus"] = menus
+    elif dir_menus and not menus:
+        data["menus"] = dir_menus
+    return data
+
+
 def knowledge_pack_from_dict(
     pack_id: str,
     payload: Mapping[str, Any],
@@ -677,13 +689,7 @@ def knowledge_pack_from_dict(
         search_queries = payload.get("search_queries") or {}
         content_index = payload.get("content_index") or {}
 
-    # Normalize: if menus present but dir_menus empty, mirror for list-catalog matchers
-    menus = dir_req.get("menus") if isinstance(dir_req.get("menus"), list) else []
-    dir_menus = dir_req.get("dir_menus") if isinstance(dir_req.get("dir_menus"), list) else []
-    if menus and not dir_menus:
-        dir_req = {**dir_req, "dir_menus": menus}
-    elif dir_menus and not menus:
-        dir_req = {**dir_req, "menus": dir_menus}
+    dir_req = _normalize_dir_catalog_shape(dir_req)
 
     return KnowledgePack(
         pack_id=str(meta.get("pack_id") or pack_id),
@@ -728,6 +734,7 @@ def load_knowledge_pack(
     dir_req = _load_yaml(path / "dir_requirements.yaml")
     if not isinstance(dir_req, dict):
         raise TypeError("dir_requirements.yaml must be a mapping")
+    dir_req = _normalize_dir_catalog_shape(dir_req)
 
     options = _load_yaml(path / "equipment_options.yaml")
     if not isinstance(options, dict):

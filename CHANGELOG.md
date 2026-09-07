@@ -1,5 +1,13 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.5 — 2026-09-07
+
+### Local / website DIR match-or-generate parity
+
+- Catalog miss always generates a draft DIR (same path for filesystem YAML and website `knowledge_pack_payload`). Mirrored `menus[]` / `default_scenario` are not treated as a hit.
+- Filesystem pack load mirrors `dir_menus` ↔ `menus` the same way DB hydrate does.
+- Local chat prints `sme_warnings` (so a failed generate is visible) and keeps a trailing comma segment as `application` (e.g. `Pharmaceutical Small Molecule`).
+
 ## 0.2.4 — 2026-09-01
 
 ### PPTX slide 3 objective cards

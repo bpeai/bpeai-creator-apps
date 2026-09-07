@@ -11,6 +11,7 @@ from bpeai_creator_sdk.sme import (
     append_dir_menu,
     filter_numeric_common_codes,
     is_numeric_dir_code,
+    knowledge_pack_from_dict,
     list_missing_pack_files,
     load_knowledge_pack,
     match_dir_menu,
@@ -488,6 +489,10 @@ def test_equipment_evaluator_generates_dir_on_catalog_miss(mixing_stub, tmp_path
     dest = tmp_path / "mixing_stub"
     shutil.copytree(mixing_stub.path, dest)
     pack = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
+    # Website hydrate mirrors dir_menus → menus; local filesystem must too.
+    # Mirrored menus must not skip generate for an unmatched system.
+    assert pack.menus
+    assert len(pack.menus) == len(pack.dir_menus)
 
     fake_dir = {
         "label": "Resin slurry mix DIR",
@@ -585,6 +590,106 @@ def test_equipment_evaluator_generates_dir_on_catalog_miss(mixing_stub, tmp_path
     )
 
 
+def test_equipment_evaluator_generates_dir_on_payload_hydrate(
+    mixing_stub, tmp_path: Path, monkeypatch
+):
+    """Website knowledge_pack_payload (menus mirrored) must still generate on miss."""
+    import shutil
+    import sys
+
+    py_root = Path(__file__).resolve().parents[3]
+    if str(py_root) not in sys.path:
+        sys.path.insert(0, str(py_root))
+
+    from apps._templates.equipment_evaluator.agent import EquipmentEvaluatorAgent
+
+    dest = tmp_path / "mixing_stub"
+    shutil.copytree(mixing_stub.path, dest)
+    payload = {
+        "meta": dict(mixing_stub.meta),
+        "dir_requirements": {
+            "dir_menus": list(mixing_stub.dir_menus),
+            "menus": list(mixing_stub.dir_menus),
+        },
+        "equipment_options": mixing_stub.equipment_options,
+        "validation_rules": mixing_stub.validation_rules,
+        "prompt_fragments": mixing_stub.prompt_fragments,
+    }
+    pack = knowledge_pack_from_dict("mixing_stub", payload, path=dest)
+    assert pack.menus
+    assert pack.dir_menus
+
+    fake_dir = {
+        "label": "Crystallizer mixing DIR",
+        "summary": "Draft DIR for a pharmaceutical crystallizer.",
+        "system_examples": ["Crystallizer"],
+        "common_codes": [
+            {"code": "2-1-1-1-1", "caption": "Pilot stainless crystallizer, moderate shear."},
+            {"code": "3-1-2-1-2", "caption": "Production crystallizer with cooling jacket."},
+        ],
+        "requirements": [
+            {
+                "index": 1,
+                "label": "Working volume",
+                "options": [
+                    {"index": 1, "text": "50–250 L"},
+                    {"index": 2, "text": "250–1,000 L"},
+                    {"index": 3, "text": "> 1,000 L"},
+                ],
+            },
+            {
+                "index": 2,
+                "label": "Vessel format",
+                "options": [
+                    {"index": 1, "text": "Stainless CIP/SIP"},
+                    {"index": 2, "text": "Single-use"},
+                ],
+            },
+            {
+                "index": 3,
+                "label": "Duty",
+                "options": [
+                    {"index": 1, "text": "Cooling crystallization"},
+                    {"index": 2, "text": "Evaporative crystallization"},
+                ],
+            },
+            {
+                "index": 4,
+                "label": "Shear",
+                "options": [
+                    {"index": 1, "text": "Low shear"},
+                    {"index": 2, "text": "Moderate shear OK"},
+                ],
+            },
+            {
+                "index": 5,
+                "label": "Documentation",
+                "options": [
+                    {"index": 1, "text": "GMP"},
+                    {"index": 2, "text": "GMP-lite"},
+                ],
+            },
+        ],
+    }
+    agent = EquipmentEvaluatorAgent()
+    monkeypatch.setattr(agent, "serper_search", lambda *a, **k: [])
+    monkeypatch.setattr(agent, "call_openai_json", lambda **kwargs: fake_dir)
+    monkeypatch.setattr(agent, "status", lambda *a, **k: None)
+
+    menu, notes = agent._resolve_or_generate_dir_menu(
+        pack,
+        system_name="Crystallizer",
+        application="Pharmaceutical Small Molecule",
+        scenario_id=None,
+        equipment_system_variant=None,
+        industry=None,
+        force_generate=False,
+    )
+    assert menu.source == "generated"
+    assert menu.scenario_id == "crystallizer"
+    assert any("Generated draft DIR" in n for n in notes)
+
+
 def test_validate_dir_code_ok(mixing_stub):
     result = validate_dir_code(mixing_stub, "media_preparation", "2-1-2")
     assert result.ok
@@ -641,6 +746,7 @@ def test_format_dir_text():
             ],
             "common_codes": ["2-1-2"],
             "message": "Reply with a DIR code.",
+            "sme_warnings": ["DIR generation failed (boom); falling back to pack menu."],
         }
     )
     assert "Design Input Requirements" in text
@@ -649,6 +755,7 @@ def test_format_dir_text():
     assert "hold_tank_vent_aseptic" in text
     assert "Hold tank sterile vent" in text
     assert "equipment options" in text
+    assert "DIR generation failed (boom)" in text
     assert format_result_text({"phase": "dir_requirements", "requirements": []}).startswith(
         "Design Input"
     )
