@@ -475,43 +475,103 @@ def resolve_variant_id(
     return pack.default_variant
 
 
+# project_definition_sectors.yaml — canonical industry / sector labels.
+_TAXONOMY_SECTORS: tuple[tuple[str, str], ...] = (
+    ("biopharmaceutical_biologics", "Biopharmaceutical & Biologics"),
+    ("pharmaceutical_small_molecule", "Pharmaceutical / Small Molecule"),
+    ("diagnostics_lab_products", "Diagnostics & Laboratory Products"),
+    ("animal_health_veterinary", "Animal Health / Veterinary"),
+    ("industrial_biotechnology", "Industrial Biotechnology"),
+    ("consumer_health_nutraceutical", "Consumer Health / Nutraceutical"),
+)
+
+
+def _taxonomy_sector_pairs() -> list[tuple[str, str]]:
+    """Return (id, label) from bpeai_taxonomy when installed, else the YAML fallback."""
+    try:
+        from bpeai_taxonomy.project_definition import _sector_labels  # type: ignore
+
+        loaded = _sector_labels()
+        if isinstance(loaded, dict) and loaded:
+            return [(str(k), str(v)) for k, v in loaded.items()]
+    except Exception:
+        pass
+    return list(_TAXONOMY_SECTORS)
+
+
 def resolve_industry(pack: KnowledgePack, industry: str | None = None, application: str | None = None) -> str:
-    """Pick an industry key for DIR menu selection."""
-    candidates = pack.meta.get("industries") or []
-    if not isinstance(candidates, list):
-        candidates = []
-    cand_norm = {_norm(str(c)): str(c) for c in candidates}
+    """Pick an industry / sector label for DIR menu selection.
+
+    ``project_definition_sectors`` is the source of truth. Pack ``industries``
+    are extra accepted aliases, not a reason to map small-molecule text onto
+    Biopharmaceuticals (``pharmaceutical`` is a substring of that word).
+    """
+    sectors = _taxonomy_sector_pairs()
+    sector_by_norm = {_norm(label): label for _sid, label in sectors}
+    sector_by_norm.update({_norm(sid): label for sid, label in sectors})
+
+    pack_inds = pack.meta.get("industries") or []
+    if not isinstance(pack_inds, list):
+        pack_inds = []
+    pack_by_norm = {_norm(str(c)): str(c) for c in pack_inds if str(c).strip()}
+
+    def _from_catalog(text: str) -> str | None:
+        if text in sector_by_norm:
+            return sector_by_norm[text]
+        if text in pack_by_norm:
+            return pack_by_norm[text]
+        if "small molecule" in text:
+            for key, label in sector_by_norm.items():
+                if "small molecule" in key:
+                    return label
+            for key, label in pack_by_norm.items():
+                if "small molecule" in key:
+                    return label
+            return sector_by_norm.get(_norm("Pharmaceutical / Small Molecule"))
+        if "biopharm" in text or text in {"biopharma", "biopharmaceutical", "biologics"}:
+            for key, label in sector_by_norm.items():
+                if "biologics" in key or key.startswith("biopharm"):
+                    return label
+            for key, label in pack_by_norm.items():
+                if "biopharm" in key:
+                    return label
+        if "industrial" in text and "biotech" in text:
+            for key, label in sector_by_norm.items():
+                if "industrial" in key:
+                    return label
+        if "diagnostic" in text:
+            for key, label in sector_by_norm.items():
+                if "diagnostic" in key:
+                    return label
+        if "animal" in text or "veterinary" in text:
+            for key, label in sector_by_norm.items():
+                if "animal" in key or "veterinary" in key:
+                    return label
+        if "nutraceut" in text or "consumer health" in text:
+            for key, label in sector_by_norm.items():
+                if "nutraceut" in key or "consumer" in key:
+                    return label
+        if text == "food" or (text.startswith("food") and "beverage" in text):
+            for key, label in pack_by_norm.items():
+                if "food" in key:
+                    return label
+        # Exact-ish pack label only (avoid pharmaceutical ⊂ biopharmaceuticals).
+        for key, label in pack_by_norm.items():
+            if text == key:
+                return label
+        return None
 
     for raw in (industry, application):
         text = _norm(str(raw or ""))
         if not text:
             continue
-        if text in cand_norm:
-            return cand_norm[text]
-        for key, label in cand_norm.items():
-            if text in key or key in text:
-                return label
-        # Common short aliases
-        if "biopharm" in text or text in {"biopharma", "biopharmaceutical"}:
-            for key, label in cand_norm.items():
-                if "biopharm" in key:
-                    return label
-        if "industrial" in text and "biotech" in text:
-            for key, label in cand_norm.items():
-                if "industrial" in key:
-                    return label
-        if "small molecule" in text or "pharma" in text:
-            for key, label in cand_norm.items():
-                if "small molecule" in key or "pharmaceutical" in key:
-                    return label
-        if text == "food" or "food" in text:
-            for key, label in cand_norm.items():
-                if "food" in key:
-                    return label
+        hit = _from_catalog(text)
+        if hit:
+            return hit
 
-    if candidates:
-        return str(candidates[0])
-    return "Biopharmaceuticals"
+    if pack_inds:
+        return str(pack_inds[0])
+    return "Biopharmaceutical & Biologics"
 
 
 def resolve_dir_menu(

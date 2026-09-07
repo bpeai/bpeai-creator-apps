@@ -8,6 +8,7 @@
 - Filesystem pack load mirrors `dir_menus` ↔ `menus` the same way DB hydrate does.
 - Local chat prints `sme_warnings` (so a failed generate is visible) and keeps a trailing comma segment as `application` (e.g. `Pharmaceutical Small Molecule`).
 - Generate failure no longer silently substitutes `default_scenario` (e.g. process vessel mixing for Crystallizer). The website DIR card also shows `sme_warnings`.
+- DIR industry resolves from `project_definition_sectors` (e.g. Pharmaceutical / Small Molecule). "pharmaceutical" no longer maps onto Biopharmaceuticals. Hub Inputs use a sector dropdown.
 
 ## 0.2.4 — 2026-09-01
 

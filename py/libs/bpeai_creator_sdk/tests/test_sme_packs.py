@@ -376,6 +376,23 @@ def test_resolve_scenario_aliases(mixing_stub):
     assert resolve_scenario_id(mixing_stub, "Media Preparation Vessel") == "media_preparation"
 
 
+def test_resolve_industry_uses_project_definition_sectors(mixing_stub):
+    from bpeai_creator_sdk.sme import resolve_industry
+
+    assert (
+        resolve_industry(mixing_stub, application="Pharmaceutical Small Molecule")
+        == "Pharmaceutical / Small Molecule"
+    )
+    assert (
+        resolve_industry(mixing_stub, application="pharmaceutical_small_molecule")
+        == "Pharmaceutical / Small Molecule"
+    )
+    assert resolve_industry(mixing_stub, application="biopharma") in {
+        "Biopharmaceuticals",
+        "Biopharmaceutical & Biologics",
+    }
+
+
 def test_resolve_dir_menu_industry_variant(mixing_stub):
     menu = resolve_dir_menu(
         mixing_stub,
