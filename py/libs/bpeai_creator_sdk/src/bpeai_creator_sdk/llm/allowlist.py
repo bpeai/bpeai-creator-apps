@@ -11,7 +11,7 @@ ALLOWLIST: Mapping[str, Optional[FrozenSet[str]]] = {
 }
 
 DEFAULT_MODELS: Mapping[str, str] = {
-    "openai": "gpt-4o",
+    "openai": "gpt-5.6-sol",
     "anthropic": "claude-sonnet-4-5",
     "google": "gemini-2.5-pro",
     "xai": "grok-3",

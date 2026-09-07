@@ -25,7 +25,7 @@ pytest py/libs/bpeai_creator_sdk/tests/test_llm_providers.py -v
 
 | Provider | Model | Key env | Extra |
 |----------|-------|---------|-------|
-| openai | any (default `gpt-4o`; recommend `gpt-5.2`) | `OPENAI_API_KEY` | (core) |
+| openai | any (default `gpt-5.6-sol`) | `OPENAI_API_KEY` | (core) |
 | anthropic | `claude-sonnet-4-5` | `ANTHROPIC_API_KEY` | `[anthropic]` |
 | google | `gemini-2.5-pro` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | `[google]` |
 | xai | `grok-3` | `XAI_API_KEY` | (uses `openai` client) |

@@ -172,7 +172,7 @@ keys (`OPENAI_API_KEY`, `SERPER_API_KEY`) — do not have Cursor write that YAML
 - After evaluation, reply `pptx` / `y` for a 7-slide deck (local artifact)
 - Artifacts write under `./artifacts/` (gitignored): markdown + PDF report; optional PPTX
 - Optional: copy `.env.example` → `.env` and set personal `OPENAI_API_KEY` (never commit)
-- For evaluator depth: `OPENAI_CREATOR_MODEL=gpt-5.2` and `OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000` (code default remains `gpt-4o`)
+- For evaluator depth: `OPENAI_CREATOR_MODEL=gpt-5.6-sol` and `OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000` (code default is `gpt-5.6-sol`)
 - Or set `llm_model` / `llm_provider` in `manifest.json` (applied by `local_chat` / `run_agent`)
 - Multi-provider (v1 allowlist): set `CREATOR_LLM_PROVIDER` to `openai` (default), `anthropic`, `google`, or `xai`, plus the matching API key. Non-OpenAI models are hard-allowlisted (`claude-sonnet-4-5`, `gemini-2.5-pro`, `grok-3`). See [docs/PROVIDER_DIR_QA.md](./docs/PROVIDER_DIR_QA.md).
 - `--json` dumps validated `equipment_selector_v1`; `--once "…"` for one-shot

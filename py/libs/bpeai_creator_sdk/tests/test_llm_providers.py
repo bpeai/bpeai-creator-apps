@@ -19,12 +19,12 @@ def test_default_provider_is_openai(monkeypatch):
     assert default_creator_provider() == "openai"
 
 
-def test_default_model_falls_back_to_gpt4o(monkeypatch):
+def test_default_model_falls_back_to_gpt56_sol(monkeypatch):
     monkeypatch.delenv("CREATOR_LLM_PROVIDER", raising=False)
     monkeypatch.delenv("CREATOR_LLM_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_CREATOR_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
-    assert default_creator_model() == "gpt-4o"
+    assert default_creator_model() == "gpt-5.6-sol"
 
 
 def test_openai_creator_model_env(monkeypatch):
@@ -115,6 +115,7 @@ def test_call_llm_json_uses_complete_json(monkeypatch):
 
 
 def test_default_models_match_allowlist_defaults():
+    assert DEFAULT_MODELS["openai"] == "gpt-5.6-sol"
     assert DEFAULT_MODELS["anthropic"] == "claude-sonnet-4-5"
     assert DEFAULT_MODELS["google"] == "gemini-2.5-pro"
     assert DEFAULT_MODELS["xai"] == "grok-3"

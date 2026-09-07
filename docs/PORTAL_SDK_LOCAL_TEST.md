@@ -23,9 +23,8 @@ local 7-slide deck. Use --json to dump validated equipment_selector_v1. Use
 Optional personal LLM key (local PC only):
   1. Copy .env.example → .env at the repo root (never commit .env)
   2. Default provider is OpenAI: set OPENAI_API_KEY=sk-… (BPEAI platform keys are not used locally)
-  3. For evaluator quality (match/exceed custom GPT depth), set a strong model, e.g.
-     OPENAI_CREATOR_MODEL=gpt-5.2 (or another reasoning-capable model on your account).
-     Code default remains gpt-4o if unset. Also set OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000.
+  3. Default model is gpt-5.6-sol (flagship GPT-5.6 professional). Override with
+     OPENAI_CREATOR_MODEL if needed. Also set OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000.
   4. Optional v1 providers (hard allowlist): CREATOR_LLM_PROVIDER=anthropic|google|xai
      with ANTHROPIC_API_KEY / GOOGLE_API_KEY / XAI_API_KEY and allowlisted models
      claude-sonnet-4-5 / gemini-2.5-pro / grok-3. Install extras:
