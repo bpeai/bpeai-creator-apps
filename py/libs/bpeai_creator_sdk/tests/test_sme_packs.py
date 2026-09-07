@@ -690,6 +690,48 @@ def test_equipment_evaluator_generates_dir_on_payload_hydrate(
     assert any("Generated draft DIR" in n for n in notes)
 
 
+def test_equipment_evaluator_generate_fail_does_not_reuse_default_menu(
+    mixing_stub, tmp_path: Path, monkeypatch
+):
+    """LLM failure must not present an unrelated default_scenario questionnaire."""
+    import shutil
+    import sys
+
+    py_root = Path(__file__).resolve().parents[3]
+    if str(py_root) not in sys.path:
+        sys.path.insert(0, str(py_root))
+
+    from apps._templates.equipment_evaluator.agent import EquipmentEvaluatorAgent
+
+    dest = tmp_path / "mixing_stub"
+    shutil.copytree(mixing_stub.path, dest)
+    pack = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
+
+    agent = EquipmentEvaluatorAgent()
+    monkeypatch.setattr(agent, "serper_search", lambda *a, **k: [])
+    monkeypatch.setattr(
+        agent,
+        "call_openai_json",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("LLM returned empty output")),
+    )
+    monkeypatch.setattr(agent, "status", lambda *a, **k: None)
+
+    menu, notes = agent._resolve_or_generate_dir_menu(
+        pack,
+        system_name="Crystallizer",
+        application="Pharmaceutical Small Molecule",
+        scenario_id=None,
+        equipment_system_variant=None,
+        industry=None,
+        force_generate=False,
+    )
+    assert menu.source == "unresolved"
+    assert menu.scenario_id == "crystallizer"
+    assert menu.requirements == []
+    assert all(n.find("media_preparation") < 0 for n in notes)
+    assert any("DIR generation failed" in n for n in notes)
+
+
 def test_validate_dir_code_ok(mixing_stub):
     result = validate_dir_code(mixing_stub, "media_preparation", "2-1-2")
     assert result.ok

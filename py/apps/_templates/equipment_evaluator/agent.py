@@ -818,17 +818,44 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             )
             return menu, notes
         except Exception as exc:
-            notes.append(f"DIR generation failed ({exc}); falling back to pack menu.")
-            fallback = resolve_dir_menu(
+            notes.append(f"DIR generation failed ({exc}).")
+            explicit = (scenario_id or "").strip()
+            if explicit:
+                fallback = resolve_dir_menu(
+                    pack,
+                    system_name=system_name,
+                    scenario_id=explicit,
+                    equipment_system_variant=equipment_system_variant,
+                    industry=industry,
+                    application=application,
+                    require_approved=False,
+                )
+                if fallback.requirements and fallback.scenario_id == explicit:
+                    notes.append(f"Fell back to explicit scenario '{explicit}'.")
+                    return fallback, notes
+            # Do not substitute default_scenario / mirrored menus (that presented
+            # process_vessel_mixing as if it were Crystallizer).
+            slug = re.sub(r"[^a-z0-9]+", "_", system_name.strip().lower()).strip("_")
+            variant = resolve_variant_id(
                 pack,
-                system_name=system_name,
-                scenario_id=scenario_id,
-                equipment_system_variant=equipment_system_variant,
-                industry=industry,
+                system_name,
+                equipment_system_variant,
                 application=application,
-                require_approved=False,
             )
-            return fallback, notes
+            ind = resolve_industry(pack, industry=industry, application=application)
+            return (
+                DirMenu(
+                    scenario_id=slug or "unresolved",
+                    equipment_system_variant=variant,
+                    industry=ind,
+                    label=f"DIR generation failed for {system_name}",
+                    lifecycle="pending",
+                    requirements=[],
+                    common_codes=[],
+                    source="unresolved",
+                ),
+                notes,
+            )
 
     def _generate_and_persist_dir_menu(
         self,
@@ -980,6 +1007,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         }
         if warning:
             out["sme_warnings"] = [warning]
+            if not validation_error and "DIR generation failed" in warning:
+                validation_error = warning
         if validation_error:
             out["validation_error"] = validation_error
             out["suggested_correction"] = suggested_correction or (codes[0] if codes else "")
