@@ -555,7 +555,6 @@ def resolve_industry(pack: KnowledgePack, industry: str | None = None, applicati
             for key, label in pack_by_norm.items():
                 if "food" in key:
                     return label
-        # Exact-ish pack label only (avoid pharmaceutical ⊂ biopharmaceuticals).
         for key, label in pack_by_norm.items():
             if text == key:
                 return label
@@ -781,7 +780,9 @@ def load_knowledge_pack(
         return knowledge_pack_from_dict(pid, payload)
 
     root = Path(pack_root) if pack_root else knowledge_root(py_root)
-    path = (root / pid).resolve()
+    from ..app_paths import resolve_pack_dir
+
+    path = resolve_pack_dir(pid, root, create=False)
     if not path.is_dir():
         raise FileNotFoundError(f"Knowledge pack not found: {path}")
 

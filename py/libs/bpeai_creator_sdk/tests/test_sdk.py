@@ -151,3 +151,53 @@ def test_evaluator_result_envelope_round_trip_and_legacy_adapter():
     }
     assert validate_output(persisted).equipment_tag == "MX-101"
     assert validate_output(payload).equipment_tag == "MX-101"
+
+
+def test_validate_equipment_sizing_output():
+    from pydantic import ValidationError
+    from bpeai_creator_sdk import EquipmentSizingOutput, wrap_sizing_result
+
+    data = {
+        "schema_version": "equipment_sizing_v1",
+        "equipment_tag": "T-101",
+        "equipment_name": "Media vessel",
+        "equipment_system": "mixing",
+        "capacity": {"value": "2000", "unit": "L", "basis": "DIR working volume"},
+        "connections": [{"name": "inlet", "size": "2", "unit": "in", "service": "process"}],
+        "dimensions": {"value": "2.4 m H x 1.8 m D", "unit": "m", "method": "vendor catalog"},
+        "utilities": "CIP, PW",
+        "creator_attribution": {"display_name": "BPEAI", "app_id": "mixing_sizer"},
+    }
+    out = validate_output(data)
+    assert isinstance(out, EquipmentSizingOutput)
+    assert out.equipment_tag == "T-101"
+    assert out.capacity.value == "2000"
+    assert out.capacity.unit == "L"
+    assert out.connections[0].name == "inlet"
+    envelope = wrap_sizing_result(out)
+    assert envelope.template_family == "equipment_sizing"
+    assert envelope.outputs[0].port_id == "equipment_sizing"
+    assert validate_output(envelope.model_dump()).equipment_tag == "T-101"
+
+    try:
+        validate_output(
+            {
+                "schema_version": "equipment_sizing_v1",
+                "creator_attribution": {"display_name": "X", "app_id": "x"},
+            }
+        )
+        raise AssertionError("missing equipment_tag should fail")
+    except ValidationError:
+        pass
+
+    sizing_manifest = CreatorAppManifest(
+        id="sizer",
+        slug="sizer",
+        label="Sizer",
+        equipment_system="mixing",
+        author={"creator_id": "x", "display_name": "X"},
+        route="/sizer",
+        template_family="equipment_sizing",
+        output_schema_version="equipment_sizing_v1",
+    )
+    assert sizing_manifest.output_schema_version == "equipment_sizing_v1"

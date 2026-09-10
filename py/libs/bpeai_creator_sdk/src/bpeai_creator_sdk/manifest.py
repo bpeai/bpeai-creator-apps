@@ -50,7 +50,7 @@ class CreatorAppManifest(BaseModel):
     author: CreatorAppAuthor
     app_kind: AppKind = "first_party"
     template_family: str = "equipment_evaluator"
-    output_schema_version: Literal["equipment_selector_v1"] = "equipment_selector_v1"
+    output_schema_version: Literal["equipment_selector_v1", "equipment_sizing_v1"] = "equipment_selector_v1"
     required_inputs: List[str] = Field(default_factory=list)
     input_ports: List[CreatorAppPort] = Field(default_factory=list)
     output_ports: List[CreatorAppPort] = Field(default_factory=list)

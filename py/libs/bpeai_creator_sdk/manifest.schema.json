@@ -72,7 +72,7 @@
       "default": "equipment_evaluator",
       "description": "Deliverable family. Omitted legacy manifests are treated as equipment_evaluator."
     },
-    "output_schema_version": { "type": "string", "const": "equipment_selector_v1" },
+    "output_schema_version": { "type": "string", "enum": ["equipment_selector_v1", "equipment_sizing_v1"] },
     "required_inputs": {
       "type": "array",
       "items": { "type": "string" }

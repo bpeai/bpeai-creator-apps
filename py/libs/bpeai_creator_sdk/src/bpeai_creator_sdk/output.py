@@ -16,27 +16,39 @@ from .handshake import (
 # Re-export for callers that imported from output
 __all__ = [
     "OUTPUT_SCHEMA_VERSION",
+    "SIZING_SCHEMA_VERSION",
     "EI_RESULT_MANIFEST_VERSION",
     "EQUIPMENT_SELECTOR_SCHEMA_REF",
+    "EQUIPMENT_SIZING_SCHEMA_REF",
     "EQUIPMENT_EVALUATOR_OUTPUT_PORT",
+    "EQUIPMENT_SIZING_OUTPUT_PORT",
     "CreatorAttribution",
     "KeySpecValue",
+    "QuantitySpec",
+    "ConnectionSpec",
+    "DimensionSpec",
     "EvaluationMatrixRow",
     "EvaluationOption",
     "EquipmentSelectorOutput",
+    "EquipmentSizingOutput",
     "EiResultOutput",
     "EiResultManifest",
     "validate_output",
     "validate_result_manifest",
     "wrap_evaluator_result",
+    "wrap_sizing_result",
     "unwrap_evaluator_result",
+    "unwrap_result_payload",
     "output_to_equipment_row",
     "coerce_string_list_items",
 ]
 
 EI_RESULT_MANIFEST_VERSION = "ei_result_manifest_v1"
 EQUIPMENT_SELECTOR_SCHEMA_REF = "https://bpeai.com/schemas/equipment-selector/v1"
+EQUIPMENT_SIZING_SCHEMA_REF = "https://bpeai.com/schemas/equipment-sizing/v1"
 EQUIPMENT_EVALUATOR_OUTPUT_PORT = "equipment_selection"
+EQUIPMENT_SIZING_OUTPUT_PORT = "equipment_sizing"
+SIZING_SCHEMA_VERSION = "equipment_sizing_v1"
 
 
 class CreatorAttribution(BaseModel):
@@ -186,6 +198,126 @@ class EquipmentSelectorOutput(BaseModel):
         return data
 
 
+def _quantity_from_unknown(raw: Any) -> Dict[str, str]:
+    if raw is None:
+        return {"value": "", "unit": "", "basis": ""}
+    if isinstance(raw, Mapping):
+        return {
+            "value": str(raw.get("value") or raw.get("envelope") or "").strip(),
+            "unit": str(raw.get("unit") or "").strip(),
+            "basis": str(raw.get("basis") or raw.get("method") or "").strip(),
+        }
+    text = str(raw).strip()
+    return {"value": text, "unit": "", "basis": ""}
+
+
+class QuantitySpec(BaseModel):
+    value: str = ""
+    unit: str = ""
+    basis: str = ""
+
+
+class ConnectionSpec(BaseModel):
+    name: str
+    size: str = ""
+    unit: str = ""
+    service: str = ""
+    basis: str = ""
+
+
+class DimensionSpec(BaseModel):
+    value: str = ""
+    unit: str = ""
+    method: str = ""
+    length: str | None = None
+    width: str | None = None
+    height: str | None = None
+
+
+class EquipmentSizingOutput(BaseModel):
+    schema_version: Literal["equipment_sizing_v1"] = "equipment_sizing_v1"
+    equipment_tag: str
+    equipment_name: str = ""
+    equipment_system: str = ""
+    equipment_type: str = ""
+    equipment_category: str = ""
+    capacity: QuantitySpec = Field(default_factory=QuantitySpec)
+    connections: List[ConnectionSpec] = Field(default_factory=list)
+    dimensions: DimensionSpec = Field(default_factory=DimensionSpec)
+    utilities: str = ""
+    inputs_used: List[str] = Field(default_factory=list)
+    missing_inputs: List[str] = Field(default_factory=list)
+    assumptions: List[str] = Field(default_factory=list)
+    source_basis: List[str] = Field(default_factory=list)
+    datasheet_markdown: str = ""
+    creator_attribution: CreatorAttribution
+    handshake_protocol: str = "ei_handshake_v1"
+    artifacts: Dict[str, Any] = Field(default_factory=dict)
+    # PPTX / hub display alias — not part of the sizing field catalog.
+    selected_model: str = ""
+    key_specs: List[KeySpecValue] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_sizing(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        payload = dict(data)
+        payload.setdefault("schema_version", SIZING_SCHEMA_VERSION)
+        payload.setdefault("handshake_protocol", "ei_handshake_v1")
+        cap = _quantity_from_unknown(payload.get("capacity"))
+        payload["capacity"] = cap
+        dim_raw = payload.get("dimensions")
+        if isinstance(dim_raw, Mapping):
+            payload["dimensions"] = {
+                "value": str(dim_raw.get("value") or dim_raw.get("envelope") or "").strip(),
+                "unit": str(dim_raw.get("unit") or "").strip(),
+                "method": str(dim_raw.get("method") or dim_raw.get("basis") or "").strip(),
+                "length": dim_raw.get("length"),
+                "width": dim_raw.get("width"),
+                "height": dim_raw.get("height"),
+            }
+        elif dim_raw is not None and not isinstance(dim_raw, Mapping):
+            payload["dimensions"] = {"value": str(dim_raw).strip(), "unit": "", "method": ""}
+        utils = payload.get("utilities")
+        if isinstance(utils, list):
+            payload["utilities"] = "; ".join(str(item).strip() for item in utils if item)
+        elif isinstance(utils, Mapping):
+            payload["utilities"] = "; ".join(
+                f"{k}: {v}" for k, v in utils.items() if v not in (None, "")
+            )
+        conns = payload.get("connections")
+        if isinstance(conns, list):
+            normalized: List[Dict[str, Any]] = []
+            for item in conns:
+                if isinstance(item, Mapping):
+                    normalized.append(
+                        {
+                            "name": str(item.get("name") or item.get("id") or "").strip() or "connection",
+                            "size": str(item.get("size") or item.get("value") or "").strip(),
+                            "unit": str(item.get("unit") or "").strip(),
+                            "service": str(item.get("service") or "").strip(),
+                            "basis": str(item.get("basis") or "").strip(),
+                        }
+                    )
+                elif item:
+                    normalized.append({"name": str(item).strip(), "size": "", "unit": "", "service": "", "basis": ""})
+            payload["connections"] = normalized
+        for field in ("inputs_used", "missing_inputs", "assumptions", "source_basis"):
+            if field in payload:
+                payload[field] = coerce_string_list_items(payload[field])
+        if not str(payload.get("selected_model") or "").strip():
+            payload["selected_model"] = str(
+                payload.get("equipment_name") or payload.get("equipment_type") or "Sized equipment"
+            ).strip()
+        if not str(payload.get("equipment_category") or "").strip():
+            sys_name = str(payload.get("equipment_system") or payload.get("equipment_type") or "").strip()
+            payload["equipment_category"] = (
+                sys_name.replace("_", " ").title() if sys_name else "Equipment"
+            )
+        return payload
+
+
 class EiResultOutput(BaseModel):
     """One typed value emitted by an EI app."""
 
@@ -238,30 +370,76 @@ def wrap_evaluator_result(
     )
 
 
+def unwrap_result_payload(data: Dict[str, Any] | EiResultManifest) -> Dict[str, Any]:
+    """Return the inner deliverable dict from a bare result or ei_result_manifest_v1."""
+    if isinstance(data, EiResultManifest):
+        payload = data.model_dump()
+    else:
+        payload = dict(data or {})
+    if payload.get("schema_version") != EI_RESULT_MANIFEST_VERSION:
+        return payload
+    inner = payload.get("result")
+    if isinstance(inner, dict):
+        return inner
+    for item in payload.get("outputs") or []:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("value")
+        if isinstance(value, dict):
+            return value
+    raise ValueError("result manifest has no typed output payload")
+
+
+def wrap_sizing_result(
+    data: Dict[str, Any] | EquipmentSizingOutput,
+    *,
+    output_port_id: str = EQUIPMENT_SIZING_OUTPUT_PORT,
+    run: Dict[str, Any] | None = None,
+    inputs: Dict[str, Any] | None = None,
+) -> EiResultManifest:
+    """Wrap equipment_sizing_v1 without changing its payload contract."""
+    output = data if isinstance(data, EquipmentSizingOutput) else EquipmentSizingOutput.model_validate(
+        unwrap_result_payload(data) if isinstance(data, dict) else data
+    )
+    payload = output.model_dump()
+    return EiResultManifest(
+        template_family="equipment_sizing",
+        run=run or {},
+        inputs=inputs or {},
+        result=payload,
+        outputs=[
+            EiResultOutput(
+                port_id=output_port_id,
+                label="Equipment sizing",
+                schema_ref=EQUIPMENT_SIZING_SCHEMA_REF,
+                value=payload,
+            )
+        ],
+        artifacts=output.artifacts,
+    )
+
+
 def unwrap_evaluator_result(
     data: Dict[str, Any] | EiResultManifest | EquipmentSelectorOutput,
 ) -> EquipmentSelectorOutput:
     """Read either a generic envelope or the legacy bare evaluator payload."""
     if isinstance(data, EquipmentSelectorOutput):
         return data
-    manifest = data if isinstance(data, EiResultManifest) else validate_result_manifest(data)
-    if isinstance(manifest.result, dict):
-        return EquipmentSelectorOutput.model_validate(manifest.result)
-    for item in manifest.outputs:
-        if (
-            item.port_id == EQUIPMENT_EVALUATOR_OUTPUT_PORT
-            or item.schema_ref == EQUIPMENT_SELECTOR_SCHEMA_REF
-        ):
-            if not isinstance(item.value, dict):
-                raise ValueError("equipment evaluator output value must be an object")
-            return EquipmentSelectorOutput.model_validate(item.value)
-    raise ValueError("result manifest has no equipment_selector_v1 output")
+    if isinstance(data, EquipmentSizingOutput):
+        raise ValueError("expected equipment_selector_v1, got equipment_sizing_v1")
+    payload = unwrap_result_payload(data)
+    return EquipmentSelectorOutput.model_validate(payload)
 
 
-def validate_output(data: Dict[str, Any] | EiResultManifest) -> EquipmentSelectorOutput:
-    if isinstance(data, EiResultManifest) or data.get("schema_version") == EI_RESULT_MANIFEST_VERSION:
-        return unwrap_evaluator_result(data)
-    payload = dict(data or {})
+def validate_output(
+    data: Dict[str, Any] | EiResultManifest,
+) -> EquipmentSelectorOutput | EquipmentSizingOutput:
+    if isinstance(data, EquipmentSelectorOutput) or isinstance(data, EquipmentSizingOutput):
+        return data
+    payload = unwrap_result_payload(data)
+    schema = str(payload.get("schema_version") or "").strip()
+    if schema == SIZING_SCHEMA_VERSION:
+        return EquipmentSizingOutput.model_validate(payload)
     normalize_options_fields(payload)
     return EquipmentSelectorOutput.model_validate(payload)
 

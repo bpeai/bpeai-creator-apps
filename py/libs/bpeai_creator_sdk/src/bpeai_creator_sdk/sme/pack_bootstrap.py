@@ -74,12 +74,15 @@ def pack_dir(
     *,
     py_root: Path | None = None,
     pack_root: Path | None = None,
+    family: str | None = None,
 ) -> Path:
     pid = (pack_id or "").strip()
     if not pid:
         raise ValueError("pack_id is required")
+    from ..app_paths import resolve_pack_dir
+
     root = Path(pack_root) if pack_root else knowledge_root(py_root)
-    return (root / pid).resolve()
+    return resolve_pack_dir(pid, root, family=family, create=True)
 
 
 def list_missing_pack_files(
@@ -236,18 +239,27 @@ def component_schema_hints() -> Dict[str, str]:
     }
 
 
-def structure_example_snippet(filename: str, *, py_root: Path | None = None) -> str:
-    """Return a truncated structural example from ``_examples/mixing_stub`` (not website packs)."""
+def structure_example_snippet(
+    filename: str,
+    *,
+    py_root: Path | None = None,
+    stub_name: str = "mixing_stub",
+) -> str:
+    """Return a truncated structural example from ``_examples/<stub>`` (not website packs)."""
     root = Path(py_root) if py_root else knowledge_root().parent
-    stub = root / "knowledge" / "_examples" / "mixing_stub" / filename
+    stub = root / "knowledge" / "_examples" / stub_name / filename
     if stub.is_file():
         return stub.read_text(encoding="utf-8")[:6000]
     # Optional outlines may be absent from the stub — fall back to pack.yaml shape.
-    alt = root / "knowledge" / "_examples" / "mixing_stub" / "pack.yaml"
+    alt = root / "knowledge" / "_examples" / stub_name / "pack.yaml"
     if alt.is_file():
         text = alt.read_text(encoding="utf-8")[:4000]
-        return f"(mixing_stub/{filename} missing; pack.yaml excerpt for shape only)\n{text}"
-    return "(no mixing_stub structure example available)"
+        return f"({stub_name}/{filename} missing; pack.yaml excerpt for shape only)\n{text}"
+    fallback = root / "knowledge" / "_examples" / "mixing_stub" / "pack.yaml"
+    if fallback.is_file():
+        text = fallback.read_text(encoding="utf-8")[:4000]
+        return f"({stub_name} missing; mixing_stub pack.yaml excerpt for shape only)\n{text}"
+    return f"(no {stub_name} structure example available)"
 
 
 def unwrap_component_payload(filename: str, payload: Mapping[str, Any]) -> Dict[str, Any]:

@@ -47,8 +47,18 @@ def mixing_stub(py_root: Path, examples_root: Path):
 def test_repo_has_example_stub_not_production_packs(py_root: Path):
     root = repo_py_root(py_root)
     assert (root / "knowledge" / "_examples" / "mixing_stub" / "pack.yaml").is_file()
+    assert (root / "knowledge" / "_examples" / "mixing_sizing_stub" / "pack.yaml").is_file()
     # Production platform seeds are not shipped here. Local creator draft packs
-    # under py/knowledge/<id>/ (e.g. LLM-bootstrapped filtration) are allowed.
+    # under py/knowledge/<family>/<id>/ (e.g. LLM-bootstrapped filtration) are allowed.
+
+
+def test_mixing_sizing_stub_dir_shape(py_root: Path, examples_root: Path):
+    pack = load_knowledge_pack("mixing_sizing_stub", py_root=py_root, pack_root=examples_root)
+    menus = pack.dir_requirements.get("dir_menus") or []
+    assert menus
+    reqs = menus[0].get("requirements") or []
+    labels = [str(r.get("label") or "") for r in reqs]
+    assert any("volume" in label.lower() or "duty" in label.lower() or "connection" in label.lower() for label in labels)
 
 
 def test_committed_style_templates_preferred(py_root: Path, monkeypatch: pytest.MonkeyPatch):

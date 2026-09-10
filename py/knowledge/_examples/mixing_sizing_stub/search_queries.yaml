@@ -1,0 +1,21 @@
+dir_generate:
+  templates:
+    - "{system_name} {equipment_system} design requirements {application}"
+    - "{application} {system_name} equipment specification DIR hygienic"
+
+evaluate:
+  templates:
+    - "{system_name} {equipment_system} {application} {working_volume}"
+  slots:
+    working_volume: ["working volume"]
+    vessel_format: ["vessel", "format", "tank"]
+
+sizing:
+  templates:
+    - "{system_name} {working_volume} sanitary vessel dimensions catalog {application}"
+    - "{application} {system_name} nozzle connection size hygienic {working_volume}"
+    - "biopharmaceutical mixing vessel overall height diameter {working_volume}"
+  slots:
+    working_volume: ["working volume"]
+  static:
+    - "sanitary process vessel outline dimensions biopharmaceutical 1000 L"

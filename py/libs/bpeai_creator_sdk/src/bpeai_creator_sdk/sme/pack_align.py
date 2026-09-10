@@ -135,18 +135,32 @@ def align_pack_to_app(
     also exists, leave both folders and report a collision (use the app-id pack).
     """
     notes: List[str] = []
-    canonical = normalize_pack_id(app_id)
+    from ..app_paths import infer_family_from_app_dir, resolve_app_dir, split_family_leaf
+
+    fam, leaf = split_family_leaf(app_id)
+    canonical = normalize_pack_id(leaf or app_id)
     if not canonical:
         raise ValueError("app_id is required")
 
     root = Path(py_root) if py_root is not None else knowledge_root().parent
     kroot = knowledge_root(root)
-    app_dir = root / "apps" / canonical
-    dest = kroot / canonical
+    try:
+        app_dir = resolve_app_dir(app_id, root)
+    except FileNotFoundError:
+        app_dir = root / "apps" / canonical
+    family = fam or infer_family_from_app_dir(
+        app_dir, root / "apps" if (root / "apps").is_dir() else root
+    )
+    dest = (kroot / family / canonical) if family else (kroot / canonical)
 
     hinted = pack_id or read_app_pack_pointer(app_dir) or canonical
     current = normalize_pack_id(hinted) or canonical
-    src = kroot / current
+    nested_src = (kroot / family / current) if family else None
+    legacy_src = kroot / current
+    if nested_src and nested_src.is_dir():
+        src = nested_src
+    else:
+        src = legacy_src
 
     dest_exists = dest.is_dir()
     src_exists = src.is_dir()

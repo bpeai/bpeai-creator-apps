@@ -46,7 +46,7 @@ def _status(message: str) -> None:
 
 def _print_run_instructions(app_id: str) -> None:
     """Tell the creator how to seed SME files and how to start a DIR turn."""
-    content = f"py/knowledge/{app_id}/references/content/"
+    content = f"py/knowledge/<family>/{app_id.split('/')[-1]}/references/content/"
     print(
         "Optional SME files (.pdf / .md / .txt / .csv — not .docx): copy into "
         f"{content} if needed, then re-run this command to index them. "
@@ -76,13 +76,16 @@ def _is_storable_evaluation(result: Dict[str, Any]) -> bool:
     if result.get("requirements") and not result.get("selected_model"):
         return False
     return bool(
-        result.get("selected_model")
-        and (
-            result.get("schema_version") == "equipment_selector_v1"
-            or result.get("mixing_options")
-            or result.get("rationale")
-            or phase in {"evaluation", "evaluate"}
-        )
+        result.get("schema_version") in {"equipment_selector_v1", "equipment_sizing_v1"}
+        or result.get("selected_model")
+        or result.get("capacity")
+    ) and (
+        result.get("schema_version") == "equipment_selector_v1"
+        or result.get("schema_version") == "equipment_sizing_v1"
+        or result.get("mixing_options")
+        or result.get("rationale")
+        or result.get("capacity")
+        or phase in {"evaluation", "evaluate", "sizing"}
     )
 
 
@@ -129,6 +132,9 @@ def _run_once(
             inputs["system_name"] = session["system_name"]
         if not inputs.get("application") and session.get("application"):
             inputs["application"] = session["application"]
+        if session.get("awaiting_sizing_inputs") and session.get("dir_code"):
+            inputs["sizing_inputs"] = inputs["dir_code"]
+            inputs["dir_code"] = session["dir_code"]
 
     if not inputs.get("system_name"):
         print(
@@ -151,6 +157,16 @@ def _run_once(
         result["application"] = session["application"]
     if _is_storable_evaluation(result):
         session["last_evaluation"] = result
+        session["awaiting_sizing_inputs"] = False
+        if result.get("dir_code"):
+            session["dir_code"] = result["dir_code"]
+    elif str(result.get("phase") or "") == "dir_requirements" and (
+        inputs.get("dir_code") or session.get("dir_code")
+    ):
+        if inputs.get("dir_code") and not session.get("awaiting_sizing_inputs"):
+            session["dir_code"] = inputs["dir_code"]
+        if session.get("dir_code"):
+            session["awaiting_sizing_inputs"] = True
 
     if as_json:
         sys.stdout.write(format_selector_json(result))
@@ -206,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--app",
-        help="App id (snake_case under py/apps/ or py/apps/_templates/). Default: infer from cwd.",
+        help="App id (family/leaf under py/apps/<family>/<id>/, or template id). Default: infer from cwd.",
     )
     parser.add_argument(
         "--once",

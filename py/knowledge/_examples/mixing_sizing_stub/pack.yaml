@@ -1,0 +1,43 @@
+# EXAMPLE ONLY — not a platform production seed.
+# Sizing-family stub. Do not reuse evaluator mixing_stub.
+pack_id: mixing_sizing_stub
+equipment_system: mixing
+version: "0.1.0-example"
+label: Mixing sizing stub (example)
+description: >
+  Minimal example pack for equipment_sizing local SDK tests.
+  Do not use as a production SME pack.
+
+expertise_keys:
+  - mixing
+  - equipment_sizing
+alignment_category: equipment_technology
+alignment_subcategory: mixing_agitation
+
+coverage_scope:
+  default: life_science
+  industries:
+    - Biopharmaceuticals
+
+industries:
+  - Biopharmaceuticals
+
+default_variant: general_mixing
+default_scenario: media_preparation
+
+scenario_aliases:
+  media_preparation:
+    - media
+    - buffer
+    - media preparation
+
+variant_aliases:
+  general_mixing:
+    - mixing
+    - agitator
+    - vessel
+
+prompt_hooks:
+  system_role: example_mixing_sizing_engineer
+  emphasize:
+    - This is an EXAMPLE sizing pack for local tests only

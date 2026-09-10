@@ -1,0 +1,5 @@
+options:
+  - name: Jacketed stainless process vessel
+    fit_hints: [best, strong]
+  - name: Single-use mixing bag
+    fit_hints: [conditional, strong]

@@ -30,7 +30,7 @@ Day-to-day edits for templates/SDK/seeds land first in **bpeai-creator-apps**, t
 ### Ownership (locked)
 
 - **Creator packs are private** to that creator’s EI apps only (not a marketplace).
-- **Creator apps are 1:1 with a private pack of the same name** (`py/apps/<id>/` ↔ `py/knowledge/<id>/`).
+- **Creator apps are 1:1 with a private pack of the same leaf name** (`py/apps/<family>/<id>/` ↔ `py/knowledge/<family>/<id>/`).
 - **Platform seeds** (e.g. `mixing`) are BPEAI-owned; first-party apps may share them. Creators **do not** bind seeds — they bootstrap a private pack named after the app.
 - **Python agent code** ships via **portal zip upload** / `upload_creator_bundle.py` (primary). See [EI_HANDSHAKE.md](./EI_HANDSHAKE.md).
 
@@ -53,6 +53,7 @@ Day-to-day edits for templates/SDK/seeds land first in **bpeai-creator-apps**, t
 | Family id | Primary hub deliverables | Output schema | Priority |
 |-----------|--------------------------|---------------|----------|
 | `equipment_evaluator` | Design option evaluation, Technology recommendation, DIR | `equipment_selector_v1` | **shipped** |
+| `equipment_sizing` | Capacity, connections, envelope dimensions | `equipment_sizing_v1` | **shipped template** |
 | `datasheet` | Equipment datasheet | `datasheet_v1` | P1 |
 | `specification_urs` | Specification / URS | `urs_v1` / `spec_v1` | P1 |
 | `pid` | P&ID / drawing package | `pid_v1` | P2 |

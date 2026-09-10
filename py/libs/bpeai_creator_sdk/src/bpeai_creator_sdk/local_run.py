@@ -44,20 +44,31 @@ def ensure_import_paths(py_root: Path | None = None) -> Path:
 
 
 def resolve_app_id(app_id: str | None = None, *, cwd: Path | None = None) -> str:
-    """Resolve app id from --app or from cwd under py/apps/<id>."""
+    """Resolve app id from --app or from cwd under py/apps/<id> or py/apps/<family>/<id>."""
+    from .app_paths import TEMPLATE_FAMILIES, normalize_app_ref
+
     if app_id and app_id.strip():
-        return app_id.strip()
+        return normalize_app_ref(app_id)
     cur = (cwd or Path.cwd()).resolve()
     parts = cur.parts
     for i, part in enumerate(parts):
-        if part == "apps" and i + 1 < len(parts):
-            candidate = parts[i + 1]
-            if candidate not in ("examples", "_template", "_templates") and not candidate.startswith(
-                "."
-            ) and not candidate.startswith("_"):
-                return candidate
+        if part != "apps" or i + 1 >= len(parts):
+            continue
+        first = parts[i + 1]
+        if first.startswith("."):
+            continue
+        if first == "_templates":
+            if i + 2 < len(parts):
+                return parts[i + 2]
+            continue
+        if first in ("examples",) or first.startswith("_"):
+            continue
+        if first in TEMPLATE_FAMILIES and i + 2 < len(parts):
+            return f"{first}/{parts[i + 2]}"
+        return first
     raise ValueError(
-        "Could not resolve app id. Pass --app <snake_case_id> or run from py/apps/<id>."
+        "Could not resolve app id. Pass --app <family>/<id> or --app <id>, "
+        "or run from py/apps/<family>/<id>."
     )
 
 
@@ -68,16 +79,10 @@ def load_manifest(app_id: str, *, py_root: Path | None = None) -> Dict[str, Any]
 
 
 def _app_dir(app_id: str, root: Path) -> Path:
-    """Resolve ``apps/<id>`` or ``apps/_templates/<id>``."""
-    direct = root / "apps" / app_id
-    if (direct / "manifest.json").is_file():
-        return direct
-    nested = root / "apps" / "_templates" / app_id
-    if (nested / "manifest.json").is_file():
-        return nested
-    raise FileNotFoundError(
-        f"App '{app_id}' not found under apps/ or apps/_templates/ (looking for manifest.json)"
-    )
+    """Resolve apps/<id>, apps/<family>/<id>, or apps/_templates/<id>."""
+    from .app_paths import resolve_app_dir
+
+    return resolve_app_dir(app_id, root)
 
 
 def _app_manifest_path(app_id: str, root: Path) -> Path:
@@ -127,25 +132,29 @@ def load_agent_class(
 
 
 def is_selector_result(result: Dict[str, Any]) -> bool:
-    """True when the payload should be validated as equipment_selector_v1."""
+    """True when the payload should be validated as a typed EI deliverable."""
     if not isinstance(result, dict):
         return False
     phase = str(result.get("phase") or "").strip().lower()
-    if phase in {"dir_requirements", "dir"}:
+    if phase in {"dir_requirements", "dir", "generate_dir", "pptx_error"}:
         return False
     schema = str(result.get("schema_version") or "").strip()
-    if schema == "equipment_selector_v1":
+    if schema in {"equipment_selector_v1", "equipment_sizing_v1"}:
         return True
-    if phase in {"evaluation", "evaluate"}:
+    if phase in {"evaluation", "evaluate", "sizing"}:
         return True
-    # Heuristic: final selector cards always include these keys.
-    return bool(result.get("equipment_tag") and result.get("selected_model") and result.get("rationale"))
+    if result.get("equipment_tag") and result.get("selected_model") and result.get("rationale"):
+        return True
+    return bool(result.get("equipment_tag") and result.get("capacity") and result.get("dimensions"))
 
 
 def _manifest_llm_overrides(app_id: str, py_root: Path | None) -> Dict[str, Any]:
-    """Read llm_* fields from apps/<id>/manifest.json when present."""
+    """Read llm_* fields from the resolved app manifest when present."""
     root = py_root or repo_py_root()
-    path = root / "apps" / app_id / "manifest.json"
+    try:
+        path = _app_dir(app_id, root) / "manifest.json"
+    except FileNotFoundError:
+        path = root / "apps" / app_id / "manifest.json"
     if not path.is_file():
         return {}
     try:

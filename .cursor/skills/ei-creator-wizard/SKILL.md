@@ -28,54 +28,61 @@ Full docs: `docs/EI_CREATOR_EXTENSIONS.md`, `docs/EI_HANDSHAKE.md`, `CREATOR_PLA
 - Do not fork `py/libs/bpeai_creator_sdk/`.
 - Do not commit secrets, `.env`, `artifacts/`, or treat gitignored apps as platform seeds.
 - Platform seed packs cannot be bound at runtime — a creator app uses a **private pack with the same id** as the app.
-- **Do not write knowledge-pack YAML in Cursor.** The pack is LLM-bootstrapped when the creator runs `local_chat.py` in PowerShell, using **their** `.env` keys (`OPENAI_API_KEY`, `SERPER_API_KEY`). Do not copy `py/knowledge/_examples/mixing_stub/` as a starter pack. Do not run `local_chat.py` for them.
+- **Do not write knowledge-pack YAML in Cursor.** The pack is LLM-bootstrapped when the creator runs `local_chat.py` in PowerShell, using **their** `.env` keys (`OPENAI_API_KEY`, `SERPER_API_KEY`). Do not copy `py/knowledge/_examples/mixing_stub/` or `mixing_sizing_stub/` as a starter pack. Do not run `local_chat.py` for them.
 
 ## Interview (one decision at a time)
 
 Ask briefly; wait for answers before scaffolding.
 
+0. **Template family** (choose one)
+   - **Evaluator** (`equipment_evaluator`) — design-option recommendation, `equipment_selector_v1`
+   - **Sizing** (`equipment_sizing`) — capacity / connections / envelope, `equipment_sizing_v1`
+
 1. **App identity**
-   - `id` (snake_case folder / `app_id` / manifest `id` / pack folder / `pack.yaml` `pack_id` — **all the same**)
+   - `id` (snake_case **leaf** folder / `app_id` / manifest `id` / pack folder / `pack.yaml` `pack_id` — **all the same**)
+   - Live paths are `py/apps/<family>/<id>/` and `py/knowledge/<family>/<id>/`
    - slug, label, creator display name
    - `equipment_system` (taxonomy only: mixing, filtration, heat_transfer, … — **not** the pack name)
 
 2. **SME documents** (optional; indexed later by Python, not by this wizard)
    - Ask whether the creator has technical PDFs/docs (`.pdf`, `.md`, `.txt`, `.csv` — not `.docx`).
-   - If yes, they go in `py/knowledge/<id>/references/content/` **before or after** the first local run. Style PPTX shells live in `references/style/`.
+   - If yes, they go in `py/knowledge/<family>/<id>/references/content/` **before or after** the first local run. Style PPTX shells live in `references/style/`.
 
 3. **Customization depth after the first Python run** (user may pick more than one)
    - **SME dial (prompts)** — edit `prompt_fragments.yaml` (+ light catalog touch)
-   - **Outputs** — `report_outline.yaml`, options, validation within `equipment_selector_v1`
+   - **Outputs** — `report_outline.yaml`, options, validation within the family schema
    - **Optional Python tools** — wire `creator_tools.py` inside existing phases; show HANDSHAKE constraints
 
    Record the choice. Do **not** author pack files now — wait until Python has generated the draft.
 
 ## Execute (app only)
 
-1. Copy template (PowerShell example):
+1. Copy template (PowerShell example). Use the family from step 0:
 
    ```powershell
-   Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\<id>
+   Copy-Item -Recurse py\apps\_templates\equipment_evaluator py\apps\equipment_evaluator\<id>
+   Copy-Item -Recurse py\apps\_templates\equipment_sizing py\apps\equipment_sizing\<id>
    ```
 
-2. Rewrite in `py/apps/<id>/` only:
-   - Class name + `app_id` + `knowledge_pack_id` (**same as `app_id`**) + `equipment_system` + `creator_display_name` in `agent.py`
-   - `manifest.json`: `id`, `slug`, `label`, `equipment_system`, `knowledge_pack` (**same as `id`**), `python_entrypoint` (`apps.<id>.agent`), `route`, keep `output_schema_version: equipment_selector_v1`
+2. Rewrite in `py/apps/<family>/<id>/` only:
+   - Class name + `app_id` + `knowledge_pack_id` (**same as leaf `id`**) + `equipment_system` + `creator_display_name` in `agent.py`
+   - Keep `template_family` matching the copied template
+   - `manifest.json`: `id`, `slug`, `label`, `equipment_system`, `knowledge_pack` (**same as `id`**), `python_entrypoint` (`apps.<family>.<id>.agent`), `route`, keep the template `output_schema_version`
    - Point out `HANDSHAKE:` comments and `EXTENSIONS.md`
-   - Optionally create empty `py/knowledge/<id>/references/content/` so they have a drop folder. **Do not** write `pack.yaml` or other pack YAML.
+   - Optionally create empty `py/knowledge/<family>/<id>/references/content/` so they have a drop folder. **Do not** write `pack.yaml` or other pack YAML.
 
 3. Stop. Instruct the creator to generate the pack themselves in a **PowerShell** terminal (their `.env` keys). Give this block and wait for feedback:
 
    ```powershell
-   python py\tools\local_chat.py --app <id>
+   python py\tools\local_chat.py --app <family>/<id>
    ```
 
    Tell them:
 
-   - First run LLM-bootstraps `py/knowledge/<id>/` (draft pending SME approval).
-   - Optional SME files: copy into `py/knowledge/<id>/references/content/`, then re-run to index.
+   - First run LLM-bootstraps `py/knowledge/<family>/<id>/` (draft pending SME approval).
+   - Optional SME files: copy into `py/knowledge/<family>/<id>/references/content/`, then re-run to index.
    - At the `>` prompt, enter **system name and application/domain**, for example: `CIP return pump, biopharmaceutical`
-   - Then reply with a DIR code to evaluate; `pptx` after evaluation for a deck.
+   - Then reply with a DIR code to evaluate; sizing apps may ask a second input code; `pptx` after a finished result for a deck.
    - Ask them to paste status lines or questions here when the first run finishes.
 
 4. **After** they confirm the pack exists, help with the chosen depth:
@@ -85,7 +92,7 @@ Ask briefly; wait for answers before scaffolding.
 
 5. Ship path (do not edit the website repo):
 
-   - Portal https://bpiplatform.bpeai.com → Upload zip of `py/apps/<id>/` **and** `py/knowledge/<id>/`, **or**
+   - Portal https://bpiplatform.bpeai.com → Upload zip of `py/apps/<family>/<id>/` **and** `py/knowledge/<family>/<id>/`, **or**
    - `python py/tools/upload_creator_bundle.py --apps <id>` (includes the matching pack by default)
    - Then **Test → Submit → admin Publish**
 

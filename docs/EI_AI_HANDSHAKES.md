@@ -1,12 +1,13 @@
 # EI AI Handshakes (LLM + web search)
 
-Status: **beta** (`equipment_evaluator`)  
+Status: **beta** (`equipment_evaluator`, `equipment_sizing`)  
 Audience: SME creators authoring knowledge packs  
 Related: [EI_CREATOR_EXTENSIONS.md](./EI_CREATOR_EXTENSIONS.md) · [EI_HANDSHAKE.md](./EI_HANDSHAKE.md)
 
 This is the inventory of **every AI call** the template makes: when it runs, why,
 and which pack keys the SME owns. Look for `# AI_HANDSHAKE: <id>` in
-`py/apps/_templates/equipment_evaluator/agent.py`.
+`py/apps/_templates/equipment_evaluator/agent.py` and
+`py/apps/_templates/equipment_sizing/agent.py`.
 
 ## Ownership split
 
@@ -31,6 +32,11 @@ so the hub stays compatible.
 | `evaluate` | Valid DIR → evaluate | Full `equipment_selector_v1` | LLM | `fragments.*` (system) + `calls.evaluate.user_instructions` |
 | `evaluate_repair` | Thin/missing report headings after evaluate | Deepen `datasheet_markdown` | LLM | Same system as evaluate + `calls.evaluate_repair.instructions` |
 | `pptx` | `deliverable=pptx` / phase pptx | Slide pack JSON | LLM | `calls.pptx.system_extra` + `calls.pptx.instructions` (+ `fragments.role` fallback) |
+| `sizing_plan` | Valid DIR, before sizing LLMs | Decide capacity/connection inputs vs DIR | LLM | `calls.sizing_plan.*` |
+| `sizing_search` | After plan, when sizing proceeds | Vendor/catalog envelope references | Serper | `search_queries.yaml` → `sizing.*` (falls back to `evaluate.*`) |
+| `sizing_capacity` | After plan | Capacity JSON | LLM | `calls.sizing_capacity.*` |
+| `sizing_connections` | After capacity | Connection JSON | LLM | `calls.sizing_connections.*` |
+| `sizing_dimensions` | After connections | Envelope JSON | LLM | `calls.sizing_dimensions.*` |
 
 Post-search excerpt fetch (`enrich_search_hits_with_excerpts`) is **not** an SME
 prompt dial — it only expands Serper hits for the LLM user message.

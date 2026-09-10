@@ -25,6 +25,20 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _bootstrap_sdk() -> None:
+    py_root = Path(__file__).resolve().parents[1]
+    sdk_src = py_root / "libs" / "bpeai_creator_sdk" / "src"
+    for path in (str(py_root), str(sdk_src)):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+
+_bootstrap_sdk()
+
 SKIP_APP_DIRS = {"_templates", "examples", "__pycache__"}
 SKIP_PACK_DIRS = {"_examples", "examples", "__pycache__"}
 SKIP_FILE_PARTS = {".env", "__pycache__", "artifacts", ".venv", "venv", ".git"}
@@ -40,10 +54,6 @@ ALLOW_SUFFIX = {
 }
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
 def _should_skip(path: Path) -> bool:
     parts = set(path.parts)
     if parts & SKIP_FILE_PARTS:
@@ -57,33 +67,15 @@ def _should_skip(path: Path) -> bool:
 
 
 def discover_apps(root: Path, only: list[str] | None) -> list[Path]:
-    apps_root = root / "py" / "apps"
-    if not apps_root.is_dir():
-        return []
-    found: list[Path] = []
-    for child in sorted(apps_root.iterdir()):
-        if not child.is_dir() or child.name in SKIP_APP_DIRS or child.name.startswith("_"):
-            continue
-        if only and child.name not in only and child.name.replace("_", "-") not in only:
-            continue
-        if (child / "agent.py").is_file():
-            found.append(child)
-    return found
+    from bpeai_creator_sdk.app_paths import discover_live_app_dirs
+
+    return discover_live_app_dirs(root / "py" / "apps", only)
 
 
 def discover_packs(root: Path, only: list[str] | None) -> list[Path]:
-    packs_root = root / "py" / "knowledge"
-    if not packs_root.is_dir():
-        return []
-    found: list[Path] = []
-    for child in sorted(packs_root.iterdir()):
-        if not child.is_dir() or child.name in SKIP_PACK_DIRS or child.name.startswith("_"):
-            continue
-        if only and child.name not in only and child.name.replace("_", "-") not in only:
-            continue
-        if (child / "pack.yaml").is_file() or (child / "pack.yml").is_file():
-            found.append(child)
-    return found
+    from bpeai_creator_sdk.app_paths import discover_live_pack_dirs
+
+    return discover_live_pack_dirs(root / "py" / "knowledge", only)
 
 
 def add_tree(zf: zipfile.ZipFile, folder: Path, arc_prefix: str) -> int:
@@ -98,12 +90,20 @@ def add_tree(zf: zipfile.ZipFile, folder: Path, arc_prefix: str) -> int:
 
 
 def build_zip(root: Path, apps: list[Path], packs: list[Path], out: Path) -> int:
+    from bpeai_creator_sdk.app_paths import app_zip_prefix
+
+    apps_root = root / "py" / "apps"
+    packs_root = root / "py" / "knowledge"
     total = 0
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for app in apps:
-            total += add_tree(zf, app, f"py/apps/{app.name}")
+            total += add_tree(zf, app, app_zip_prefix(app, apps_root))
         for pack in packs:
-            total += add_tree(zf, pack, f"py/knowledge/{pack.name}")
+            try:
+                rel = pack.resolve().relative_to(packs_root.resolve()).as_posix()
+            except ValueError:
+                rel = pack.name
+            total += add_tree(zf, pack, f"py/knowledge/{rel}")
     return total
 
 
