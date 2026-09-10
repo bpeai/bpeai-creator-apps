@@ -46,7 +46,11 @@ def _status(message: str) -> None:
 
 def _print_run_instructions(app_id: str) -> None:
     """Tell the creator how to seed SME files and how to start a DIR turn."""
-    content = f"py/knowledge/<family>/{app_id.split('/')[-1]}/references/content/"
+    from bpeai_creator_sdk.app_paths import split_family_leaf
+
+    family, leaf = split_family_leaf(app_id)
+    pack_path = f"{family}/{leaf}" if family else leaf
+    content = f"py/knowledge/{pack_path}/references/content/"
     print(
         "Optional SME files (.pdf / .md / .txt / .csv — not .docx): copy into "
         f"{content} if needed, then re-run this command to index them. "

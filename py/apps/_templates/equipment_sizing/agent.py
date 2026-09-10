@@ -1086,7 +1086,13 @@ class EquipmentSizingAgent(CreatorAppBase):
                     f"is '{menu.lifecycle}' — approve before sizing."
                 ),
             )
-        dir_check = validate_dir_code(pack, dir_code, requirements=menu.requirements)
+        dir_check = validate_dir_code(
+            pack,
+            menu.scenario_id,
+            dir_code,
+            requirements=menu.requirements,
+            common_codes=menu.common_codes,
+        )
         if not dir_check.ok:
             return self._dir_requirements(
                 pack,

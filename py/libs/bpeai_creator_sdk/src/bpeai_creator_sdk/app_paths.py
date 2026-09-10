@@ -66,14 +66,25 @@ def iter_app_dir_candidates(
     out: list[Path] = []
     if family:
         out.append(apps_root / family / leaf)
+        # `_templates/<family>` is the template itself, not a live leaf app.
+        if leaf == family:
+            out.append(apps_root / "_templates" / family)
     out.append(apps_root / leaf)
     out.append(apps_root / "_templates" / leaf)
-    if family:
-        out.append(apps_root / "_templates" / family)
-    else:
+    if not family:
         for known in TEMPLATE_FAMILIES:
             out.append(apps_root / known / leaf)
     return out
+
+
+def _prefer_live_app(hits: list[Path]) -> Path | None:
+    """When a live copy and the family template both match, keep the live copy."""
+    if len(hits) == 1:
+        return hits[0]
+    live = [path for path in hits if "_templates" not in path.parts]
+    if len(live) == 1:
+        return live[0]
+    return None
 
 
 def resolve_app_dir(
@@ -88,11 +99,13 @@ def resolve_app_dir(
         iter_app_dir_candidates(app_id, apps_root, family=family),
         marker="manifest.json",
     )
-    if len(hits) == 1:
-        return hits[0]
+    preferred = _prefer_live_app(hits)
+    if preferred is not None:
+        return preferred
     if len(hits) > 1:
+        names = ", ".join(path.as_posix() for path in hits)
         raise FileNotFoundError(
-            f"App '{app_id}' matches multiple folders; pass family/leaf "
+            f"App '{app_id}' matches multiple folders ({names}); pass family/leaf "
             f"(e.g. equipment_evaluator/{split_family_leaf(app_id)[1]})."
         )
     raise FileNotFoundError(

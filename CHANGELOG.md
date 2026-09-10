@@ -1,5 +1,16 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.7 — 2026-09-10
+
+### Local app path: family/leaf vs template
+
+- `--app equipment_sizing/<id>` no longer collides with `py/apps/_templates/equipment_sizing`.
+- Live nested copies win over the family template when both folders have a manifest.
+
+### Sizing DIR validation signature
+
+- `equipment_sizing` now passes `scenario_id` into `validate_dir_code` (same call as the evaluator).
+
 ## 0.2.6 — 2026-09-07
 
 ### DIR generate unwrap + pack prompt
