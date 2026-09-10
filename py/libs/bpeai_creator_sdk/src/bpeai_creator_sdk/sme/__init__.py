@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .dir_catalog import (
     append_dir_menu,
+    coerce_generated_dir_payload,
     ensure_common_codes_for_requirements,
     filter_numeric_common_codes,
     match_dir_menu,
@@ -86,6 +87,7 @@ __all__ = [
     "PackAlignResult",
     "align_pack_to_app",
     "append_dir_menu",
+    "coerce_generated_dir_payload",
     "check_application",
     "check_equipment_option_names",
     "align_pack_meta_with_scenarios",

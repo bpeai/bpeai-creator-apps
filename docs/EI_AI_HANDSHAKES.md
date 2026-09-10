@@ -51,6 +51,8 @@ calls:
       System prompt for DIR questionnaire generation.
     instructions: >
       SME guidance (domain emphasis). Template appends the JSON schema contract.
+      Ask for ONE menu JSON with a top-level requirements[] array — not
+      dir_requirements.yaml and not a dir_menus wrapper.
   evaluate:
     user_instructions: >
       Extra SME text appended in the evaluate user message (before schema contract).

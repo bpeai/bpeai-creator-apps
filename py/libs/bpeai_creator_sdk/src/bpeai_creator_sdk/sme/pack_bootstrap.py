@@ -209,7 +209,8 @@ def component_schema_hints() -> Dict[str, str]:
             "evaluation_goals, application_default, workflow, output_style, "
             "depth_requirements, response_outline, exclusions_rule}. Each value is "
             "a string (not nested objects with label/content). Optional calls: map for "
-            "per-handshake SME text: dir_generate.{system,instructions}, "
+            "per-handshake SME text: dir_generate.{system,instructions} (runtime "
+            "one-menu JSON with requirements[], not a dir_menus YAML wrapper), "
             "evaluate.user_instructions, evaluate_repair.instructions, "
             "pptx.{system_extra,instructions}, pack_bootstrap.system."
         ),

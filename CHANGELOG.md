@@ -1,5 +1,13 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.6 — 2026-09-07
+
+### DIR generate unwrap + pack prompt
+
+- Accept LLM DIR JSON wrapped as `{dir_menus: [...]}` (bootstrap-shaped pack prompts).
+- `vessel_mixing` `dir_generate` instructions now ask for one menu with `requirements[]`, not `dir_requirements.yaml`.
+- One schema-repair retry if the first generate still has fewer than 3 requirements.
+
 ## 0.2.5 — 2026-09-07
 
 ### Local / website DIR match-or-generate parity

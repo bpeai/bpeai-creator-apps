@@ -459,6 +459,36 @@ def test_normalize_generated_menu_requires_numeric_common_codes():
     assert filter_numeric_common_codes([{"code": "SIP"}], requirements=row["requirements"]) == []
 
 
+def test_normalize_generated_menu_unwraps_dir_menus_wrapper():
+    reqs = [
+        {
+            "index": i,
+            "label": f"R{i}",
+            "options": [{"index": 1, "text": "a"}, {"index": 2, "text": "b"}],
+        }
+        for i in range(1, 4)
+    ]
+    row = normalize_generated_menu(
+        {
+            "dir_menus": [
+                {
+                    "label": "Crystallizer Mixing DIR",
+                    "requirements": reqs,
+                    "common_codes": [{"code": "1-1-1", "caption": "starter"}],
+                }
+            ]
+        },
+        system_name="Crystallizer",
+        application="Pharmaceutical Small Molecule",
+        scenario_id="crystallizer",
+        variant="stirred_tank_general",
+        industry="Pharmaceutical / Small Molecule",
+    )
+    assert row["label"] == "Crystallizer Mixing DIR"
+    assert len(row["requirements"]) == 3
+    assert row["industry"] == "Pharmaceutical / Small Molecule"
+
+
 def test_append_dir_menu_and_catalog_md(mixing_stub, tmp_path: Path):
     # Copy stub into temp pack path for write tests
     import shutil

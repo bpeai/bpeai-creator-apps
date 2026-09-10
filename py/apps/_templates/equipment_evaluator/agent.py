@@ -926,14 +926,38 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         if not isinstance(raw, dict):
             raise TypeError("DIR generation did not return a JSON object")
 
-        row = normalize_generated_menu(
-            raw,
-            system_name=system_name,
-            application=application,
-            scenario_id=sid,
-            variant=variant,
-            industry=ind,
-        )
+        try:
+            row = normalize_generated_menu(
+                raw,
+                system_name=system_name,
+                application=application,
+                scenario_id=sid,
+                variant=variant,
+                industry=ind,
+            )
+        except ValueError as exc:
+            self.status("Retrying DIR questionnaire with a stricter schema…")
+            repair_user = (
+                f"System name: {system_name}\n"
+                f"Application / industry: {application} / {ind}\n"
+                f"Equipment system: {pack.equipment_system}\n"
+                f"Scenario id hint: {sid}\n"
+                f"Variant hint: {variant}\n\n"
+                f"Your previous JSON was unusable ({exc}).\n\n"
+                f"{DIR_GENERATE_SCHEMA_CONTRACT}\n"
+                "Do not wrap the menu in dir_menus or dir_requirements.yaml."
+            )
+            raw = self.call_openai_json(system=system, user=repair_user)
+            if not isinstance(raw, dict):
+                raise TypeError("DIR generation retry did not return a JSON object") from exc
+            row = normalize_generated_menu(
+                raw,
+                system_name=system_name,
+                application=application,
+                scenario_id=sid,
+                variant=variant,
+                industry=ind,
+            )
         # Persist: filesystem packs write YAML; DB-hydrated packs POST to internal API.
         try:
             path_s = str(pack.path)

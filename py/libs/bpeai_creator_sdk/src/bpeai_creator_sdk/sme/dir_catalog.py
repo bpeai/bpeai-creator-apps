@@ -329,6 +329,82 @@ def match_dir_menu(
     return catalog_row_to_dir_menu(scored[0][1])
 
 
+_GENERATED_MENU_WRAPPERS = (
+    "dir_menu",
+    "menu",
+    "questionnaire",
+    "result",
+    "data",
+    "content",
+    "dir_requirements",
+)
+
+
+def _requirement_count(obj: Mapping[str, Any]) -> int:
+    for key in ("requirements", "dir_requirements", "questions", "items"):
+        value = obj.get(key)
+        if isinstance(value, list):
+            return len(value)
+        if isinstance(value, Mapping):
+            return len(value)
+    return 0
+
+
+def _flatten_requirement_aliases(data: Mapping[str, Any]) -> Dict[str, Any]:
+    out = dict(data)
+    reqs = out.get("requirements")
+    if isinstance(reqs, Mapping):
+        items: List[Dict[str, Any]] = []
+        for key, value in reqs.items():
+            if not isinstance(value, Mapping):
+                continue
+            row = dict(value)
+            row.setdefault("index", key)
+            items.append(row)
+        out["requirements"] = items
+    elif not isinstance(reqs, list):
+        for alt in ("dir_requirements", "questions", "items"):
+            if isinstance(out.get(alt), list):
+                out["requirements"] = out[alt]
+                break
+    return out
+
+
+def coerce_generated_dir_payload(raw: Mapping[str, Any]) -> Dict[str, Any]:
+    """Accept one-menu JSON or bootstrap-shaped ``{dir_menus: [...]}`` wrappers.
+
+    Pack ``dir_generate`` prompts sometimes reuse the YAML bootstrap contract
+    (``dir_menus`` only). Runtime normalize expects a single menu object.
+    """
+    if not isinstance(raw, Mapping):
+        return {}
+    data = dict(raw)
+    if _requirement_count(data) >= 3:
+        return _flatten_requirement_aliases(data)
+
+    menus = data.get("dir_menus")
+    if isinstance(menus, list):
+        for row in menus:
+            if isinstance(row, Mapping) and _requirement_count(row) >= 3:
+                merged = dict(data)
+                merged.update(row)
+                return _flatten_requirement_aliases(merged)
+
+    for key in _GENERATED_MENU_WRAPPERS:
+        nested = data.get(key)
+        if isinstance(nested, Mapping) and _requirement_count(nested) >= 3:
+            merged = dict(data)
+            merged.update(nested)
+            return _flatten_requirement_aliases(merged)
+        if isinstance(nested, list):
+            for row in nested:
+                if isinstance(row, Mapping) and _requirement_count(row) >= 3:
+                    merged = dict(data)
+                    merged.update(row)
+                    return _flatten_requirement_aliases(merged)
+    return _flatten_requirement_aliases(data)
+
+
 def normalize_generated_menu(
     raw: Mapping[str, Any],
     *,
@@ -339,9 +415,14 @@ def normalize_generated_menu(
     industry: str,
 ) -> Dict[str, Any]:
     """Normalize LLM output into a catalog row; raise ValueError if unusable."""
+    raw = coerce_generated_dir_payload(raw)
     requirements = raw.get("requirements") or []
     if not isinstance(requirements, list) or len(requirements) < 3:
-        raise ValueError("Generated DIR must include at least 3 requirements.")
+        keys = ", ".join(sorted(str(k) for k in raw.keys())) or "(none)"
+        count = len(requirements) if isinstance(requirements, list) else 0
+        raise ValueError(
+            f"Generated DIR must include at least 3 requirements (got {count}; keys: {keys})."
+        )
 
     norm_reqs: List[Dict[str, Any]] = []
     for i, req in enumerate(requirements):
