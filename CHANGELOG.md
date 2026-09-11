@@ -11,6 +11,10 @@
 
 - `equipment_sizing` now passes `scenario_id` into `validate_dir_code` (same call as the evaluator).
 
+### Local chat sizing results
+
+- `equipment_sizing_v1` prints capacity, connections, envelope, key specs, and datasheet markdown instead of the evaluator option-evaluation layout.
+
 ## 0.2.6 — 2026-09-07
 
 ### DIR generate unwrap + pack prompt

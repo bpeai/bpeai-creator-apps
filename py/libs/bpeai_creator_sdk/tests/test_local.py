@@ -35,6 +35,39 @@ def test_format_selector_text_includes_core_fields():
     assert "vent_filter_expert" in text
 
 
+def test_format_sizing_text_includes_datasheet():
+    from bpeai_creator_sdk.local_format import format_result_text
+
+    text = format_result_text(
+        {
+            "schema_version": "equipment_sizing_v1",
+            "equipment_tag": "AG-101",
+            "selected_model": "Top-entry dual hydrofoil",
+            "system_name": "Buffer Preparation Vessel",
+            "application": "biopharmaceutical",
+            "dir_code": "2-1-1-2-2-1-2",
+            "capacity": {"value": "5", "unit": "m³", "basis": "DIR working volume"},
+            "connections": [
+                {
+                    "name": "Agitator mounting flange",
+                    "size": "DN200",
+                    "unit": "",
+                    "service": "vessel interface",
+                }
+            ],
+            "dimensions": {"value": "drive ~2.1 m", "unit": "", "method": "estimate"},
+            "key_specs": [{"key": "Tip speed", "value": "1.8", "unit": "m/s"}],
+            "datasheet_markdown": "## Equipment datasheet\nMotor 0.75 kW",
+            "creator_attribution": {"display_name": "David Tomsik", "app_id": "vessel_agitator"},
+        }
+    )
+    assert "Equipment sizing" in text
+    assert "5 m³" in text
+    assert "Agitator mounting flange" in text
+    assert "Motor 0.75 kW" in text
+    assert "Mixing technology evaluation" not in text
+
+
 def test_format_selector_json_is_pretty():
     raw = format_selector_json({"equipment_tag": "VF-101", "selected_model": "A"})
     assert '"equipment_tag": "VF-101"' in raw

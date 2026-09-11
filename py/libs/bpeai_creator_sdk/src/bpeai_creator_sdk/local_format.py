@@ -256,13 +256,157 @@ def format_selector_text(result: Mapping[str, Any]) -> str:
 
 
 def format_result_text(result: Mapping[str, Any]) -> str:
-    """Format DIR or selector payloads for local chat."""
+    """Format DIR or selector/sizing payloads for local chat."""
     phase = str(result.get("phase") or "").strip().lower()
     if phase in {"dir_requirements", "dir"} or (
         "requirements" in result and not result.get("schema_version")
     ):
         return format_dir_text(result)
+    schema = str(result.get("schema_version") or "").strip()
+    if schema == "equipment_sizing_v1":
+        return format_sizing_text(result)
     return format_selector_text(result)
+
+
+def format_sizing_text(result: Mapping[str, Any]) -> str:
+    """Render equipment_sizing_v1 for local chat (datasheet-first)."""
+    lines: list[str] = []
+    tag = result.get("equipment_tag") or ""
+    model = result.get("selected_model") or ""
+    system = result.get("system_name") or result.get("equipment_name") or "—"
+    application = result.get("application") or ""
+    dir_code = result.get("dir_code") or ""
+    name = result.get("equipment_name") or ""
+
+    lines.append("Equipment sizing")
+    lines.append("─" * 40)
+    if tag:
+        lines.append(f"Tag:        {tag}")
+    if model:
+        lines.append(f"Concept:    {model}")
+    if name and name != model:
+        lines.append(f"Name:       {name}")
+    lines.append(f"System:     {system}")
+    if application:
+        lines.append(f"Application: {application}")
+    if dir_code:
+        lines.append(f"Validated DIR: {dir_code}")
+
+    cap = result.get("capacity") or {}
+    if isinstance(cap, Mapping) and any(cap.get(k) for k in ("value", "unit", "basis")):
+        lines.append("")
+        lines.append("Capacity")
+        lines.append("─" * 40)
+        value = " ".join(str(cap.get(k) or "").strip() for k in ("value", "unit")).strip()
+        if value:
+            lines.append(f"  {value}")
+        if cap.get("basis"):
+            lines.append(f"  Basis: {cap.get('basis')}")
+
+    specs = result.get("key_specs") or []
+    if isinstance(specs, list) and specs:
+        lines.append("")
+        lines.append("Key specs")
+        lines.append("─" * 40)
+        for spec in specs:
+            if not isinstance(spec, Mapping):
+                continue
+            key = spec.get("key") or "?"
+            value = spec.get("value")
+            unit = spec.get("unit")
+            value_s = f"{value} {unit}".strip() if unit else str(value)
+            lines.append(f"  • {key}: {value_s}")
+
+    conns = result.get("connections") or []
+    if isinstance(conns, list) and conns:
+        lines.append("")
+        lines.append("Agitator-package connections")
+        lines.append("─" * 40)
+        for item in conns:
+            if not isinstance(item, Mapping):
+                continue
+            label = item.get("name") or "connection"
+            size = " ".join(
+                str(item.get(k) or "").strip() for k in ("size", "unit")
+            ).strip()
+            service = str(item.get("service") or "").strip()
+            bits = [label]
+            if size:
+                bits.append(size)
+            if service:
+                bits.append(service)
+            lines.append("  • " + " — ".join(bits))
+
+    dims = result.get("dimensions") or {}
+    if isinstance(dims, Mapping) and any(dims.get(k) for k in ("value", "height", "length", "width")):
+        lines.append("")
+        lines.append("Envelope")
+        lines.append("─" * 40)
+        if dims.get("value"):
+            lines.append(f"  {dims.get('value')} {dims.get('unit') or ''}".rstrip())
+        for key in ("length", "width", "height"):
+            if dims.get(key):
+                lines.append(f"  {key}: {dims.get(key)}")
+        if dims.get("method"):
+            lines.append(f"  Method: {dims.get('method')}")
+
+    utilities = str(result.get("utilities") or "").strip()
+    if utilities:
+        lines.append("")
+        lines.append(f"Utilities:  {utilities}")
+
+    assumptions = _listish(result.get("assumptions"))
+    if assumptions:
+        lines.append("")
+        lines.append("Assumptions")
+        lines.append("─" * 40)
+        for item in assumptions:
+            lines.append(f"  • {item}")
+
+    md = str(result.get("datasheet_markdown") or "").strip()
+    if md:
+        lines.append("")
+        lines.append("Datasheet / URS narrative")
+        lines.append("─" * 40)
+        lines.append(md)
+
+    attribution = result.get("creator_attribution") or {}
+    if isinstance(attribution, Mapping) and attribution:
+        display = attribution.get("display_name") or ""
+        app_id = attribution.get("app_id") or ""
+        lines.append("")
+        lines.append(f"Attribution: {display} ({app_id})".strip())
+
+    source = result.get("source_basis") or []
+    if source:
+        lines.append(f"Source basis: {', '.join(str(s) for s in source)}")
+
+    artifacts = result.get("artifacts") or {}
+    if isinstance(artifacts, Mapping):
+        if artifacts.get("markdown_path"):
+            lines.append("")
+            lines.append(f"Markdown report: {artifacts['markdown_path']}")
+        if artifacts.get("pdf_path"):
+            lines.append(f"PDF report: {artifacts['pdf_path']}")
+        if artifacts.get("pptx_path"):
+            lines.append(f"PPTX deck: {artifacts['pptx_path']}")
+
+    prompt = (result.get("pptx_prompt") or "").strip()
+    if prompt and not (isinstance(artifacts, Mapping) and artifacts.get("pptx_path")):
+        lines.append("")
+        lines.append(prompt)
+
+    warnings = result.get("sme_warnings") or []
+    if warnings:
+        lines.append("")
+        lines.append("SME warnings")
+        lines.append("─" * 40)
+        for warning in warnings:
+            text = str(warning).strip()
+            if text:
+                lines.append(f"  • {text}")
+
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def format_selector_json(result: Dict[str, Any]) -> str:
