@@ -8,6 +8,7 @@ from .app_paths import (
     split_family_leaf,
 )
 from .artifacts import (
+    attach_title_hero_image,
     build_evaluation_pdf,
     build_evaluation_pptx,
     build_slide_pack_from_evaluation,
@@ -75,6 +76,7 @@ __all__ = [
     "resolve_pack_dir",
     "split_family_leaf",
     "TEMPLATE_FAMILIES",
+    "attach_title_hero_image",
     "CreatorAppBase",
     "CreatorAppAuthor",
     "CreatorAppManifest",

@@ -185,6 +185,40 @@ def _add_rect(slide, left, top, width, height, fill_hex: str, *, line: bool = Fa
     return shape
 
 
+def _resolve_hero_image(
+    pack: Mapping[str, Any],
+    title_slide: Mapping[str, Any],
+    result: Mapping[str, Any],
+) -> Path | None:
+    artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), Mapping) else {}
+    candidates = [
+        pack.get("hero_image_path"),
+        title_slide.get("hero_image_path"),
+        result.get("hero_image_path"),
+        artifacts.get("hero_image_path") if isinstance(artifacts, Mapping) else None,
+    ]
+    for cand in candidates:
+        if not cand:
+            continue
+        path = Path(str(cand))
+        if path.is_file():
+            return path
+    return None
+
+
+def _add_hero_picture(slide, image_path: Path) -> None:
+    from pptx.util import Emu
+
+    # Inset inside the right rounded panel; leave room for the caption overlay.
+    slide.shapes.add_picture(
+        str(image_path),
+        Emu(7720296),
+        Emu(274320),
+        width=Emu(4337880),
+        height=Emu(5120640),
+    )
+
+
 def _add_line(slide, left, top, width):
     from pptx.enum.shapes import MSO_SHAPE
     from pptx.util import Emu
@@ -486,6 +520,24 @@ def build_evaluation_pptx(
     t1 = slides[0] if isinstance(slides[0], Mapping) else {}
     # right panel
     _add_rect(s1, 7589520, 0, 4599432, 6858000, PANEL_RIGHT, line=False)
+    hero_image = _resolve_hero_image(pack, t1, result)
+    if hero_image is not None:
+        _add_hero_picture(s1, hero_image)
+    else:
+        tags_box = _add_textbox(s1, 8796528, 2212848, 2000000, 1200000)
+        tags = _as_list(t1.get("hero_tags"))[:3] or ["fit", "GMP", "scale-up"]
+        _fill_textbox(
+            tags_box,
+            [_truncate(tag, 18) for tag in tags],
+            width_emu=2000000,
+            height_emu=1200000,
+            preferred_pt=13,
+            min_pt=10,
+            bold=True,
+            color=TEAL,
+            font_name=FONT_BODY,
+            center=True,
+        )
     title_box = _add_textbox(s1, 658368, 1207008, 6217920, 1400000)
     lines = _as_list(t1.get("title_lines")) or system.split()
     _fill_textbox(
@@ -540,21 +592,9 @@ def build_evaluation_pptx(
         font_name=FONT_BODY,
         center=True,
     )
-    # hero tags + headline on right
-    tags_box = _add_textbox(s1, 8796528, 2212848, 2000000, 1200000)
-    tags = _as_list(t1.get("hero_tags"))[:3] or ["fit", "GMP", "scale-up"]
-    _fill_textbox(
-        tags_box,
-        [_truncate(tag, 18) for tag in tags],
-        width_emu=2000000,
-        height_emu=1200000,
-        preferred_pt=13,
-        min_pt=10,
-        bold=True,
-        color=TEAL,
-        font_name=FONT_BODY,
-        center=True,
-    )
+    # Caption overlay at the bottom of the right panel (kept even when an image is present).
+    if hero_image is not None:
+        _add_rect(s1, 7680960, 5486400, 4297680, 820000, "FFFFFF", line=False)
     hero = _add_textbox(s1, 7680960, 5577840, 4297680, 700000)
     headline = _as_list(t1.get("hero_headline"))[:3] or [_truncate(str(result.get("recommended_basis") or ""), 36)]
     _fill_textbox(

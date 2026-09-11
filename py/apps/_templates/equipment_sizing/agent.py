@@ -51,6 +51,7 @@ from pydantic import ValidationError
 
 from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate_output
 from bpeai_creator_sdk.artifacts import (
+    attach_title_hero_image,
     build_evaluation_pdf,
     build_evaluation_pptx,
     build_slide_pack_from_evaluation,
@@ -133,7 +134,8 @@ Return ONLY JSON with this shape:
       "dir_badge": "Validated DIR: x-x-x-x-x-x",
       "summary_badge": "Project-team summary",
       "hero_tags": ["tag1", "tag2", "tag3"],
-      "hero_headline": ["line1", "line2", "line3"]
+      "hero_headline": ["line1", "line2", "line3"],
+      "hero_image_prompt": "optional cutaway catalog rendering of THIS equipment, no text in the image"
     },
     {
       "id": "design_basis",
@@ -1428,6 +1430,15 @@ class EquipmentSizingAgent(CreatorAppBase):
     ) -> Dict[str, Any]:
         self.status("Building presentation-ready PPTX (reference visual style)…")
         slide_pack = self._build_pptx_slide_pack(pack, evaluation)
+        try:
+            self.status("Rendering title-slide equipment image…")
+            attach_title_hero_image(
+                evaluation,
+                slide_pack,
+                output_path=Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(evaluation)} hero.png",
+            )
+        except Exception as exc:
+            self.status(f"Title-slide image skipped ({exc})")
         out_path = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(evaluation)}.pptx"
         path = build_evaluation_pptx(
             evaluation,
@@ -1439,6 +1450,8 @@ class EquipmentSizingAgent(CreatorAppBase):
         result = dict(evaluation)
         artifacts = dict(result.get("artifacts") or {})
         artifacts["pptx_path"] = str(path.resolve())
+        if slide_pack.get("hero_image_path"):
+            artifacts["hero_image_path"] = str(slide_pack["hero_image_path"])
         result["artifacts"] = artifacts
         result["pptx_slide_pack"] = slide_pack
         result["phase"] = "evaluation"

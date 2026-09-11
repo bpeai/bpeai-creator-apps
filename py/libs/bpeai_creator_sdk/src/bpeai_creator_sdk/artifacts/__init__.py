@@ -1,5 +1,6 @@
 """Artifact helpers for creator apps (PPTX / PDF evaluation deliverables)."""
 
+from .hero_image import attach_title_hero_image, render_title_hero
 from .pdf_eval import build_evaluation_pdf
 from .pptx_eval import build_evaluation_pptx, build_slide_pack_from_evaluation
 from .reference_decks import (
@@ -9,10 +10,12 @@ from .reference_decks import (
 )
 
 __all__ = [
+    "attach_title_hero_image",
     "build_evaluation_pdf",
     "build_evaluation_pptx",
     "build_slide_pack_from_evaluation",
     "list_reference_decks",
+    "render_title_hero",
     "replace_reference_deck",
     "resolve_reference_deck",
 ]
