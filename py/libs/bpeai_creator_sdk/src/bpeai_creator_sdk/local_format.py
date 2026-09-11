@@ -68,8 +68,9 @@ def format_dir_text(result: Mapping[str, Any]) -> str:
 
     details = result.get("common_code_details") or []
     codes = result.get("common_codes") or []
+    sizing_followup = menu_label.lower() == "sizing inputs"
     lines.append("")
-    lines.append("Common starting DIR codes")
+    lines.append("Common starting sizing-input replies" if sizing_followup else "Common starting DIR codes")
     lines.append("─" * 40)
     if isinstance(details, list) and details:
         for entry in details:
@@ -85,7 +86,13 @@ def format_dir_text(result: Mapping[str, Any]) -> str:
             lines.append(f"  • {code}")
 
     lines.append("")
-    lines.append("Reply with the closest code to evaluate realistic equipment options.")
+    if sizing_followup:
+        lines.append(
+            "Reply with a method code, optionally followed by actual numbers "
+            "(e.g. 2-2; 12000 L normal, turndown 0.6, H/T 1.2)."
+        )
+    else:
+        lines.append("Reply with the closest code to evaluate realistic equipment options.")
     return "\n".join(lines).rstrip() + "\n"
 
 

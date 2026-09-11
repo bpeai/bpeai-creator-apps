@@ -1179,10 +1179,20 @@ class EquipmentSizingAgent(CreatorAppBase):
                 "dir_menu_label": "Sizing inputs",
                 "requirements": gaps,
                 "common_codes": [example],
-                "common_code_details": [{"code": example, "caption": "Example sizing-input code"}],
+                "common_code_details": [
+                    {
+                        "code": example,
+                        "caption": (
+                            f"Method code only. Example with numbers: "
+                            f"{example}; 12000 L normal, turndown 0.6"
+                        ),
+                    }
+                ],
                 "message": (
-                    f"DIR {dir_code} is on file. Reply with a hyphen-separated sizing-input code "
-                    f"(e.g. {example}) for the extra capacity/connection data below."
+                    f"DIR {dir_code} is on file. Reply with a hyphen-separated method code "
+                    f"(e.g. {example}). Digits are option indexes, not volumes. "
+                    f"To supply actual values, append them after a semicolon "
+                    f"(e.g. {example}; 12000 L normal, turndown 0.6)."
                 ),
                 "sme_warnings": [w for w in [app_warning, *missing] if w],
             }

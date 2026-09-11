@@ -128,17 +128,25 @@ def _run_once(
             print(f"Wrote PPTX: {pptx_path}", file=sys.stderr)
         return 0
 
-    inputs = parse_free_text(text)
+    if session.get("awaiting_sizing_inputs") and session.get("dir_code"):
+        # Keep the validated DIR; treat this turn as method code and/or numbers.
+        inputs = {
+            "system_name": session.get("system_name") or "Process Vessel",
+            "application": session.get("application") or "biopharmaceutical",
+            "dir_code": session["dir_code"],
+            "sizing_inputs": text.strip(),
+            "phase": "evaluate",
+            "raw_text": text.strip(),
+        }
+    else:
+        inputs = parse_free_text(text)
 
-    # Carry system_name / application across turns for DIR code replies.
-    if inputs.get("dir_code"):
-        if not inputs.get("system_name") and session.get("system_name"):
-            inputs["system_name"] = session["system_name"]
-        if not inputs.get("application") and session.get("application"):
-            inputs["application"] = session["application"]
-        if session.get("awaiting_sizing_inputs") and session.get("dir_code"):
-            inputs["sizing_inputs"] = inputs["dir_code"]
-            inputs["dir_code"] = session["dir_code"]
+        # Carry system_name / application across turns for DIR code replies.
+        if inputs.get("dir_code"):
+            if not inputs.get("system_name") and session.get("system_name"):
+                inputs["system_name"] = session["system_name"]
+            if not inputs.get("application") and session.get("application"):
+                inputs["application"] = session["application"]
 
     if not inputs.get("system_name"):
         print(
