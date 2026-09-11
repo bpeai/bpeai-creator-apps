@@ -388,6 +388,8 @@ def format_sizing_text(result: Mapping[str, Any]) -> str:
             lines.append(f"Markdown report: {artifacts['markdown_path']}")
         if artifacts.get("pdf_path"):
             lines.append(f"PDF report: {artifacts['pdf_path']}")
+        if artifacts.get("xlsx_path"):
+            lines.append(f"Excel workbook: {artifacts['xlsx_path']}")
         if artifacts.get("pptx_path"):
             lines.append(f"PPTX deck: {artifacts['pptx_path']}")
 

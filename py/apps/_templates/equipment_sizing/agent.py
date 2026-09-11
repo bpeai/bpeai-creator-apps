@@ -298,12 +298,16 @@ def _option_catalog_block(pack: KnowledgePack) -> str:
     return "\n".join(lines)
 
 
+def _sizing_artifact_basename(result: Dict[str, Any]) -> str:
+    system = re.sub(r"[^\w\-]+", "_", str(result.get("system_name") or "Vessel")).strip("_")
+    return f"{system or 'Vessel'} Sizing"
+
+
 def _write_markdown_artifact(result: Dict[str, Any], *, py_root: Path) -> Path | None:  # noqa: ARG001
     md = (result.get("datasheet_markdown") or "").strip()
     if not md:
         return None
-    system = re.sub(r"[^\w\-]+", "_", str(result.get("system_name") or "evaluation")).strip("_")
-    target = Path.cwd() / "artifacts" / f"{system or 'evaluation'}_evaluation.md"
+    target = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(result)}.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(md, encoding="utf-8")
     return target
@@ -313,8 +317,7 @@ def _write_pdf_artifact(result: Dict[str, Any]) -> Path | None:
     md = (result.get("datasheet_markdown") or "").strip()
     if not md and not result.get("selected_model"):
         return None
-    system = re.sub(r"[^\w\-]+", "_", str(result.get("system_name") or "evaluation")).strip("_")
-    target = Path.cwd() / "artifacts" / f"{system or 'evaluation'}_evaluation.pdf"
+    target = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(result)}.pdf"
     return build_evaluation_pdf(result, output_path=target)
 
 
@@ -533,7 +536,7 @@ class EquipmentSizingAgent(CreatorAppBase):
                 artifacts["markdown_path"] = str(md_path)
             try:
                 # HANDSHAKE: self.status(...) → SSE event "status" (progress line).
-                self.status("Writing PDF evaluation report…")
+                self.status("Writing sizing PDF…")
                 pdf_path = _write_pdf_artifact(result)
                 if pdf_path:
                     artifacts["pdf_path"] = str(pdf_path.resolve())
@@ -1415,8 +1418,7 @@ class EquipmentSizingAgent(CreatorAppBase):
     ) -> Dict[str, Any]:
         self.status("Building presentation-ready PPTX (reference visual style)…")
         slide_pack = self._build_pptx_slide_pack(pack, evaluation)
-        system = re.sub(r"[^\w\-]+", "_", str(evaluation.get("system_name") or "evaluation")).strip("_")
-        out_path = Path.cwd() / "artifacts" / f"{system or 'evaluation'}_evaluation.pptx"
+        out_path = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(evaluation)}.pptx"
         path = build_evaluation_pptx(
             evaluation,
             outline=pack.pptx_outline,
