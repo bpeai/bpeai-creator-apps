@@ -71,6 +71,7 @@ from bpeai_creator_sdk.sme import (
     ensure_creator_pack_assets,
     list_missing_pack_files,
     load_knowledge_pack,
+    pack_dir,
     match_dir_menu,
     missing_report_headings,
     normalize_generated_menu,
@@ -709,7 +710,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             partial = load_knowledge_pack(pack_id, py_root=py_root)
             system = partial.call_fragment("pack_bootstrap", "system", default=default_system) or default_system
         except Exception:
-            frag_path = py_root / "knowledge" / pack_id / "prompt_fragments.yaml"
+            frag_path = pack_dir(pack_id, py_root=py_root) / "prompt_fragments.yaml"
             if frag_path.is_file():
                 try:
                     import yaml as _yaml

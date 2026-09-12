@@ -188,7 +188,7 @@ def resolve_pack_dir(
             f"Pack '{pack_id}' matches multiple folders; pass family/leaf."
         )
     fam, leaf = split_family_leaf(pack_id)
-    family = fam or family
+    family = fam or family or infer_pack_family(leaf, knowledge_root)
     if family and leaf:
         target = knowledge_root / family / leaf
     else:
@@ -196,6 +196,21 @@ def resolve_pack_dir(
     if create:
         return target.resolve()
     return target.resolve()
+
+
+def infer_pack_family(leaf: str, knowledge_root: Path) -> str | None:
+    """Prefer ``knowledge/<family>/<leaf>`` when that folder or a matching live app exists."""
+    if not leaf:
+        return None
+    for known in TEMPLATE_FAMILIES:
+        if (knowledge_root / known / leaf).is_dir():
+            return known
+    apps_root = knowledge_root.parent / "apps"
+    if apps_root.is_dir():
+        for known in TEMPLATE_FAMILIES:
+            if (apps_root / known / leaf / "manifest.json").is_file():
+                return known
+    return None
 
 
 def infer_family_from_app_dir(app_dir: Path, apps_root: Path) -> str | None:

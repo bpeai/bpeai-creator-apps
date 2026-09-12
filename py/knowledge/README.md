@@ -4,7 +4,7 @@
 |----------|---------|---------|
 | `py/knowledge/_examples/` | Thin stubs for local SDK / template tests | Yes |
 | `py/knowledge/_templates/references/` | Shared PPTX/PDF **style** shells for new packs | Yes |
-| `py/knowledge/<id>/` | **Creator workspace drafts** (bootstrap / runtime DIR catalog) | **No** (gitignored) |
+| `py/knowledge/<family>/<id>/` (or leaf-only `py/knowledge/<id>/`) | **Creator workspace drafts** (bootstrap / runtime DIR catalog) | **No** (gitignored) |
 | `bpeai` website `py/knowledge/<id>/` | Platform seeds owned by BPEAI | In bpeai deploy repo |
 | Portal Knowledge | Creator-owned private packs + DIR CRUD | Portal / Postgres + S3 |
 
