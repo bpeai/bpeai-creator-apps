@@ -160,6 +160,14 @@ def inherited_parameters_payload(basis: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def inherited_dir_code(basis: Any, prior_eval: Any = None) -> str:
+    if isinstance(basis, dict) and str(basis.get("dir_code") or "").strip():
+        return str(basis.get("dir_code") or "").strip()
+    if isinstance(prior_eval, dict) and str(prior_eval.get("dir_code") or "").strip():
+        return str(prior_eval.get("dir_code") or "").strip()
+    return ""
+
+
 def compact_prior_eval(prior: Any, basis: Any = None) -> Dict[str, Any]:
     prior = prior if isinstance(prior, dict) else {}
     basis = basis if isinstance(basis, dict) else {}
@@ -554,6 +562,48 @@ class EquipmentSizingAgent(CreatorAppBase):
         )
 
         force_generate = phase in {"generate_dir"} or bool(inputs.get("force_generate_dir"))
+        shared_basis = shared_basis_from_inputs(inputs, prior_eval)
+        inherited_code = inherited_dir_code(shared_basis, prior_eval)
+        reuse_eval_dir = bool(inherited_code) and not force_generate and phase != "generate_dir"
+        if reuse_eval_dir:
+            if not dir_code:
+                dir_code = inherited_code
+            if phase in {"dir", "dir_requirements"}:
+                return self._inherited_eval_dir_ready(
+                    system_name,
+                    application,
+                    shared_basis,
+                    warning=combined_warning,
+                )
+            result = self._size(
+                pack,
+                None,
+                system_name,
+                application,
+                dir_code,
+                sizing_inputs=sizing_inputs,
+                prior_eval=prior_eval if isinstance(prior_eval, dict) else None,
+                app_warning=combined_warning,
+                equipment_tag=str(inputs.get("equipment_tag") or "").strip(),
+                reuse_inherited_dir=True,
+            )
+            if result.get("phase") == "evaluation":
+                md_path = _write_markdown_artifact(result, py_root=py_root)
+                artifacts = dict(result.get("artifacts") or {})
+                if md_path:
+                    artifacts["markdown_path"] = str(md_path)
+                try:
+                    self.status("Writing sizing PDF…")
+                    pdf_path = _write_pdf_artifact(result)
+                    if pdf_path:
+                        artifacts["pdf_path"] = str(pdf_path.resolve())
+                except Exception as exc:
+                    self.status(f"PDF export skipped ({exc})")
+                result["artifacts"] = artifacts
+                result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
+            result.setdefault("template_family", getattr(self, "template_family", "equipment_sizing"))
+            return result
+
         menu, gen_notes = self._resolve_or_generate_dir_menu(
             pack,
             system_name=system_name,
@@ -1117,6 +1167,40 @@ class EquipmentSizingAgent(CreatorAppBase):
         menu.source = "generated"
         return menu
 
+    def _inherited_eval_dir_ready(
+        self,
+        system_name: str,
+        application: str,
+        shared_basis: Dict[str, Any] | None,
+        *,
+        warning: str = "",
+    ) -> Dict[str, Any]:
+        prior_code = inherited_dir_code(shared_basis)
+        params = inherited_parameters_payload(shared_basis)
+        out: Dict[str, Any] = {
+            "phase": "dir_requirements",
+            "system_name": system_name,
+            "application": application,
+            "requirements": [],
+            "inherited_parameters": params,
+            "common_codes": [prior_code] if prior_code else [],
+            "common_code_details": (
+                [{"code": prior_code, "caption": "Approved evaluation DIR"}] if prior_code else []
+            ),
+            "suggested_correction": prior_code,
+            "reused_evaluation_dir": True,
+            "template_family": getattr(self, "template_family", "equipment_sizing"),
+            "message": (
+                f"Using the approved evaluation DIR {prior_code} for {system_name}. "
+                "A new DIR menu was not generated. Run sizing to continue. "
+                "Additional material-balance or connection inputs will be requested only if needed."
+            ),
+        }
+        if warning:
+            out["sme_warnings"] = [warning]
+        self.status(f"Reusing approved evaluation DIR {prior_code}")
+        return out
+
     def _dir_requirements(
         self,
         pack: KnowledgePack,
@@ -1206,7 +1290,7 @@ class EquipmentSizingAgent(CreatorAppBase):
     def _size(
         self,
         pack: KnowledgePack,
-        menu: DirMenu,
+        menu: DirMenu | None,
         system_name: str,
         application: str,
         dir_code: str,
@@ -1215,9 +1299,25 @@ class EquipmentSizingAgent(CreatorAppBase):
         prior_eval: Dict[str, Any] | None = None,
         app_warning: str = "",
         equipment_tag: str = "",
+        reuse_inherited_dir: bool = False,
     ) -> Dict[str, Any]:
         shared_basis = shared_basis_from_inputs(getattr(self, "_identity_inputs", {}) or {}, prior_eval)
-        if not menu.is_approved:
+        if reuse_inherited_dir:
+            decoded = list(
+                (shared_basis or {}).get("decoded_dir")
+                or (prior_eval or {}).get("decoded_dir")
+                or []
+            )
+            dir_code = dir_code or inherited_dir_code(shared_basis, prior_eval)
+            menu_scenario = str((prior_eval or {}).get("scenario_id") or "inherited")
+        elif menu is None:
+            return self._inherited_eval_dir_ready(
+                system_name,
+                application,
+                shared_basis,
+                warning=app_warning,
+            )
+        elif not menu.is_approved:
             return self._dir_requirements(
                 pack,
                 menu,
@@ -1230,26 +1330,27 @@ class EquipmentSizingAgent(CreatorAppBase):
                 ),
                 shared_basis=shared_basis,
             )
-        dir_check = validate_dir_code(
-            pack,
-            menu.scenario_id,
-            dir_code,
-            requirements=menu.requirements,
-            common_codes=menu.common_codes,
-        )
-        if not dir_check.ok:
-            return self._dir_requirements(
+        else:
+            dir_check = validate_dir_code(
                 pack,
-                menu,
-                system_name,
-                application,
-                warning=app_warning,
-                validation_error=dir_check.error or "Invalid DIR code",
-                suggested_correction=dir_check.suggested or "",
-                shared_basis=shared_basis,
+                menu.scenario_id,
+                dir_code,
+                requirements=menu.requirements,
+                common_codes=menu.common_codes,
             )
-
-        decoded = list(dir_check.decoded or [])
+            if not dir_check.ok:
+                return self._dir_requirements(
+                    pack,
+                    menu,
+                    system_name,
+                    application,
+                    warning=app_warning,
+                    validation_error=dir_check.error or "Invalid DIR code",
+                    suggested_correction=dir_check.suggested or "",
+                    shared_basis=shared_basis,
+                )
+            decoded = list(dir_check.decoded or [])
+            menu_scenario = menu.scenario_id
         prior = prior_eval or {}
         tag = equipment_tag or str(prior.get("equipment_tag") or "").strip()
         if not tag:
@@ -1311,8 +1412,11 @@ class EquipmentSizingAgent(CreatorAppBase):
                 "system_name": system_name,
                 "application": application,
                 "knowledge_pack": pack.pack_id,
-                "scenario_id": menu.scenario_id,
-                "dir_menu_label": "Sizing inputs",
+                "scenario_id": menu_scenario,
+                "dir_menu_label": "Additional sizing inputs",
+                "inherited_parameters": inherited_parameters_payload(shared_basis),
+                "reused_evaluation_dir": reuse_inherited_dir,
+                "template_family": getattr(self, "template_family", "equipment_sizing"),
                 "requirements": gaps,
                 "common_codes": [example],
                 "common_code_details": [
@@ -1483,6 +1587,8 @@ class EquipmentSizingAgent(CreatorAppBase):
         result["application"] = application
         result["knowledge_pack"] = pack.pack_id
         result["decoded_dir"] = decoded
+        result["template_family"] = getattr(self, "template_family", "equipment_sizing")
+        result["reused_evaluation_dir"] = reuse_inherited_dir
         if app_warning:
             result["sme_warnings"] = [app_warning]
         return result
