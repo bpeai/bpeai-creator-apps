@@ -562,9 +562,26 @@ class EquipmentSizingAgent(CreatorAppBase):
         )
 
         force_generate = phase in {"generate_dir"} or bool(inputs.get("force_generate_dir"))
+        want_pptx = deliverable == "pptx" or phase == "pptx"
+        if want_pptx:
+            prior = inputs.get("evaluation_result")
+            if isinstance(prior, dict) and (
+                prior.get("schema_version") == "equipment_sizing_v1"
+                or prior.get("selected_model")
+                or prior.get("equipment_tag")
+                or prior.get("datasheet_markdown")
+            ):
+                result = self._attach_pptx(pack, prior, py_root=py_root)
+                result.setdefault("template_family", getattr(self, "template_family", "equipment_sizing"))
+                return result
         shared_basis = shared_basis_from_inputs(inputs, prior_eval)
         inherited_code = inherited_dir_code(shared_basis, prior_eval)
-        reuse_eval_dir = bool(inherited_code) and not force_generate and phase != "generate_dir"
+        reuse_eval_dir = (
+            bool(inherited_code)
+            and not force_generate
+            and phase not in {"generate_dir", "pptx"}
+            and not want_pptx
+        )
         if reuse_eval_dir:
             if not dir_code:
                 dir_code = inherited_code
