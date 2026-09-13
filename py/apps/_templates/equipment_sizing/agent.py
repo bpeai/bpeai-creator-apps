@@ -90,6 +90,111 @@ from bpeai_creator_sdk.sme import (
 from bpeai_creator_sdk.sme.dir_catalog import catalog_row_to_dir_menu
 from bpeai_creator_sdk.tools import enrich_search_hits_with_excerpts, format_search_context
 
+_DIR_TOPIC_MATCHERS = (
+    ("capacity", re.compile(r"\b(volume|capacity|scale|batch size|working volume|liter|litre)\b", re.I)),
+    ("application", re.compile(r"\b(application|industry|product|modality|cell culture)\b", re.I)),
+    ("materials", re.compile(r"\b(material|moc|316|stainless|single-use|polymeric)\b", re.I)),
+    ("selected_model", re.compile(r"\b(agitator|impeller|technology|model|mixer type|entry)\b", re.I)),
+    ("design_basis", re.compile(r"\b(duty|basis|mixing objective|suspension|blend)\b", re.I)),
+    ("utilities", re.compile(r"\b(utilit|cip|sip|jacket|power)\b", re.I)),
+    ("dimensions", re.compile(r"\b(dimension|envelope|height|diameter)\b", re.I)),
+    ("connection_sizes", re.compile(r"\b(connection|nozzle|inlet|outlet|port size)\b", re.I)),
+)
+
+
+def _basis_parameter_ids(basis: Any) -> set[str]:
+    if not isinstance(basis, dict):
+        return set()
+    params = basis.get("parameters") if isinstance(basis.get("parameters"), list) else []
+    return {
+        str(item.get("id") or "")
+        for item in params
+        if isinstance(item, dict) and str(item.get("id") or "").strip()
+    }
+
+
+def requirement_overlaps_inherited(label: str, basis: Any) -> bool:
+    ids = _basis_parameter_ids(basis)
+    if not ids:
+        return False
+    text = str(label or "")
+    return any(pattern.search(text) and topic_id in ids for topic_id, pattern in _DIR_TOPIC_MATCHERS)
+
+
+def filter_sizing_requirements(requirements: List[Any], basis: Any) -> tuple[List[Any], List[Any]]:
+    kept: List[Any] = []
+    inherited: List[Any] = []
+    for req in requirements or []:
+        label = ""
+        if isinstance(req, dict):
+            label = str(req.get("label") or "")
+        else:
+            label = str(getattr(req, "label", "") or "")
+        if requirement_overlaps_inherited(label, basis):
+            inherited.append(req)
+        else:
+            kept.append(req)
+    return kept, inherited
+
+
+def inherited_parameters_payload(basis: Any) -> List[Dict[str, Any]]:
+    if not isinstance(basis, dict):
+        return []
+    params = basis.get("parameters") if isinstance(basis.get("parameters"), list) else []
+    out: List[Dict[str, Any]] = []
+    for item in params:
+        if not isinstance(item, dict):
+            continue
+        value = str(item.get("value") or "").strip()
+        if not value:
+            continue
+        out.append(
+            {
+                "id": str(item.get("id") or ""),
+                "label": str(item.get("label") or item.get("id") or ""),
+                "value": value,
+                "unit": item.get("unit"),
+                "source": str(item.get("source") or "evaluation"),
+            }
+        )
+    return out
+
+
+def compact_prior_eval(prior: Any, basis: Any = None) -> Dict[str, Any]:
+    prior = prior if isinstance(prior, dict) else {}
+    basis = basis if isinstance(basis, dict) else {}
+    return {
+        "equipment_tag": basis.get("equipment_tag") or prior.get("equipment_tag"),
+        "equipment_name": basis.get("equipment_item_name") or prior.get("equipment_name"),
+        "equipment_system": prior.get("equipment_system"),
+        "selected_model": basis.get("selected_model") or prior.get("selected_model"),
+        "dir_code": basis.get("dir_code") or prior.get("dir_code"),
+        "application": basis.get("application") or prior.get("application"),
+        "design_basis": basis.get("design_basis") or prior.get("design_basis"),
+        "key_specs": prior.get("key_specs") or basis.get("parameters") or [],
+    }
+
+
+def shared_basis_from_inputs(inputs: Dict[str, Any], prior_eval: Any = None) -> Dict[str, Any] | None:
+    basis = inputs.get("shared_basis")
+    if isinstance(basis, dict) and (basis.get("parameters") or basis.get("dir_code") or basis.get("selected_model")):
+        return basis
+    prior = prior_eval if isinstance(prior_eval, dict) else inputs.get("evaluation_result")
+    if not isinstance(prior, dict):
+        return None
+    compact = compact_prior_eval(prior)
+    if not any(compact.get(key) for key in ("dir_code", "selected_model", "equipment_tag")):
+        return None
+    return {
+        **compact,
+        "parameters": [
+            {"id": "selected_model", "label": "Selected technology", "value": compact.get("selected_model") or "", "source": "evaluation"},
+            {"id": "application", "label": "Application", "value": compact.get("application") or "", "source": "evaluation"},
+            {"id": "design_basis", "label": "Design basis", "value": compact.get("design_basis") or "", "source": "evaluation"},
+        ],
+    }
+
+
 # Template-owned JSON schema contracts (deliverable). SME voice/search live in the pack —
 # see docs/EI_AI_HANDSHAKES.md and prompt_fragments.yaml → calls / search_queries.yaml.
 
@@ -522,6 +627,7 @@ class EquipmentSizingAgent(CreatorAppBase):
                 system_name,
                 application,
                 warning=combined_warning,
+                shared_basis=shared_basis_from_inputs(inputs, prior_eval),
             )
 
         # HANDSHAKE: size path → SSE "evaluation" / "result" + equipment_sizing_v1.
@@ -1021,15 +1127,19 @@ class EquipmentSizingAgent(CreatorAppBase):
         warning: str = "",
         validation_error: str = "",
         suggested_correction: str = "",
+        shared_basis: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         self.status(f"Assembling design input requirements for {system_name}…")
-        requirements = menu.requirements
+        requirements = list(menu.requirements or [])
+        inherited_params = inherited_parameters_payload(shared_basis)
+        residual, _skipped = filter_sizing_requirements(requirements, shared_basis)
+        prior_code = str((shared_basis or {}).get("dir_code") or "").strip()
         try:
             from bpeai_creator_sdk.sme.dir_catalog import ensure_common_codes_for_requirements
 
             entries = ensure_common_codes_for_requirements(
                 menu.common_codes,
-                requirements,
+                residual or requirements,
                 system_name=system_name,
                 application=application,
                 min_count=3,
@@ -1038,7 +1148,31 @@ class EquipmentSizingAgent(CreatorAppBase):
         except Exception:
             entries = pack._normalize_common_codes(menu.common_codes)
         codes = [e["code"] for e in entries]
-        example = codes[0] if codes else "-".join("1" for _ in (requirements or [1]))
+        if prior_code and prior_code not in codes:
+            codes = [prior_code, *codes]
+            entries = [{"code": prior_code, "caption": "Prior evaluation DIR code"}, *entries]
+        example = prior_code or (codes[0] if codes else "-".join("1" for _ in (residual or requirements or [1])))
+        if residual:
+            message = (
+                f"For {system_name} — {menu.label} "
+                f"({menu.industry} / {menu.equipment_system_variant} / scenario={menu.scenario_id}), "
+                f"I’ll assume {application} unless you specify otherwise. "
+                "Questions already answered by evaluation are inherited. "
+                f"Reply with a hyphen-separated DIR code (e.g. {example})."
+            )
+        elif inherited_params:
+            message = (
+                f"Inherited evaluation basis already covers the DIR questions for {system_name}. "
+                f"Reply with the prior DIR code {prior_code or example} to continue, "
+                "or a new code if you want to change the basis."
+            )
+        else:
+            message = (
+                f"For {system_name} — {menu.label} "
+                f"({menu.industry} / {menu.equipment_system_variant} / scenario={menu.scenario_id}), "
+                f"I’ll assume {application} unless you specify otherwise. "
+                f"Reply with a hyphen-separated DIR code (e.g. {example})."
+            )
         # HANDSHAKE: phase=dir_requirements payload fields the generic UI renders.
         out: Dict[str, Any] = {
             "phase": "dir_requirements",
@@ -1051,15 +1185,11 @@ class EquipmentSizingAgent(CreatorAppBase):
             "industry": menu.industry,
             "dir_menu_label": menu.label,
             "dir_lifecycle": menu.lifecycle,
-            "requirements": requirements,
+            "requirements": residual,
+            "inherited_parameters": inherited_params,
             "common_codes": codes,
             "common_code_details": entries,
-            "message": (
-                f"For {system_name} — {menu.label} "
-                f"({menu.industry} / {menu.equipment_system_variant} / scenario={menu.scenario_id}), "
-                f"I’ll assume {application} unless you specify otherwise. "
-                f"Reply with a hyphen-separated DIR code (e.g. {example})."
-            ),
+            "message": message,
         }
         if warning:
             out["sme_warnings"] = [warning]
@@ -1068,6 +1198,8 @@ class EquipmentSizingAgent(CreatorAppBase):
         if validation_error:
             out["validation_error"] = validation_error
             out["suggested_correction"] = suggested_correction or (codes[0] if codes else "")
+        elif prior_code and not residual:
+            out["suggested_correction"] = prior_code
         self.status(f"Design input requirements ready for {system_name}")
         return out
 
@@ -1084,6 +1216,7 @@ class EquipmentSizingAgent(CreatorAppBase):
         app_warning: str = "",
         equipment_tag: str = "",
     ) -> Dict[str, Any]:
+        shared_basis = shared_basis_from_inputs(getattr(self, "_identity_inputs", {}) or {}, prior_eval)
         if not menu.is_approved:
             return self._dir_requirements(
                 pack,
@@ -1095,6 +1228,7 @@ class EquipmentSizingAgent(CreatorAppBase):
                     f"DIR menu for {menu.industry} / {menu.equipment_system_variant} "
                     f"is '{menu.lifecycle}' — approve before sizing."
                 ),
+                shared_basis=shared_basis,
             )
         dir_check = validate_dir_code(
             pack,
@@ -1112,6 +1246,7 @@ class EquipmentSizingAgent(CreatorAppBase):
                 warning=app_warning,
                 validation_error=dir_check.error or "Invalid DIR code",
                 suggested_correction=dir_check.suggested or "",
+                shared_basis=shared_basis,
             )
 
         decoded = list(dir_check.decoded or [])
@@ -1128,16 +1263,7 @@ class EquipmentSizingAgent(CreatorAppBase):
         )
         decoded_text = json.dumps(decoded, indent=2)[:20000]
         sizing_text = json.dumps(sizing_inputs, indent=2)[:12000] if sizing_inputs else ""
-        prior_text = json.dumps(
-            {
-                "equipment_tag": prior.get("equipment_tag"),
-                "equipment_name": prior.get("equipment_name"),
-                "equipment_system": prior.get("equipment_system"),
-                "selected_model": prior.get("selected_model"),
-                "key_specs": prior.get("key_specs"),
-            },
-            indent=2,
-        )[:12000]
+        prior_text = json.dumps(compact_prior_eval(prior, shared_basis), indent=2)[:8000]
 
         # AI_HANDSHAKE: sizing_plan — decide capacity/connection inputs vs DIR.
         self.status("Planning capacity and connection inputs…")
