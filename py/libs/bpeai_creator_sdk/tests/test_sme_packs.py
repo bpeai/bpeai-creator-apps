@@ -432,6 +432,84 @@ def test_match_dir_menu_from_list_catalog(mixing_stub):
     assert hit.menu_id
 
 
+def test_match_dir_menu_requires_exact_industry_and_all_system_keywords(mixing_stub):
+    assert (
+        match_dir_menu(
+            mixing_stub,
+            system_name="Conditioning & Mixing Tank - for feedstock handling",
+            application="Biopharmaceuticals",
+            allow_draft=True,
+        )
+        is None
+    )
+    assert (
+        match_dir_menu(
+            mixing_stub,
+            system_name="Media Preparation Vessel",
+            application="Industrial Biotechnology",
+            allow_draft=True,
+        )
+        is None
+    )
+    assert (
+        match_dir_menu(
+            mixing_stub,
+            system_name="Media Preparation Vessel",
+            application="Biopharmaceutical & Biologics",
+            allow_draft=True,
+        )
+        is None
+    )
+    hit = match_dir_menu(
+        mixing_stub,
+        system_name="Media Preparation Vessel",
+        application="Biopharmaceuticals",
+        allow_draft=True,
+    )
+    assert hit is not None
+    assert hit.scenario_id == "media_preparation"
+
+
+def test_match_dir_menu_rejects_partial_chromatography_example_overlap(mixing_stub):
+    seed = mixing_stub.dir_menus[0]
+    payload = {
+        "meta": dict(mixing_stub.meta),
+        "dir_requirements": {
+            "dir_menus": list(mixing_stub.dir_menus)
+            + [
+                {
+                    "menu_id": "chromatography_media_preparation__stirred_tank_general__biopharmaceuticals",
+                    "status": "draft_generated",
+                    "scenario_id": "chromatography_media_preparation",
+                    "equipment_system_variant": "stirred_tank_general",
+                    "industry": "Biopharmaceuticals",
+                    "system_examples": [
+                        "Chromatography media preparation",
+                        "chromatography resin slurry preparation tank",
+                        "media hydration and hold mixing vessel",
+                        "resin make-up / conditioning stirred tank",
+                    ],
+                    "requirements": seed.get("requirements") or [],
+                    "common_codes": seed.get("common_codes") or [],
+                }
+            ],
+        },
+        "equipment_options": mixing_stub.equipment_options,
+        "validation_rules": mixing_stub.validation_rules,
+        "prompt_fragments": mixing_stub.prompt_fragments,
+    }
+    pack = knowledge_pack_from_dict("mixing_stub", payload, path=mixing_stub.path)
+    assert (
+        match_dir_menu(
+            pack,
+            system_name="Conditioning & Mixing Tank - for feedstock handling",
+            application="Biopharmaceuticals",
+            allow_draft=True,
+        )
+        is None
+    )
+
+
 def test_normalize_generated_menu_requires_numeric_common_codes():
     raw = {
         "label": "Demo",

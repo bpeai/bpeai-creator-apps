@@ -15,7 +15,7 @@ from .pack_loader import (
     _alias_match_text,
     _best_alias_match,
     _norm,
-    resolve_industry,
+    _taxonomy_sector_pairs,
     resolve_variant_id,
 )
 from .validate import is_numeric_dir_code, validate_dir_code
@@ -239,6 +239,93 @@ def catalog_row_to_dir_menu(row: Mapping[str, Any]) -> DirMenu:
     )
 
 
+_SYSTEM_KEYWORD_STOP = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "as",
+        "at",
+        "by",
+        "for",
+        "from",
+        "in",
+        "into",
+        "of",
+        "on",
+        "onto",
+        "or",
+        "the",
+        "to",
+        "via",
+        "vs",
+        "with",
+        "without",
+        "used",
+        "using",
+        "use",
+    }
+)
+
+
+def _significant_keywords(text: str) -> List[str]:
+    tokens = re.findall(r"[a-z0-9]+", _norm(text))
+    seen: set[str] = set()
+    out: List[str] = []
+    for token in tokens:
+        if len(token) < 3 or token in _SYSTEM_KEYWORD_STOP or token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
+
+
+def _selected_industry(industry: str | None, application: str | None) -> str:
+    for raw in (industry, application):
+        value = str(raw or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _yaml_sector_id(text: str) -> str | None:
+    key = _norm(text)
+    if not key:
+        return None
+    for sid, label in _taxonomy_sector_pairs():
+        if key == _norm(label) or key == _norm(sid):
+            return _norm(sid)
+    return None
+
+
+def industry_is_exact_match(row_industry: str, selected: str) -> bool:
+    """True when the catalog industry is the selected sector YAML entry (or the same literal)."""
+    if not selected:
+        return True
+    if _norm(row_industry) == _norm(selected):
+        return True
+    row_id = _yaml_sector_id(row_industry)
+    selected_id = _yaml_sector_id(selected)
+    return bool(row_id and selected_id and row_id == selected_id)
+
+
+def _row_system_keywords(row: Mapping[str, Any]) -> set[str]:
+    parts = [str(row.get("scenario_id") or "")]
+    examples = row.get("system_examples") or []
+    if isinstance(examples, list):
+        parts.extend(str(ex) for ex in examples if str(ex).strip())
+    return set(_significant_keywords(" ".join(parts)))
+
+
+def system_keywords_covered(system_name: str, row: Mapping[str, Any]) -> bool:
+    """Every equipment-system keyword must appear in scenario_id or system_examples."""
+    required = _significant_keywords(system_name)
+    if not required:
+        return False
+    catalog = _row_system_keywords(row)
+    return all(keyword in catalog for keyword in required)
+
+
 def match_dir_menu(
     pack: KnowledgePack,
     *,
@@ -251,28 +338,28 @@ def match_dir_menu(
 ) -> DirMenu | None:
     """Find best catalog row for the run fingerprint, or None if no usable match.
 
-    Does **not** fall back to ``default_scenario`` alone — that would reuse an
-    unrelated menu for unique systems. Match requires an explicit ``scenario_id``,
-    a ``scenario_aliases`` hit, and/or a ``system_examples`` hit on a catalog row.
+    Industry must be an exact project-definition sector match. Every keyword in
+    ``system_name`` must appear in the row ``scenario_id`` or ``system_examples``.
+    Does **not** fall back to ``default_scenario`` or partial example overlap.
     """
     rows = dir_menus(pack)
     if not rows:
         return None
 
-    text = _alias_match_text(system_name, application)
+    system_text = _alias_match_text(system_name)
     explicit_sid = (scenario_id or "").strip()
     aliases = pack.meta.get("scenario_aliases") or {}
     alias_sid = _best_alias_match(
         aliases if isinstance(aliases, dict) else {},
-        text,
+        system_text,
         allowed_ids=set(pack.scenarios.keys()),
     )
     sid = explicit_sid or alias_sid or ""
+    selected_industry = _selected_industry(industry, application)
 
     variant = resolve_variant_id(
         pack, system_name, equipment_system_variant, application=application
     )
-    ind = resolve_industry(pack, industry=industry, application=application)
 
     scored: list[tuple[int, Dict[str, Any]]] = []
     for row in rows:
@@ -290,37 +377,20 @@ def match_dir_menu(
             continue
         if not isinstance(row.get("requirements"), list) or not row.get("requirements"):
             continue
+        if not industry_is_exact_match(str(row.get("industry") or ""), selected_industry):
+            continue
+        if not system_keywords_covered(system_name, row):
+            continue
 
         score = status_bonus
         scenario_hit = bool(sid) and _norm(str(row.get("scenario_id") or "")) == _norm(sid)
         if scenario_hit:
             score += 100
+        if explicit_sid and scenario_hit:
+            score += 20
         if _norm(str(row.get("equipment_system_variant") or "")) == _norm(variant):
             score += 40
-        if _norm(str(row.get("industry") or "")) == _norm(ind):
-            score += 40
-
-        example_bonus = 0
-        examples = row.get("system_examples") or []
-        if isinstance(examples, list) and text:
-            for ex in examples:
-                t = str(ex).strip().lower()
-                if not t:
-                    continue
-                # Full example appears in user text, or shared significant tokens (either direction).
-                if t in text or text in t:
-                    example_bonus = max(example_bonus, min(40, max(len(t), len(text))))
-                    continue
-                ex_tokens = {w for w in t.replace("/", " ").split() if len(w) >= 4}
-                text_tokens = {w for w in text.replace("/", " ").split() if len(w) >= 4}
-                overlap = ex_tokens & text_tokens
-                if len(overlap) >= 2:
-                    example_bonus = max(example_bonus, 12 + 4 * len(overlap))
-        score += example_bonus
-
-        # Accept: scenario fingerprint match, or strong system_examples evidence.
-        if not scenario_hit and example_bonus < 12:
-            continue
+        score += min(40, 5 * len(_significant_keywords(system_name)))
         scored.append((score, row))
 
     if not scored:
