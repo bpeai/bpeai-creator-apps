@@ -24,6 +24,42 @@
       "kind": "value"
     },
     {
+      "id": "equipment_system_name",
+      "label": "Equipment system name",
+      "schema_ref": "https://bpeai.com/schemas/value/string/v1",
+      "data_type": "string",
+      "required": false,
+      "cardinality": "one",
+      "kind": "value"
+    },
+    {
+      "id": "equipment_system_tag",
+      "label": "Equipment system tag",
+      "schema_ref": "https://bpeai.com/schemas/value/string/v1",
+      "data_type": "string",
+      "required": false,
+      "cardinality": "one",
+      "kind": "value"
+    },
+    {
+      "id": "equipment_item_name",
+      "label": "Equipment item name",
+      "schema_ref": "https://bpeai.com/schemas/value/string/v1",
+      "data_type": "string",
+      "required": false,
+      "cardinality": "one",
+      "kind": "value"
+    },
+    {
+      "id": "equipment_tag",
+      "label": "Equipment item tag",
+      "schema_ref": "https://bpeai.com/schemas/value/string/v1",
+      "data_type": "string",
+      "required": false,
+      "cardinality": "one",
+      "kind": "value"
+    },
+    {
       "id": "evaluation_result",
       "label": "Prior equipment evaluation",
       "schema_ref": "https://bpeai.com/schemas/equipment-selector/v1",

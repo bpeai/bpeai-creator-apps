@@ -50,6 +50,7 @@ from typing import Any, Dict, List
 from pydantic import ValidationError
 
 from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate_output
+from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
     attach_title_hero_image,
     build_evaluation_pdf,
@@ -397,7 +398,10 @@ class EquipmentSizingAgent(CreatorAppBase):
         # HANDSHAKE: UI / local_chat send phase, system_name, application, dir_code,
         # deliverable, evaluation_result. Platform may inject knowledge_pack_payload
         # and LLM overrides — never invent new required UI input keys here.
-        system_name = str(inputs.get("system_name") or "Process Vessel").strip()
+        system_name = str(
+            inputs.get("equipment_system_name") or inputs.get("system_name") or "Process Vessel"
+        ).strip()
+        self._identity_inputs = inputs
         application_raw = str(inputs.get("application") or "biopharmaceutical").strip()
         industry_raw = str(inputs.get("industry") or "").strip()
         variant_raw = str(inputs.get("equipment_system_variant") or "").strip()
@@ -1115,6 +1119,9 @@ class EquipmentSizingAgent(CreatorAppBase):
         tag = equipment_tag or str(prior.get("equipment_tag") or "").strip()
         if not tag:
             tag = _suggest_tag(system_name, pack.equipment_system)
+        identity_inputs = getattr(self, "_identity_inputs", None)
+        if isinstance(identity_inputs, dict) and str(identity_inputs.get("equipment_tag") or "").strip():
+            tag = str(identity_inputs.get("equipment_tag") or "").strip()
 
         creator_block = self._creator_content_block(
             pack, system_name, application, pack.equipment_system, dir_code
@@ -1314,7 +1321,9 @@ class EquipmentSizingAgent(CreatorAppBase):
         raw: Dict[str, Any] = {
             "schema_version": "equipment_sizing_v1",
             "equipment_tag": tag,
-            "equipment_name": str(prior.get("equipment_name") or system_name),
+            "equipment_name": str(
+                prior.get("equipment_item_name") or prior.get("equipment_name") or system_name
+            ),
             "equipment_system": pack.equipment_system,
             "equipment_type": str(prior.get("equipment_system") or pack.equipment_system),
             "capacity": cap_raw.get("capacity") or {},
@@ -1334,6 +1343,7 @@ class EquipmentSizingAgent(CreatorAppBase):
                 "app_id": self.app_id,
             },
         }
+        apply_user_identity(raw, getattr(self, "_identity_inputs", None))
         if search_context and "serper_search" not in raw["source_basis"]:
             raw["source_basis"].append("serper_search")
         if creator_block and "creator_references" not in raw["source_basis"]:

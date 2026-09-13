@@ -41,6 +41,8 @@ __all__ = [
     "unwrap_result_payload",
     "output_to_equipment_row",
     "coerce_string_list_items",
+    "apply_user_identity",
+    "canonicalize_equipment_tag",
 ]
 
 EI_RESULT_MANIFEST_VERSION = "ei_result_manifest_v1"
@@ -156,6 +158,16 @@ class EquipmentSelectorOutput(BaseModel):
     selected_model: str
     equipment_system: str
     equipment_name: str = ""
+    equipment_item_name: str = ""
+    equipment_system_name: str = ""
+    equipment_system_tag: str = ""
+    composition_role: str = ""
+    source_module_id: str = ""
+    source_module_label: str = ""
+    core_equipment_module_id: str = ""
+    core_equipment_module_label: str = ""
+    functional_area_id: str = ""
+    functional_area_label: str = ""
     equipment_category: str = ""
     key_specs: List[KeySpecValue] = Field(default_factory=list)
     rationale: str
@@ -238,7 +250,17 @@ class EquipmentSizingOutput(BaseModel):
     schema_version: Literal["equipment_sizing_v1"] = "equipment_sizing_v1"
     equipment_tag: str
     equipment_name: str = ""
+    equipment_item_name: str = ""
     equipment_system: str = ""
+    equipment_system_name: str = ""
+    equipment_system_tag: str = ""
+    composition_role: str = ""
+    source_module_id: str = ""
+    source_module_label: str = ""
+    core_equipment_module_id: str = ""
+    core_equipment_module_label: str = ""
+    functional_area_id: str = ""
+    functional_area_label: str = ""
     equipment_type: str = ""
     equipment_category: str = ""
     capacity: QuantitySpec = Field(default_factory=QuantitySpec)
@@ -419,6 +441,78 @@ def wrap_sizing_result(
     )
 
 
+def canonicalize_equipment_tag(raw: Any) -> str:
+    cleaned = str(raw or "").strip().upper()
+    out: List[str] = []
+    prev_dash = False
+    for ch in cleaned:
+        if ch.isalnum() or ch in "._-":
+            if ch == "-":
+                if prev_dash:
+                    continue
+                prev_dash = True
+            else:
+                prev_dash = False
+            out.append(ch)
+        else:
+            if not prev_dash:
+                out.append("-")
+                prev_dash = True
+    return "".join(out).strip("-")
+
+
+def apply_user_identity(result: Dict[str, Any], inputs: Mapping[str, Any] | None = None) -> Dict[str, Any]:
+    """Force user-owned system/item names and tags onto a result payload."""
+    src = dict(inputs or {})
+    item_tag = canonicalize_equipment_tag(src.get("equipment_tag") or src.get("equipment_key") or "")
+    item_name = str(src.get("equipment_item_name") or "").strip()
+    system_name = str(src.get("equipment_system_name") or src.get("system_name") or "").strip()
+    system_tag = canonicalize_equipment_tag(src.get("equipment_system_tag") or "")
+    role = str(src.get("composition_role") or "").strip()
+
+    if item_tag:
+        result["equipment_tag"] = item_tag
+    elif not str(result.get("equipment_tag") or "").strip():
+        result["equipment_tag"] = canonicalize_equipment_tag(result.get("equipment_tag") or "")
+
+    if item_name:
+        result["equipment_item_name"] = item_name
+        result["equipment_name"] = item_name
+    elif str(result.get("equipment_item_name") or "").strip():
+        result["equipment_name"] = str(result.get("equipment_item_name") or "").strip()
+
+    if system_name:
+        result["equipment_system_name"] = system_name
+        result["system_name"] = system_name
+
+    if system_tag:
+        result["equipment_system_tag"] = system_tag
+    elif item_tag and not str(result.get("equipment_system_tag") or "").strip():
+        result["equipment_system_tag"] = item_tag
+
+    final_item = canonicalize_equipment_tag(result.get("equipment_tag") or "")
+    final_system = canonicalize_equipment_tag(result.get("equipment_system_tag") or "")
+    if role in {"standalone", "skid", "system_child"}:
+        result["composition_role"] = role
+    else:
+        result["composition_role"] = (
+            "system_child" if final_system and final_item and final_system != final_item else "standalone"
+        )
+
+    for key in (
+        "source_module_id",
+        "source_module_label",
+        "core_equipment_module_id",
+        "core_equipment_module_label",
+        "functional_area_id",
+        "functional_area_label",
+    ):
+        value = str(src.get(key) or "").strip()
+        if value:
+            result[key] = value
+    return result
+
+
 def unwrap_evaluator_result(
     data: Dict[str, Any] | EiResultManifest | EquipmentSelectorOutput,
 ) -> EquipmentSelectorOutput:
@@ -460,16 +554,26 @@ def output_to_equipment_row(
         for i, spec in enumerate(output.key_specs)
     ]
     system = output.equipment_system or "equipment"
+    cem_source_id = (output.source_module_id or "").strip()
+    cem_source_label = (output.source_module_label or "").strip()
+    fa_id = (output.functional_area_id or "").strip() or (
+        "equipment-intelligence" if not cem_source_id else cem_source_id
+    )
+    fa_label = (output.functional_area_label or "").strip() or (
+        functional_area_label if not cem_source_id else cem_source_label or functional_area_label
+    )
     return {
         "id": str(uuid.uuid4()),
         "preliminary_tag": output.equipment_tag,
-        "functional_area_id": "equipment-intelligence",
-        "functional_area_label": functional_area_label,
-        "process_step_id": f"ei-{system}",
-        "process_step_label": f"Equipment Intelligence — {output.equipment_category or system}",
-        "source_module_id": output.creator_attribution.app_id,
-        "source_module_label": output.creator_attribution.display_name,
-        "equipment_name": output.equipment_name or output.selected_model,
+        "functional_area_id": fa_id,
+        "functional_area_label": fa_label,
+        "process_step_id": cem_source_id or f"ei-{system}",
+        "process_step_label": cem_source_label or f"Equipment Intelligence — {output.equipment_category or system}",
+        "source_module_id": cem_source_id or output.creator_attribution.app_id,
+        "source_module_label": cem_source_label or output.creator_attribution.display_name,
+        "core_equipment_module_id": (output.core_equipment_module_id or "").strip() or None,
+        "core_equipment_module_label": (output.core_equipment_module_label or "").strip() or None,
+        "equipment_name": output.equipment_item_name or output.equipment_name or output.selected_model,
         "equipment_category": output.equipment_category or system,
         "quantity": 1,
         "sizing_basis": output.recommended_basis or output.rationale[:500],

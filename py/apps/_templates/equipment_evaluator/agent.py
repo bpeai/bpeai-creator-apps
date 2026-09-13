@@ -50,6 +50,7 @@ from typing import Any, Dict, List
 from pydantic import ValidationError
 
 from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate_output
+from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
     attach_title_hero_image,
     build_evaluation_pdf,
@@ -212,10 +213,10 @@ EVALUATION_SCHEMA_CONTRACT = """Run a full technology evaluation for the validat
 Return JSON matching equipment_selector_v1 WITH these GPT-parity fields populated:
 {
   "schema_version": "equipment_selector_v1",
-  "equipment_tag": "Tag matching the system (e.g. MX-101, FL-101)",
+  "equipment_tag": "Use the user-supplied equipment item tag when provided; never invent a replacement",
   "selected_model": "Recommended basis of design (generic type, not a single SKU)",
   "equipment_system": "<pack equipment_system>",
-  "equipment_name": "Descriptive equipment name",
+  "equipment_name": "Use the user-supplied equipment item name when provided",
   "equipment_category": "Category matching the pack (e.g. Mixing, Filtration)",
   "key_specs": [{"key": "…", "value": "…"}, …],
   "rationale": "Multi-paragraph why-best including scale-up and GMP/cleanability",
@@ -265,6 +266,9 @@ Requirements (depth bar — do not produce thin one-line sections):
 - Include alternate_basis, do_not_specify, preliminary_specs, evaluation_matrix.
 - preliminary_specs must be strings like "Material: 316L", not {key, value} objects.
 - Prefer SME catalog option names and manufacturer product-line hints when appropriate.
+- Treat user-supplied equipment system name, item name, and item tag as given.
+  Do not rename the system or invent a tag when those fields are provided.
+  DIR scale (e.g. 2001-5000 L) belongs in design basis / key_specs, not in names.
 - datasheet_markdown MUST include ALL required headings supplied in the user message
   (from the knowledge pack report_outline) with SUBSTANTIVE multi-sentence bodies
   (no one-line stubs).
@@ -393,7 +397,10 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         # HANDSHAKE: UI / local_chat send phase, system_name, application, dir_code,
         # deliverable, evaluation_result. Platform may inject knowledge_pack_payload
         # and LLM overrides — never invent new required UI input keys here.
-        system_name = str(inputs.get("system_name") or "Process Vessel").strip()
+        system_name = str(
+            inputs.get("equipment_system_name") or inputs.get("system_name") or "Process Vessel"
+        ).strip()
+        self._identity_inputs = inputs
         application_raw = str(inputs.get("application") or "biopharmaceutical").strip()
         industry_raw = str(inputs.get("industry") or "").strip()
         variant_raw = str(inputs.get("equipment_system_variant") or "").strip()
@@ -1219,9 +1226,12 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         # HANDSHAKE: validated equipment_selector_v1 + phase=evaluation for hub/portal.
         validated = self._validate_evaluation_json(raw, pack, system_name, system_prompt)
         result = validated.model_dump()
+        apply_user_identity(result, getattr(self, "_identity_inputs", None))
         result["phase"] = "evaluation"
         result["dir_code"] = dir_code
-        result["system_name"] = system_name
+        result["system_name"] = str(
+            result.get("equipment_system_name") or system_name
+        )
         result["application"] = application
         result["knowledge_pack"] = pack.pack_id
         result["scenario_id"] = menu.scenario_id
@@ -1294,12 +1304,14 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             "creator_attribution",
             {"display_name": self.creator_display_name, "app_id": self.app_id},
         )
+        apply_user_identity(raw, getattr(self, "_identity_inputs", None))
         if not raw.get("equipment_tag"):
             raw["equipment_tag"] = _suggest_tag(system_name, pack.equipment_system)
         if not raw.get("equipment_name"):
             raw["equipment_name"] = (
                 f"{system_name} — {raw.get('selected_model', pack.meta.get('label', 'Equipment'))}"
             )
+        apply_user_identity(raw, getattr(self, "_identity_inputs", None))
         if not raw.get("rationale") and raw.get("recommended_basis"):
             raw["rationale"] = str(raw["recommended_basis"])
         if not raw.get("selected_model") and raw.get("recommended_basis"):
