@@ -109,6 +109,33 @@ def _agent_class_from_module(module: Any) -> Type[CreatorAppBase]:
     return candidates[0]
 
 
+def _module_file_exists(module_name: str, py_root: Path) -> bool:
+    rel = Path(*module_name.split("."))
+    return (py_root / rel).with_suffix(".py").is_file() or (py_root / rel / "__init__.py").is_file()
+
+
+def _resolve_python_module(
+    app_id: str,
+    root: Path,
+    manifest: Dict[str, Any],
+    python_module: str | None,
+) -> str:
+    """Prefer an explicit module, then a real manifest entrypoint, then folder layout.
+
+    Copied apps often keep a stale flat ``apps.<id>.agent`` after moving under
+    ``apps/<family>/<id>/``. Derive ``apps.<family>.<id>.agent`` in that case.
+    """
+    if python_module:
+        return python_module
+    from .app_paths import python_entrypoint_for
+
+    derived = python_entrypoint_for(_app_dir(app_id, root), root / "apps")
+    declared = str(manifest.get("python_entrypoint") or "").strip()
+    if declared and _module_file_exists(declared, root):
+        return declared
+    return derived
+
+
 def load_agent_class(
     app_id: str,
     *,
@@ -119,7 +146,7 @@ def load_agent_class(
     """Import the agent class for an app id (manifest-aware)."""
     root = ensure_import_paths(py_root)
     manifest = load_manifest(app_id, py_root=root)
-    module_name = python_module or str(manifest.get("python_entrypoint") or f"apps.{app_id}.agent")
+    module_name = _resolve_python_module(app_id, root, manifest, python_module)
     module = importlib.import_module(module_name)
     if agent_class:
         cls = getattr(module, agent_class, None)

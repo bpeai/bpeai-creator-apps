@@ -120,3 +120,30 @@ def test_load_dotenv_does_not_override(tmp_path: Path, monkeypatch):
     assert os.environ["OPENAI_API_KEY"] == "already-set"
     assert os.environ["CUSTOM_FLAG"] == "yes"
     assert openai_key_present() is True
+
+
+def test_load_agent_class_falls_back_from_stale_flat_entrypoint(tmp_path: Path):
+    from bpeai_creator_sdk.local_run import load_agent_class
+
+    py_root = tmp_path / "py"
+    apps = py_root / "apps"
+    leaf = apps / "equipment_evaluator" / "pump_selector"
+    leaf.mkdir(parents=True)
+    (apps / "__init__.py").write_text("", encoding="utf-8")
+    (apps / "equipment_evaluator" / "__init__.py").write_text("", encoding="utf-8")
+    (leaf / "__init__.py").write_text("", encoding="utf-8")
+    (leaf / "manifest.json").write_text(
+        '{"id": "pump_selector", "python_entrypoint": "apps.pump_selector.agent"}',
+        encoding="utf-8",
+    )
+    (leaf / "agent.py").write_text(
+        "from bpeai_creator_sdk import CreatorAppBase\n"
+        "class PumpSelectorAgent(CreatorAppBase):\n"
+        "    app_id = 'pump_selector'\n"
+        "    def run(self, inputs):\n"
+        "        return inputs\n",
+        encoding="utf-8",
+    )
+    cls = load_agent_class("equipment_evaluator/pump_selector", py_root=py_root)
+    assert cls.__name__ == "PumpSelectorAgent"
+    assert cls.app_id == "pump_selector"

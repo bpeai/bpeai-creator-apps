@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bpeai_creator_sdk.app_paths import resolve_app_dir, resolve_pack_dir
+from bpeai_creator_sdk.app_paths import python_entrypoint_for, resolve_app_dir, resolve_pack_dir
 
 
 def _write_manifest(folder: Path) -> None:
@@ -31,6 +31,13 @@ def test_resolve_app_dir_family_id_still_finds_template(tmp_path: Path):
 
     found = resolve_app_dir("equipment_sizing", py_root)
     assert found == template.resolve()
+
+
+def test_python_entrypoint_for_nested_family(tmp_path: Path):
+    apps_root = tmp_path / "apps"
+    app_dir = apps_root / "equipment_evaluator" / "pump_selector"
+    app_dir.mkdir(parents=True)
+    assert python_entrypoint_for(app_dir, apps_root) == "apps.equipment_evaluator.pump_selector.agent"
 
 
 def test_resolve_pack_dir_uses_family_folder_when_pack_yaml_exists(tmp_path: Path):

@@ -52,10 +52,12 @@ from pydantic import ValidationError
 from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate_output
 from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
+    attach_evaluation_artifact_name,
     attach_title_hero_image,
     build_evaluation_pdf,
     build_evaluation_pptx,
     build_slide_pack_from_evaluation,
+    evaluation_artifact_stem,
 )
 from bpeai_creator_sdk.local_run import repo_py_root
 from bpeai_creator_sdk.sme import (
@@ -305,12 +307,15 @@ def _option_catalog_block(pack: KnowledgePack) -> str:
     return "\n".join(lines)
 
 
+def _artifact_stem(result: Dict[str, Any]) -> str:
+    return evaluation_artifact_stem(result) or "evaluation"
+
+
 def _write_markdown_artifact(result: Dict[str, Any], *, py_root: Path) -> Path | None:  # noqa: ARG001
     md = (result.get("datasheet_markdown") or "").strip()
     if not md:
         return None
-    system = re.sub(r"[^\w\-]+", "_", str(result.get("system_name") or "evaluation")).strip("_")
-    target = Path.cwd() / "artifacts" / f"{system or 'evaluation'}_evaluation.md"
+    target = Path.cwd() / "artifacts" / f"{_artifact_stem(result)}.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(md, encoding="utf-8")
     return target
@@ -320,9 +325,12 @@ def _write_pdf_artifact(result: Dict[str, Any]) -> Path | None:
     md = (result.get("datasheet_markdown") or "").strip()
     if not md and not result.get("selected_model"):
         return None
-    system = re.sub(r"[^\w\-]+", "_", str(result.get("system_name") or "evaluation")).strip("_")
-    target = Path.cwd() / "artifacts" / f"{system or 'evaluation'}_evaluation.pdf"
-    return build_evaluation_pdf(result, output_path=target)
+    target = Path.cwd() / "artifacts" / f"{_artifact_stem(result)}.pdf"
+    try:
+        from .eval_pdf import build_evaluation_pdf as write_pdf
+    except ImportError:
+        write_pdf = build_evaluation_pdf
+    return write_pdf(result, output_path=target)
 
 
 class EquipmentEvaluatorAgent(CreatorAppBase):
@@ -1234,6 +1242,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         )
         result["application"] = application
         result["knowledge_pack"] = pack.pack_id
+        # HANDSHAKE: artifact_stem / evaluated_item — pack.yaml evaluated_item + system name.
+        attach_evaluation_artifact_name(result, pack=pack)
         result["scenario_id"] = menu.scenario_id
         result["industry"] = menu.industry
         result["equipment_system_variant"] = menu.equipment_system_variant
@@ -1408,17 +1418,18 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
     ) -> Dict[str, Any]:
         self.status("Building presentation-ready PPTX (reference visual style)…")
         slide_pack = self._build_pptx_slide_pack(pack, evaluation)
-        system = re.sub(r"[^\w\-]+", "_", str(evaluation.get("system_name") or "evaluation")).strip("_")
+        attach_evaluation_artifact_name(evaluation, pack=pack)
+        stem = _artifact_stem(evaluation)
         try:
             self.status("Rendering title-slide equipment image…")
             attach_title_hero_image(
                 evaluation,
                 slide_pack,
-                output_path=Path.cwd() / "artifacts" / f"{system or 'evaluation'} hero.png",
+                output_path=Path.cwd() / "artifacts" / f"{stem} hero.png",
             )
         except Exception as exc:
             self.status(f"Title-slide image skipped ({exc})")
-        out_path = Path.cwd() / "artifacts" / f"{system or 'evaluation'}_evaluation.pptx"
+        out_path = Path.cwd() / "artifacts" / f"{stem}.pptx"
         path = build_evaluation_pptx(
             evaluation,
             outline=pack.pptx_outline,

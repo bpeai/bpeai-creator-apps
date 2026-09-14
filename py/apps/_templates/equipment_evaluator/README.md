@@ -79,7 +79,8 @@ Artifacts (markdown + PDF + optional PPTX) write under `./artifacts/` (gitignore
 ## Portal vs local formats
 
 - Hub / portal: `datasheet_markdown` → S3 `.md` only
-- Local: also writes styled PDF; PPTX is local authoring unless product adds binary upload
+- Local: also writes a URS-style PDF (`eval_pdf.py` → SDK `pdf_eval.py`); PPTX is local authoring unless product adds binary upload
+- Filenames: `{system}_{evaluated_item}_evaluation.{md,pdf,pptx}` — set `evaluated_item` in `pack.yaml` (SME)
 
 ## Reference PPTX and creator content
 

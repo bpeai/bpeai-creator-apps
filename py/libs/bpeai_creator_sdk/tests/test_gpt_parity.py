@@ -166,6 +166,55 @@ def test_build_evaluation_pdf_and_reference_decks(tmp_path: Path, mixing_pack):
     assert any(d["name"].endswith(".pptx") for d in decks)
 
 
+def test_evaluation_pdf_urs_layout(tmp_path: Path):
+    from pypdf import PdfReader
+
+    from bpeai_creator_sdk import build_evaluation_pdf
+
+    pdf = build_evaluation_pdf(
+        {
+            "system_name": "Conditioning & Mixing Tank",
+            "application": "Biopharmaceuticals",
+            "dir_code": "4-3-5-5-2-3-2-2",
+            "selected_model": "Pitched-blade turbine",
+            "recommended_basis": (
+                "Specify a jacketed 316L conditioning tank with a pitched-blade "
+                "turbine and VFD so crystal slurry stays suspended without attrition."
+            ),
+            "datasheet_markdown": """# Conditioning & Mixing Tank
+
+1) Validated DIR
+
+- Working volume: 2.5 m3
+- Duty: crystal slurry hold and transfer
+
+## Recommended basis of design
+
+Specify a jacketed 316L tank with a pitched-blade turbine.
+
+## Option evaluation
+
+| Option | Fit | Note |
+|---|---|---|
+| Pitched-blade turbine | Best | Suspends crystals |
+| Hydrofoil | Acceptable | Lower shear |
+
+2.5 m3 is the working volume, not a heading.
+""",
+        },
+        output_path=tmp_path / "conditioning.pdf",
+    )
+    assert pdf.is_file()
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert "Conditioning & Mixing Tank" in text
+    assert "Recommendation in one line" in text
+    assert "Pitched-blade turbine" in text
+    assert "Validated DIR" in text
+    assert "Working volume" in text
+    assert "2.5 m3 is the working volume" in text
+    assert "BPEAI equipment evaluation · project-team summary" not in text
+
+
 def test_format_evaluation_mentions_pptx_prompt():
     text = format_result_text(
         {

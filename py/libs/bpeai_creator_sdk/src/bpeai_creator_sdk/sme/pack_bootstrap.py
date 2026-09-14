@@ -159,6 +159,12 @@ def stamp_draft_meta(meta: Dict[str, Any], *, pack_id: str, equipment_system: st
     out = dict(meta)
     out["pack_id"] = pack_id
     out.setdefault("equipment_system", equipment_system or pack_id)
+    if not str(out.get("evaluated_item") or "").strip():
+        from bpeai_creator_sdk.artifacts.names import infer_evaluated_item_from_pack_id
+
+        inferred = infer_evaluated_item_from_pack_id(pack_id)
+        if inferred:
+            out["evaluated_item"] = inferred
     out.setdefault("version", "0.0.1-draft")
     out["approval_status"] = "draft_pending_sme_approval"
     out.setdefault(
@@ -176,7 +182,9 @@ def component_schema_hints() -> Dict[str, str]:
     return {
         "pack.yaml": (
             "FLAT mapping only for this file (never nest other filenames as keys). "
-            "Fields: pack_id, equipment_system, version, label, description, "
+            "Fields: pack_id, equipment_system, evaluated_item (SME noun for "
+            "{system}_{item}_evaluation filenames, e.g. pump or agitator), "
+            "optional artifact_filename_pattern, version, label, description, "
             "industries (list), default_scenario, default_variant, scenario_aliases "
             "(scenario→list of alias strings), variant_aliases, taxonomy_preparation_ids "
             "(list), prompt_hooks as an object {system_role: string, emphasize: [strings]}."

@@ -2,6 +2,7 @@
 # Canonical mixing pack lives in the bpeai deploy repo: py/knowledge/mixing/
 pack_id: mixing_stub
 equipment_system: mixing
+evaluated_item: agitator
 version: "0.1.0-example"
 label: Mixing stub (example)
 description: >

@@ -189,6 +189,27 @@ class KnowledgePack:
         return str(self.meta.get("equipment_system") or self.pack_id)
 
     @property
+    def evaluated_item(self) -> str:
+        """SME noun for deliverable filenames ({system}_{item}_evaluation)."""
+        item = str(self.meta.get("evaluated_item") or "").strip()
+        if item:
+            return item
+        nested = self.meta.get("artifact_filename")
+        if isinstance(nested, dict):
+            return str(nested.get("item") or "").strip()
+        return ""
+
+    @property
+    def artifact_filename_pattern(self) -> str:
+        pattern = str(self.meta.get("artifact_filename_pattern") or "").strip()
+        if pattern:
+            return pattern
+        nested = self.meta.get("artifact_filename")
+        if isinstance(nested, dict):
+            return str(nested.get("pattern") or "").strip()
+        return ""
+
+    @property
     def default_scenario(self) -> str:
         return str(self.meta.get("default_scenario") or "default")
 

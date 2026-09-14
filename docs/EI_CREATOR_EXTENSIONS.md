@@ -79,6 +79,7 @@ schema version.
 | `validation_rules.yaml` | Hard/soft DIR and field checks |
 | `dir_requirements.yaml` | DIR menus / questionnaires (`dir_menus[]`) |
 | `pptx_outline.yaml` | Slide structure for local / optional PPTX |
+| `pack.yaml` → `evaluated_item` | SME noun in `{system}_{item}_evaluation` filenames (e.g. `pump`). Optional `artifact_filename_pattern`. |
 
 Canonical options field in results: **`evaluation_options`**
 (alias `mixing_options` for compatibility). Prefer `evaluation_options`.

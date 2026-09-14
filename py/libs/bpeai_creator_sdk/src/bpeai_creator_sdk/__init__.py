@@ -8,13 +8,16 @@ from .app_paths import (
     split_family_leaf,
 )
 from .artifacts import (
+    attach_evaluation_artifact_name,
     attach_title_hero_image,
     build_evaluation_pdf,
+    evaluation_artifact_stem,
     build_evaluation_pptx,
     build_slide_pack_from_evaluation,
     list_reference_decks,
     replace_reference_deck,
     resolve_reference_deck,
+    write_evaluation_report_pdf,
 )
 from .base import CreatorAppBase, default_creator_model, default_creator_provider
 from .local_env import load_dotenv, llm_credentials_present, openai_key_present
@@ -77,7 +80,9 @@ __all__ = [
     "resolve_pack_dir",
     "split_family_leaf",
     "TEMPLATE_FAMILIES",
+    "attach_evaluation_artifact_name",
     "attach_title_hero_image",
+    "evaluation_artifact_stem",
     "CreatorAppBase",
     "CreatorAppAuthor",
     "CreatorAppManifest",
@@ -105,6 +110,7 @@ __all__ = [
     "OUTPUT_SCHEMA_VERSION",
     "attach_handshake",
     "build_evaluation_pdf",
+    "write_evaluation_report_pdf",
     "build_evaluation_pptx",
     "build_handshake_meta",
     "build_slide_pack_from_evaluation",
