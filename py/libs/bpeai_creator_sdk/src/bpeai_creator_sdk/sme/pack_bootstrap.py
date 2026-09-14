@@ -165,6 +165,12 @@ def stamp_draft_meta(meta: Dict[str, Any], *, pack_id: str, equipment_system: st
         inferred = infer_evaluated_item_from_pack_id(pack_id)
         if inferred:
             out["evaluated_item"] = inferred
+    if not str(out.get("sized_item") or "").strip():
+        from bpeai_creator_sdk.artifacts.names import infer_sized_item_from_pack_id
+
+        sized = infer_sized_item_from_pack_id(pack_id)
+        if sized:
+            out["sized_item"] = sized
     out.setdefault("version", "0.0.1-draft")
     out["approval_status"] = "draft_pending_sme_approval"
     out.setdefault(
@@ -184,6 +190,7 @@ def component_schema_hints() -> Dict[str, str]:
             "FLAT mapping only for this file (never nest other filenames as keys). "
             "Fields: pack_id, equipment_system, evaluated_item (SME noun for "
             "{system}_{item}_evaluation filenames, e.g. pump or agitator), "
+            "sized_item (SME noun for '{system} {item} Sizing' filenames), "
             "optional artifact_filename_pattern, version, label, description, "
             "industries (list), default_scenario, default_variant, scenario_aliases "
             "(scenario→list of alias strings), variant_aliases, taxonomy_preparation_ids "

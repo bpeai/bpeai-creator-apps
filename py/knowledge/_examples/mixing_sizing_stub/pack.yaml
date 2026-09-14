@@ -2,6 +2,7 @@
 # Sizing-family stub. Do not reuse evaluator mixing_stub.
 pack_id: mixing_sizing_stub
 equipment_system: mixing
+sized_item: agitator
 version: "0.1.0-example"
 label: Mixing sizing stub (example)
 description: >

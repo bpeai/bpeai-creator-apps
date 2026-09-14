@@ -9,9 +9,11 @@ from .app_paths import (
 )
 from .artifacts import (
     attach_evaluation_artifact_name,
+    attach_sizing_artifact_name,
     attach_title_hero_image,
     build_evaluation_pdf,
     evaluation_artifact_stem,
+    sizing_artifact_stem,
     build_evaluation_pptx,
     build_slide_pack_from_evaluation,
     list_reference_decks,
@@ -81,8 +83,10 @@ __all__ = [
     "split_family_leaf",
     "TEMPLATE_FAMILIES",
     "attach_evaluation_artifact_name",
+    "attach_sizing_artifact_name",
     "attach_title_hero_image",
     "evaluation_artifact_stem",
+    "sizing_artifact_stem",
     "CreatorAppBase",
     "CreatorAppAuthor",
     "CreatorAppManifest",

@@ -80,6 +80,7 @@ schema version.
 | `dir_requirements.yaml` | DIR menus / questionnaires (`dir_menus[]`) |
 | `pptx_outline.yaml` | Slide structure for local / optional PPTX |
 | `pack.yaml` → `evaluated_item` | SME noun in `{system}_{item}_evaluation` filenames (e.g. `pump`). Optional `artifact_filename_pattern`. |
+| `pack.yaml` → `sized_item` | SME noun in `{system} {item} Sizing` filenames (e.g. `agitator` → `Buffer Preparation Agitator Sizing.pdf`). |
 
 Canonical options field in results: **`evaluation_options`**
 (alias `mixing_options` for compatibility). Prefer `evaluation_options`.

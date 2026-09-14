@@ -3,8 +3,10 @@
 from .hero_image import attach_title_hero_image, render_title_hero
 from .names import (
     attach_evaluation_artifact_name,
+    attach_sizing_artifact_name,
     evaluation_artifact_stem,
     infer_evaluated_item,
+    sizing_artifact_stem,
 )
 from .pdf_eval import build_evaluation_pdf, write_evaluation_report_pdf
 from .pptx_eval import build_evaluation_pptx, build_slide_pack_from_evaluation
@@ -16,9 +18,11 @@ from .reference_decks import (
 
 __all__ = [
     "attach_evaluation_artifact_name",
+    "attach_sizing_artifact_name",
     "attach_title_hero_image",
     "evaluation_artifact_stem",
     "infer_evaluated_item",
+    "sizing_artifact_stem",
     "build_evaluation_pdf",
     "write_evaluation_report_pdf",
     "build_evaluation_pptx",

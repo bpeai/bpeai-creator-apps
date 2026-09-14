@@ -4,9 +4,12 @@ from types import SimpleNamespace
 
 from bpeai_creator_sdk.artifacts.names import (
     attach_evaluation_artifact_name,
+    attach_sizing_artifact_name,
     evaluation_artifact_stem,
     infer_evaluated_item,
     infer_evaluated_item_from_pack_id,
+    infer_sized_item_from_pack_id,
+    sizing_artifact_stem,
 )
 
 
@@ -72,6 +75,30 @@ def test_custom_filename_pattern():
         evaluation_artifact_stem({"system_name": "Chromatography Skid"}, pack=pack)
         == "Chromatography_Skid_pump_tech_eval"
     )
+
+
+def test_sizing_stem_uses_spaces_and_sized_item():
+    pack = SimpleNamespace(
+        pack_id="vessel_agitator",
+        sized_item="agitator",
+        evaluated_item="",
+        artifact_filename_pattern="",
+        meta={"sized_item": "agitator"},
+    )
+    stem = sizing_artifact_stem(
+        {"system_name": "Buffer Preparation"},
+        pack=pack,
+    )
+    assert stem == "Buffer Preparation Agitator Sizing"
+    result = {"system_name": "Buffer Preparation"}
+    attach_sizing_artifact_name(result, pack=pack)
+    assert result["sized_item"] == "agitator"
+    assert result["artifact_stem"] == "Buffer Preparation Agitator Sizing"
+
+
+def test_sized_item_inferred_from_vessel_agitator_pack_id():
+    assert infer_sized_item_from_pack_id("vessel_agitator") == "agitator"
+    assert infer_sized_item_from_pack_id("mixing_sizing_stub") == ""
 
 
 def test_attach_stamps_result_fields():

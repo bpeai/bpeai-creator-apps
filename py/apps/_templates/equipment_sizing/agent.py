@@ -52,10 +52,12 @@ from pydantic import ValidationError
 from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate_output
 from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
+    attach_sizing_artifact_name,
     attach_title_hero_image,
     build_evaluation_pdf,
     build_evaluation_pptx,
     build_slide_pack_from_evaluation,
+    sizing_artifact_stem,
 )
 from bpeai_creator_sdk.local_run import repo_py_root
 from bpeai_creator_sdk.sme import (
@@ -416,8 +418,7 @@ def _option_catalog_block(pack: KnowledgePack) -> str:
 
 
 def _sizing_artifact_basename(result: Dict[str, Any]) -> str:
-    system = re.sub(r"[^\w\-]+", "_", str(result.get("system_name") or "Vessel")).strip("_")
-    return f"{system or 'Vessel'} Sizing"
+    return sizing_artifact_stem(result) or "Vessel Sizing"
 
 
 def _write_markdown_artifact(result: Dict[str, Any], *, py_root: Path) -> Path | None:  # noqa: ARG001
@@ -1603,6 +1604,8 @@ class EquipmentSizingAgent(CreatorAppBase):
         result["system_name"] = system_name
         result["application"] = application
         result["knowledge_pack"] = pack.pack_id
+        # HANDSHAKE: artifact_stem / sized_item — pack.yaml sized_item + system name.
+        attach_sizing_artifact_name(result, pack=pack)
         result["decoded_dir"] = decoded
         result["template_family"] = getattr(self, "template_family", "equipment_sizing")
         result["reused_evaluation_dir"] = reuse_inherited_dir
@@ -1689,6 +1692,7 @@ class EquipmentSizingAgent(CreatorAppBase):
         py_root: Path,
     ) -> Dict[str, Any]:
         self.status("Building presentation-ready PPTX (reference visual style)…")
+        attach_sizing_artifact_name(evaluation, pack=pack)
         slide_pack = self._build_pptx_slide_pack(pack, evaluation)
         try:
             self.status("Rendering title-slide equipment image…")

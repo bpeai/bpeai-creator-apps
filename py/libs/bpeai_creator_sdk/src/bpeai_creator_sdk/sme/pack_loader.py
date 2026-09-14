@@ -200,6 +200,12 @@ class KnowledgePack:
         return ""
 
     @property
+    def sized_item(self) -> str:
+        """SME noun for sizing filenames ({system} {item} Sizing)."""
+        item = str(self.meta.get("sized_item") or "").strip()
+        return item or self.evaluated_item
+
+    @property
     def artifact_filename_pattern(self) -> str:
         pattern = str(self.meta.get("artifact_filename_pattern") or "").strip()
         if pattern:
