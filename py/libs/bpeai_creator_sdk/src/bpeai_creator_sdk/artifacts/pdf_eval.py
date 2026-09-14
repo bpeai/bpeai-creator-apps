@@ -157,7 +157,7 @@ def _synthesize_markdown(result: Mapping[str, Any]) -> str:
         "## Recommended basis of design",
         str(result.get("recommended_basis") or result.get("selected_model") or ""),
         "",
-        "## Design basis",
+        "## Design basis from DIR code",
         str(result.get("design_basis") or result.get("dir_summary") or ""),
         "",
         "## Rationale",

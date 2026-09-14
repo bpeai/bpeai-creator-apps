@@ -32,8 +32,15 @@ def mixing_pack(py_root: Path):
 
 
 def test_pack_loads_outlines(mixing_pack):
-    assert mixing_pack.required_report_headings()
-    assert "Validated DIR" in mixing_pack.required_report_headings()
+    headings = mixing_pack.required_report_headings()
+    assert headings
+    assert "Validated DIR" in headings
+    assert "Mixing objectives and failure modes" in headings
+    assert "Suggested operating recipe for qualification" in headings
+    assert "Option evaluation matrix" in headings
+    assert "Vendor / manufacturer shortlist" in headings
+    assert "References reviewed" in headings
+    assert "Manufacturers and references" not in headings
     assert mixing_pack.pptx_outline.get("slide_count") == 7
     assert mixing_pack.fragment("workflow")
     assert mixing_pack.common_code_entries("media_preparation")[0]["caption"]

@@ -233,8 +233,13 @@ def component_schema_hints() -> Dict[str, str]:
             "pptx.{system_extra,instructions}, pack_bootstrap.system."
         ),
         "report_outline.yaml": (
-            "Mapping with required_headings (list of section titles), sections "
-            "([{id, heading, description}]), min option count fields as appropriate."
+            "Mapping with required_headings (list of section titles in report order) "
+            "and sections ([{id, heading, description}]) kept in the same order. "
+            "Headings follow the evaluation PDF: Validated DIR; Design basis from DIR "
+            "code; <domain> objectives and failure modes; Strong-fit <domain> types; "
+            "Option evaluation; Recommended basis of design; Preliminary specification; "
+            "Suggested operating recipe for qualification; Do not specify; Option "
+            "evaluation matrix; Vendor / manufacturer shortlist; References reviewed."
         ),
         "pptx_outline.yaml": (
             "Mapping with slide_count (7), title_prefix, slides ([{index, id, title, ...}]), "
@@ -542,13 +547,17 @@ def normalize_bootstrapped_component(
         if not isinstance(data.get("required_headings"), list):
             data["required_headings"] = [
                 "Validated DIR",
-                "Design basis",
+                "Design basis from DIR code",
+                "Objectives and failure modes",
                 "Strong-fit equipment types",
-                "Recommended basis of design",
                 "Option evaluation",
-                "Do not specify",
+                "Recommended basis of design",
                 "Preliminary specification",
-                "Manufacturers and references",
+                "Suggested operating recipe for qualification",
+                "Do not specify",
+                "Option evaluation matrix",
+                "Vendor / manufacturer shortlist",
+                "References reviewed",
             ]
         return data
 
