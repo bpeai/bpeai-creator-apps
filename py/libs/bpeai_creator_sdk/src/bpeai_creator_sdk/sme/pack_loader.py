@@ -190,7 +190,7 @@ class KnowledgePack:
 
     @property
     def evaluated_item(self) -> str:
-        """SME noun for deliverable filenames ({system}_{item}_evaluation)."""
+        """SME noun for deliverable filenames ({system}_{item}_Evaluation)."""
         item = str(self.meta.get("evaluated_item") or "").strip()
         if item:
             return item

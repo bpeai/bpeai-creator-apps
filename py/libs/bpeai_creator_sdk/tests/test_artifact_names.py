@@ -33,7 +33,7 @@ def test_pack_evaluated_item_wins_over_identity_and_pack_id():
             {"system_name": "Chromatography Skid"},
             pack=pack,
         )
-        == "Chromatography_Skid_pump_evaluation"
+        == "Chromatography_Skid_Pump_Evaluation"
     )
 
 
@@ -54,6 +54,7 @@ def test_pack_id_selector_suffix_is_draft_fallback():
     assert infer_evaluated_item_from_pack_id("vent_filter_expert") == "vent_filter"
     assert infer_evaluated_item_from_pack_id("demo_pack") == ""
     assert infer_evaluated_item_from_pack_id("equipment_evaluator") == ""
+    assert infer_evaluated_item_from_pack_id("equipment_evaluator/pump_selector") == "pump"
 
 
 def test_does_not_duplicate_item_already_in_system_name():
@@ -61,7 +62,46 @@ def test_does_not_duplicate_item_already_in_system_name():
         {"system_name": "Chromatography Skid Pump", "evaluated_item": "pump"},
         item="pump",
     )
-    assert stem == "Chromatography_Skid_Pump_evaluation"
+    assert stem == "Chromatography_Skid_Pump_Evaluation"
+    assert (
+        evaluation_artifact_stem(
+            {"system_name": "CIP Return Pump"},
+            pack_id="pump_selector",
+        )
+        == "CIP_Return_Pump_Evaluation"
+    )
+
+
+def test_app_id_supplies_pump_when_pack_field_and_identity_are_missing():
+    stem = evaluation_artifact_stem(
+        {
+            "system_name": "Chromatography Skid",
+            "equipment_item_name": "Chromatography Skid",
+            "creator_attribution": {"app_id": "pump_selector"},
+        }
+    )
+    assert stem == "Chromatography_Skid_Pump_Evaluation"
+
+
+def test_identity_instance_name_does_not_override_selector_app_id():
+    item = infer_evaluated_item(
+        pack_id="pump_selector",
+        result={
+            "system_name": "Chromatography Skid",
+            "equipment_item_name": "Feed pump P-201",
+        },
+    )
+    assert item == "pump"
+    assert (
+        evaluation_artifact_stem(
+            {
+                "system_name": "Chromatography Skid",
+                "equipment_name": "Chromatography Skid — Quattroflow 1200",
+            },
+            pack_id="pump_selector",
+        )
+        == "Chromatography_Skid_Pump_Evaluation"
+    )
 
 
 def test_custom_filename_pattern():
@@ -73,7 +113,7 @@ def test_custom_filename_pattern():
     )
     assert (
         evaluation_artifact_stem({"system_name": "Chromatography Skid"}, pack=pack)
-        == "Chromatography_Skid_pump_tech_eval"
+        == "Chromatography_Skid_Pump_tech_eval"
     )
 
 
@@ -111,4 +151,4 @@ def test_attach_stamps_result_fields():
     result = {"system_name": "Chromatography Skid"}
     attach_evaluation_artifact_name(result, pack=pack)
     assert result["evaluated_item"] == "pump"
-    assert result["artifact_stem"] == "Chromatography_Skid_pump_evaluation"
+    assert result["artifact_stem"] == "Chromatography_Skid_Pump_Evaluation"

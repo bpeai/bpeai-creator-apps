@@ -1246,7 +1246,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         result["application"] = application
         result["knowledge_pack"] = pack.pack_id
         # HANDSHAKE: artifact_stem / evaluated_item — pack.yaml evaluated_item + system name.
-        attach_evaluation_artifact_name(result, pack=pack)
+        attach_evaluation_artifact_name(
+            result, pack=pack, pack_id=str(getattr(self, "app_id", "") or "")
+        )
         result["scenario_id"] = menu.scenario_id
         result["industry"] = menu.industry
         result["equipment_system_variant"] = menu.equipment_system_variant
@@ -1421,7 +1423,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
     ) -> Dict[str, Any]:
         self.status("Building presentation-ready PPTX (reference visual style)…")
         slide_pack = self._build_pptx_slide_pack(pack, evaluation)
-        attach_evaluation_artifact_name(evaluation, pack=pack)
+        attach_evaluation_artifact_name(
+            evaluation, pack=pack, pack_id=str(getattr(self, "app_id", "") or "")
+        )
         stem = _artifact_stem(evaluation)
         try:
             self.status("Rendering title-slide equipment image…")
