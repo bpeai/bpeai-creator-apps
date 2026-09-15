@@ -96,7 +96,7 @@ def pack_filename_pattern(pack: Any) -> str:
 
 def infer_evaluated_item_from_pack_id(pack_id: str) -> str:
     raw = str(pack_id or "").strip().lower().replace("\\", "/")
-    leaf = raw.split("/")[-1].split(".")[-1]
+    leaf = raw.split("/")[-1].split(".")[-1].replace("-", "_")
     if not leaf or leaf in _GENERIC_PACK_IDS:
         return ""
     stripped = False

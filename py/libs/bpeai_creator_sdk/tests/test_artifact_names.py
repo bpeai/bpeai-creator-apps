@@ -51,6 +51,7 @@ def test_identity_item_used_when_pack_has_no_noun():
 
 def test_pack_id_selector_suffix_is_draft_fallback():
     assert infer_evaluated_item_from_pack_id("pump_selector") == "pump"
+    assert infer_evaluated_item_from_pack_id("pump-selector") == "pump"
     assert infer_evaluated_item_from_pack_id("vent_filter_expert") == "vent_filter"
     assert infer_evaluated_item_from_pack_id("demo_pack") == ""
     assert infer_evaluated_item_from_pack_id("equipment_evaluator") == ""

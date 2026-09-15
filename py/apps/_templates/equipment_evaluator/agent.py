@@ -274,6 +274,13 @@ Requirements (depth bar — do not produce thin one-line sections):
 - datasheet_markdown MUST include ALL required headings supplied in the user message
   (from the knowledge pack report_outline) with SUBSTANTIVE multi-sentence bodies
   (no one-line stubs).
+- Match the reference evaluation-report structure: numbered sections; Markdown
+  tables for DIR basis, shortlist, preliminary specification, comparison matrix,
+  and vendor shortlist; labeled Industrial applications / Pros / Cons or watchouts /
+  Manufacturers blocks for every option; concise qualification-recipe bullets.
+- Do not use HTML, ASCII-art tables, or prose pretending to be a table. Emit valid
+  Markdown tables with a header-divider row so the deterministic PDF renderer can
+  reproduce the reference report layout.
 """
 
 
@@ -1142,6 +1149,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
 
         headings = pack.required_report_headings()
         heading_block = ", ".join(headings) if headings else "(see EVALUATION_SCHEMA_CONTRACT)"
+        outline_block = json.dumps(pack.report_outline or {}, indent=2, ensure_ascii=False)
 
         # AI_HANDSHAKE: evaluate — system from fragments; user includes SME calls + schema.
         self.status(f"Generating {pack.equipment_system} technology evaluation…")
@@ -1159,6 +1167,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"DIR requirement structure:\n{json.dumps(requirements, indent=2)}\n\n"
             f"SME equipment options catalog:\n{_option_catalog_block(pack)}\n\n"
             f"Required datasheet_markdown headings: {heading_block}\n\n"
+            f"Reference report section blueprint (follow descriptions and order):\n"
+            f"{outline_block}\n\n"
             f"Depth requirements:\n{depth_block}\n\n"
             f"Industrial search references (snippets + page excerpts):\n"
             f"{search_context or '(no serper results — use engineering judgment)'}\n\n"
@@ -1221,6 +1231,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 f"Thin sections (expand to substantive multi-sentence engineering content): "
                 f"{thin or 'none'}.\n"
                 f"Required headings: {heading_block}.\n\n"
+                f"Reference report section blueprint:\n{outline_block}\n\n"
+                "Use valid Markdown tables for comparative/specification content, "
+                "including the required header-divider row.\n\n"
                 f"Industrial search references:\n{search_context[:20000]}\n\n"
             )
             if creator_block:

@@ -220,7 +220,9 @@ def write_evaluation_report_pdf(
         f"Preliminary {kind} and recommended basis of design"
         + (f" | {application}" if application else "")
     )
-    header_title = f"{system} evaluation" + (f" • DIR {dir_code}" if dir_code else "")
+    header_title = f"{system} Evaluation"
+    if dir_code:
+        header_title += f" • Basis: user DIR code {dir_code}"
     recommendation = _extract_recommendation(result, markdown)
 
     styles = {
@@ -465,11 +467,12 @@ def write_evaluation_report_pdf(
         canvas.saveState()
         canvas.setStrokeColor(_color(GRID))
         canvas.setLineWidth(0.5)
-        canvas.line(0.7 * inch, 0.62 * inch, 8.05 * inch, 0.62 * inch)
+        canvas.line(0.7 * inch, 10.35 * inch, 8.05 * inch, 10.35 * inch)
         canvas.setFillColor(_color(MUTED))
         canvas.setFont(font, 8)
-        canvas.drawString(0.7 * inch, 0.42 * inch, header_title[:110])
-        canvas.drawRightString(8.05 * inch, 0.42 * inch, f"Page {doc.page}")
+        canvas.drawString(0.7 * inch, 10.47 * inch, header_title[:110])
+        canvas.drawRightString(8.05 * inch, 10.47 * inch, f"Page {doc.page}")
+        canvas.drawCentredString(4.25 * inch, 0.42 * inch, f"— {doc.page} —")
         canvas.restoreState()
 
     pdf = SimpleDocTemplate(
@@ -477,7 +480,7 @@ def write_evaluation_report_pdf(
         pagesize=LETTER,
         leftMargin=0.7 * inch,
         rightMargin=0.7 * inch,
-        topMargin=0.65 * inch,
+        topMargin=0.85 * inch,
         bottomMargin=0.7 * inch,
         title=header_title,
         author="BPEAI equipment evaluation",
