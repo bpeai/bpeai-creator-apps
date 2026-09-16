@@ -1,0 +1,44 @@
+# EXAMPLE ONLY — LLM bootstrap shape for equipment_evaluator packs.
+# mixing_stub remains the SDK unit-test fixture and is not the authoring seed.
+pack_id: equipment_evaluator_stub
+equipment_system: process_equipment
+evaluated_item: equipment
+sized_item: equipment
+version: "0.1.0-example"
+label: Equipment evaluator stub (example)
+description: >
+  Domain-neutral example pack showing host-system DIR scenarios and
+  project-definition sector labels. Adapt technology content to the new pack;
+  do not copy these example option names or treat operations (transfer, venting)
+  as scenario_ids.
+
+industries:
+  - Biopharmaceutical & Biologics
+  - Pharmaceutical / Small Molecule
+  - Diagnostics & Laboratory Products
+  - Animal Health / Veterinary
+  - Industrial Biotechnology
+  - Consumer Health / Nutraceutical
+
+default_variant: general_duty
+default_scenario: process_vessel
+
+scenario_aliases:
+  process_vessel:
+    - process vessel
+    - hold tank
+    - media preparation vessel
+  process_skid:
+    - process skid
+    - equipment skid
+
+variant_aliases:
+  general_duty:
+    - general
+    - standard duty
+
+prompt_hooks:
+  system_role: example_process_equipment_engineer
+  emphasize:
+    - This is an EXAMPLE pack for LLM bootstrap shape only
+    - scenario_id must name a host equipment system, not an operation

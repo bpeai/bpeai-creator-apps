@@ -1,0 +1,79 @@
+# EXAMPLE ONLY — one DIR menu per host equipment system (skid or equipment item).
+# Do not use operations (transfer, dosing, venting) as scenario_id.
+pack_id: equipment_evaluator_stub
+version: 1
+
+dir_menus:
+  - menu_id: process_vessel__general_duty__biopharmaceutical_biologics
+    status: approved
+    scenario_id: process_vessel
+    equipment_system_variant: general_duty
+    industry: Biopharmaceutical & Biologics
+    system_examples:
+      - Process Vessel
+      - hold tank
+      - media preparation vessel
+    label: Process vessel (example host system)
+    summary: >
+      Example DIR for selecting the evaluated component serving a process vessel.
+      Replace requirements with the host-system duty for the new pack.
+    generated_from: seed
+    common_codes:
+      - code: "2-1-1"
+        caption: "Pilot stainless vessel, moderate duty, hygienic construction."
+      - code: "3-1-2"
+        caption: "Production stainless vessel, higher duty, CIP/SIP path."
+    requirements:
+      - index: 1
+        label: Host-system scale
+        options:
+          - { index: 1, text: "Laboratory / bench" }
+          - { index: 2, text: "Pilot" }
+          - { index: 3, text: "Production" }
+      - index: 2
+        label: Construction
+        options:
+          - { index: 1, text: "Stainless hygienic" }
+          - { index: 2, text: "Single-use" }
+      - index: 3
+        label: Cleaning / sterility approach
+        options:
+          - { index: 1, text: "CIP without SIP" }
+          - { index: 2, text: "CIP and SIP" }
+          - { index: 3, text: "Single-use / no SIP" }
+  - menu_id: process_skid__general_duty__biopharmaceutical_biologics
+    status: approved
+    scenario_id: process_skid
+    equipment_system_variant: general_duty
+    industry: Biopharmaceutical & Biologics
+    system_examples:
+      - Process Skid
+      - equipment skid
+    label: Process skid (example host system)
+    summary: >
+      Example DIR for selecting the evaluated component serving a process skid.
+      For a pump pack, author separate menus such as chromatography_skid,
+      tff_skid, cip_skid, and cip_return_pump — do not collapse them here.
+    generated_from: seed
+    common_codes:
+      - code: "2-1-2"
+        caption: "Pilot skid, stainless path, closed-loop control."
+      - code: "3-1-2"
+        caption: "Production skid, stainless path, closed-loop control."
+    requirements:
+      - index: 1
+        label: Host-system scale
+        options:
+          - { index: 1, text: "Laboratory / bench" }
+          - { index: 2, text: "Pilot" }
+          - { index: 3, text: "Production" }
+      - index: 2
+        label: Construction
+        options:
+          - { index: 1, text: "Stainless hygienic" }
+          - { index: 2, text: "Single-use" }
+      - index: 3
+        label: Control approach
+        options:
+          - { index: 1, text: "Local / manual" }
+          - { index: 2, text: "Closed-loop skid control" }

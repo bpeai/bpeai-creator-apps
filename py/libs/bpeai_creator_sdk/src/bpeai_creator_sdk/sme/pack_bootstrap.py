@@ -14,7 +14,12 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 import yaml
 
-from .pack_loader import PACK_FILES, knowledge_root, unwrap_loaded_component
+from .pack_loader import (
+    PACK_FILES,
+    _taxonomy_sector_pairs,
+    knowledge_root,
+    unwrap_loaded_component,
+)
 
 # Core files required by load_knowledge_pack; outlines are strongly recommended.
 OPTIONAL_PACK_FILES = (
@@ -183,8 +188,53 @@ def stamp_draft_meta(meta: Dict[str, Any], *, pack_id: str, equipment_system: st
     return out
 
 
+def _canonical_industry_labels() -> List[str]:
+    """Official project_definition_sectors labels for pack.yaml industries."""
+    return [label for _sid, label in _taxonomy_sector_pairs()]
+
+
+def pack_bootstrap_authoring_rules() -> str:
+    """Shared LLM rules so bootstrap does not copy mixing/vent ontology."""
+    industries = "; ".join(_canonical_industry_labels())
+    return (
+        "Rules:\n"
+        "- scenario_id names a HOST EQUIPMENT SYSTEM (skid or equipment item used "
+        "as a system), not an operation. Use ids such as process_vessel, "
+        "cip_return_pump, chromatography_skid, tff_skid, cip_skid. Do not use "
+        "transfer, dosing, venting, cleaning, or mixing as scenario_ids.\n"
+        "- Emit one dir_menus row per distinct host system; do not collapse "
+        "chromatography, TFF, and CIP into one generic transfer scenario.\n"
+        "- scenario_aliases map those system ids to names users type "
+        "(e.g. CIP Return Pump, Chromatography Skid). Never alias a liquid-pump "
+        "system to vent / vapor equipment.\n"
+        "- industries MUST use project_definition_sectors labels exactly: "
+        f"{industries}.\n"
+        "- variant_aliases are coarse host-system classes, not evaluated "
+        "technology types. Pump types, filter types, and agitator types belong "
+        "in equipment_options.yaml.\n"
+        "- For dir_requirements.yaml emit dir_menus only (5–7 DIR requirements "
+        "and 2+ numeric common_codes with hyphenated indexes + captions; not "
+        "SIP/IT tags). Do not include menus or scenarios keys.\n"
+        "- Include at least 5 equipment options when writing equipment_options.yaml.\n"
+        "- fit_enum.allowed must include best, strong, conditional, limited, "
+        "add-on, special-case.\n"
+        "- report_outline required_headings must follow this order (domain-adapt names): "
+        "Validated DIR; Design basis from DIR code; Mixing objectives and failure modes "
+        "(or domain equivalent); Strong-fit mixing types (or Strong-fit filter types); "
+        "Option evaluation; Recommended basis of design; Preliminary specification; "
+        "Suggested operating recipe for qualification; Do not specify; "
+        "Option evaluation matrix; Vendor / manufacturer shortlist; References reviewed. "
+        "Keep sections[] in the same order; do not collapse manufacturers and references.\n"
+        "- pptx_outline should define 7 slides with a domain-appropriate title_prefix.\n"
+        "- Include search_queries.yaml with domain-appropriate Serper templates "
+        "(no unrelated vendor brand names).\n"
+        "- Mark draft intent via label/description wording where appropriate.\n"
+    )
+
+
 def component_schema_hints() -> Dict[str, str]:
     """Short structural hints for LLM pack-component generation."""
+    industries = "; ".join(_canonical_industry_labels())
     return {
         "pack.yaml": (
             "FLAT mapping only for this file (never nest other filenames as keys). "
@@ -192,16 +242,24 @@ def component_schema_hints() -> Dict[str, str]:
             "{system}_{item}_evaluation filenames, e.g. pump or agitator), "
             "sized_item (SME noun for '{system} {item} Sizing' filenames), "
             "optional artifact_filename_pattern, version, label, description, "
-            "industries (list), default_scenario, default_variant, scenario_aliases "
-            "(scenario→list of alias strings), variant_aliases, taxonomy_preparation_ids "
+            "industries (list of project_definition_sectors labels: "
+            f"{industries}), default_scenario (a host equipment system id, not "
+            "an operation), default_variant, scenario_aliases "
+            "(host-system id→list of names users type; never vent-filter terms "
+            "for a liquid-pump pack), variant_aliases (host-system classes, not "
+            "technology types), taxonomy_preparation_ids "
             "(list), prompt_hooks as an object {system_role: string, emphasize: [strings]}."
         ),
         "dir_requirements.yaml": (
             "Emit dir_menus only (list catalog). Do NOT include legacy menus or "
             "scenarios maps — the loader synthesizes those from dir_menus. "
             "dir_menus: ["
-            "{menu_id, status (approved|draft_generated), scenario_id, "
-            "equipment_system_variant, industry, system_examples, label, summary, "
+            "{menu_id, status (approved|draft_generated), scenario_id "
+            "(host equipment system such as cip_return_pump or chromatography_skid, "
+            "never an operation such as transfer or venting), "
+            "equipment_system_variant, industry (a project_definition_sectors "
+            f"label: {industries}), system_examples (user-typed system names), "
+            "label, summary, "
             "common_codes: [{code, caption}], requirements: [{index, label, "
             "options: [{index, text}]}]}]. "
             "common_codes MUST be hyphen-separated numeric DIR starters that match "
@@ -263,7 +321,7 @@ def structure_example_snippet(
     filename: str,
     *,
     py_root: Path | None = None,
-    stub_name: str = "mixing_stub",
+    stub_name: str = "equipment_evaluator_stub",
 ) -> str:
     """Return a truncated structural example from ``_examples/<stub>`` (not website packs)."""
     root = Path(py_root) if py_root else knowledge_root().parent
@@ -275,9 +333,13 @@ def structure_example_snippet(
     if alt.is_file():
         text = alt.read_text(encoding="utf-8")[:4000]
         return f"({stub_name}/{filename} missing; pack.yaml excerpt for shape only)\n{text}"
-    fallback = root / "knowledge" / "_examples" / "mixing_stub" / "pack.yaml"
+    fallback = root / "knowledge" / "_examples" / "equipment_evaluator_stub" / "pack.yaml"
     if fallback.is_file():
         text = fallback.read_text(encoding="utf-8")[:4000]
+        return f"({stub_name} missing; equipment_evaluator_stub pack.yaml excerpt for shape only)\n{text}"
+    mixing = root / "knowledge" / "_examples" / "mixing_stub" / "pack.yaml"
+    if mixing.is_file():
+        text = mixing.read_text(encoding="utf-8")[:4000]
         return f"({stub_name} missing; mixing_stub pack.yaml excerpt for shape only)\n{text}"
     return f"(no {stub_name} structure example available)"
 
@@ -448,7 +510,7 @@ def normalize_bootstrapped_component(
             hooks_d.setdefault("system_role", f"{equipment_system or pack_id}_expert")
             data["prompt_hooks"] = hooks_d
         if not isinstance(data.get("industries"), list):
-            data["industries"] = ["Biopharmaceuticals"]
+            data["industries"] = list(_canonical_industry_labels())
         if not isinstance(data.get("scenario_aliases"), dict):
             data["scenario_aliases"] = {}
         return data
@@ -815,6 +877,33 @@ def seed_template_references(
     return copied
 
 
+def _scenario_aliases_from_dir_menus(dir_req: Mapping[str, Any]) -> Dict[str, List[str]]:
+    """Build scenario_aliases from dir_menus system_examples (no domain hardcoding)."""
+    out: Dict[str, List[str]] = {}
+    menus = dir_req.get("dir_menus")
+    if not isinstance(menus, list):
+        return out
+    for row in menus:
+        if not isinstance(row, Mapping):
+            continue
+        sid = str(row.get("scenario_id") or "").strip()
+        if not sid:
+            continue
+        terms: List[str] = []
+        human = sid.replace("_", " ").strip()
+        if human:
+            terms.append(human)
+        examples = row.get("system_examples") or []
+        if isinstance(examples, list):
+            for ex in examples:
+                text = str(ex or "").strip()
+                if text and text not in terms:
+                    terms.append(text)
+        if terms:
+            out[sid] = terms
+    return out
+
+
 def align_pack_meta_with_scenarios(
     pack_id: str,
     *,
@@ -850,18 +939,10 @@ def align_pack_meta_with_scenarios(
     if not isinstance(meta_out.get("scenario_aliases"), Mapping) or not meta_out.get(
         "scenario_aliases"
     ):
-        primary = str(meta_out.get("default_scenario") or scenario_ids[0])
-        meta_out["scenario_aliases"] = {
-            primary: [
-                "vent filter",
-                "tank vent",
-                "hold tank",
-                "buffer",
-                "bioreactor vent",
-                "sterile vent",
-            ]
-        }
-        changed = True
+        seeded = _scenario_aliases_from_dir_menus(dir_req)
+        if seeded:
+            meta_out["scenario_aliases"] = seeded
+            changed = True
     if not changed:
         return False
     write_pack_file(

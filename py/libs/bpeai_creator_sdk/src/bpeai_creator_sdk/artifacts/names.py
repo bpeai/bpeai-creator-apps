@@ -27,6 +27,7 @@ _GENERIC_PACK_IDS = {
     "equipment_sizing_v1",
     "mixing_stub",
     "mixing_sizing_stub",
+    "equipment_evaluator_stub",
 }
 _STRIP_SUFFIXES = (
     "_selector",

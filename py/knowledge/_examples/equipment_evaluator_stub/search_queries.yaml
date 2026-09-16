@@ -1,0 +1,18 @@
+# Domain-neutral Serper templates for the evaluator bootstrap stub.
+dir_generate:
+  templates:
+    - "{system_name} {equipment_system} design requirements {application}"
+    - "{application} {system_name} equipment specification DIR hygienic"
+    - "{equipment_system} {system_name} GMP design basis {application}"
+
+evaluate:
+  templates:
+    - "{system_name} {equipment_system} {application} selection"
+    - "{application} {system_name} hygienic {equipment_system} specification"
+  slots:
+    working_volume: ["working volume", "flow", "capacity"]
+    vessel_format: ["vessel", "skid", "format"]
+    solids_media: ["media", "solids"]
+    duty: ["objective", "duty"]
+  static:
+    - "hygienic {equipment_system} {application} design guide"

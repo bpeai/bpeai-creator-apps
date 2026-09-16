@@ -1,0 +1,25 @@
+# EXAMPLE ONLY — replace with this pack's evaluated technology types.
+options:
+  - id: example_type_a
+    name: Example technology type A
+    tags: [example]
+    typical_fit: strong
+    manufacturers:
+      - Example manufacturer family A
+  - id: example_type_b
+    name: Example technology type B
+    tags: [example]
+    typical_fit: conditional
+    manufacturers:
+      - Example manufacturer family B
+  - id: example_type_c
+    name: Example technology type C
+    tags: [example]
+    typical_fit: limited
+    manufacturers:
+      - Example manufacturer family C
+do_not_specify_defaults:
+  - Do not specify a final model until the host-system DIR is validated
+manufacturers_examples:
+  - Example manufacturer family A
+  - Example manufacturer family B

@@ -64,6 +64,9 @@ python py\tools\local_chat.py --app equipment_evaluator
 
 For SDK tests without network, use the committed stub pack:
 `py/knowledge/_examples/mixing_stub/`.
+LLM bootstrap shape examples use `py/knowledge/_examples/equipment_evaluator_stub/`
+(host-system scenarios and project-definition sector labels). Do not copy mixing_stub
+as a starter pack.
 
 Artifacts (markdown + PDF + optional PPTX) write under `./artifacts/` (gitignored).
 
@@ -101,4 +104,5 @@ python py\tools\manage_pptx_reference.py --pack <app_id> replace --src path\to\d
 - Design: `docs/EI_APP_TEMPLATE_DESIGN.md`
 - Playbook: `CREATOR_PLAYBOOK.md`
 - Mixing pack (canonical): `bpeai/py/knowledge/mixing/`
-- Local example stub: `py/knowledge/_examples/mixing_stub/`
+- Local example stub (SDK tests): `py/knowledge/_examples/mixing_stub/`
+- LLM bootstrap shape: `py/knowledge/_examples/equipment_evaluator_stub/`

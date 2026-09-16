@@ -28,7 +28,7 @@ Full docs: `docs/EI_CREATOR_EXTENSIONS.md`, `docs/EI_HANDSHAKE.md`, `CREATOR_PLA
 - Do not fork `py/libs/bpeai_creator_sdk/`.
 - Do not commit secrets, `.env`, `artifacts/`, or treat gitignored apps as platform seeds.
 - Platform seed packs cannot be bound at runtime — a creator app uses a **private pack with the same id** as the app.
-- **Do not write knowledge-pack YAML in Cursor.** The pack is LLM-bootstrapped when the creator runs `local_chat.py` in PowerShell, using **their** `.env` keys (`OPENAI_API_KEY`, `SERPER_API_KEY`). Do not copy `py/knowledge/_examples/mixing_stub/` or `mixing_sizing_stub/` as a starter pack. Do not run `local_chat.py` for them.
+- **Do not write knowledge-pack YAML in Cursor.** The pack is LLM-bootstrapped when the creator runs `local_chat.py` in PowerShell, using **their** `.env` keys (`OPENAI_API_KEY`, `SERPER_API_KEY`). Do not copy `py/knowledge/_examples/mixing_stub/`, `equipment_evaluator_stub/`, or `mixing_sizing_stub/` as a starter pack. Do not run `local_chat.py` for them.
 
 ## Interview (one decision at a time)
 

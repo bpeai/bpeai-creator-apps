@@ -1,0 +1,62 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260915130443
+Username: B5KBCK3\tomsi
+RunAs User: B5KBCK3\tomsi
+Configuration Name: 
+Machine: B5KBCK3 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 33240
+PSVersion: 5.1.26100.9444
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.9444
+BuildVersion: 10.0.26100.9444
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is dir-debug-20260915-130443.log
+PS C:\Users\tomsi\bpeai\website\bpeai-creator-apps> python py/tools/local_chat.py --app pump_selector
+  • A single-use peristaltic arrangement assumed suitable for 100 L/min and 6 bar without documented tubing pressure, fatigue-life, extractables, and flow-capability evidence.
+
+Preliminary specification
+────────────────────────────────────────
+  • Service: Chromatography skid feed and product transfer
+  • Operating flow: 20–100 L/min with minimum, normal, and maximum recipe points defined before RFQ
+  • Differential pressure: 3–6 bar operating; maximum allowable and shutoff cases to be coordinated with column and skid design pressure
+  • Fluid: Protein solution, 1–5 cP; density, vapor pressure, composition, solids, gas content, and shear acceptance criteria to be supplied
+  • Wetted metal: 316L stainless steel with material certification appropriate to the project
+  • Elastomers: EPDM as DIR basis, subject to product, CIP chemical, hot-water, extractables, and temperature compatibility review
+  • Internal finish: Hygienic finish and electropolishing requirements to be defined by the project and vendor capability
+  • Connections: Hygienic clamp or project-standard sanitary connections, sized to limit suction loss and support complete drainage
+  • Cleaning: Automated CIP and hot-water sanitization; vendor to state allowable temperature, concentration, pressure, and exposure duration
+  • Sterilization: SIP is not required by the DIR and shall not be claimed unless separately specified and demonstrated
+  • Drainability: Pump casing, seal cavity, fittings, instruments, and connected tubing to drain in installed orientation
+  • Seal: Hygienic mechanical seal suitable for protein service, CIP, hot-water cycling, and anticipated dry-run risk; single versus flushed arrangement to be reviewed
+  • Drive: Washdown-suitable motor and VFD with hygienic skid installation and adequate low-speed cooling
+  • Flow control: Closed-loop control from a hygienic flowmeter; recipe ramp rates and acceptable accuracy to be defined
+  • Pressure instrumentation: Sanitary suction and discharge pressure measurement, with column-inlet pressure monitored where hydraulically distinct
+  • Protection: Low suction pressure, low flow, high discharge pressure, high-high column pressure, motor overload, and dry-run logic
+  • NPSH: Calculate NPSHa at worst case and select only where the project-approved margin over vendor NPSHr is maintained
+  • Operating envelope: Vendor curve to show startup, minimum flow, normal flow, maximum flow, CIP, hot-water, and maximum resistance cases
+  • Temperature rise: Vendor to identify low-flow operating restrictions; product recycle duration and allowable temperature increase to be project-defined
+  • Documentation: Wetted materials, elastomer certificates, surface-finish evidence, performance curves, recommended maintenance, and hygienic design documentation
+  • Verification: Final pump selection requires comparison with the actual system resistance curve and confirmation by the pump and chromatography-skid suppliers
+
+Manufacturers: Alfa Laval (LKH hygienic centrifugal family), Fristam (FP hygienic centrifugal family), GEA (Hilge hygienic centrifugal families), SPX FLOW (Waukesha Cherry-Burrell hygienic pump families), PSG
+Biotech (Quattroflow multiple-diaphragm family), Levitronix (BPS/PuraLev magnetically levitated pump families), Sartorius (bioprocess pump integrations), Watson-Marlow (Quantum and bioprocess peristaltic famil
+ies), NETZSCH (hygienic progressing-cavity offerings), SEEPEX (CS hygienic progressing-cavity family)
+
+Attribution: Life-Science Fluid Transfer SME Draft (pump_selector)
+
+Markdown report: C:\Users\tomsi\bpeai\website\bpeai-creator-apps\artifacts\Chromatogaphy_Skid_evaluation.md
+PPTX deck: C:\Users\tomsi\bpeai\website\bpeai-creator-apps\artifacts\Chromatogaphy_Skid_evaluation.pptx
+
+SME warnings
+────────────────────────────────────────
+  • Generated draft DIR menu 'chromatogaphy_skid__hygienic_centrifugal__biopharmaceutical_biologics' (status=draft_generated) and appended to pack catalog for SME review.
+  • Option not in SME catalog: Hygienic single-stage centrifugal pump with low-shear impeller, VFD, hygienic mechanical seal, and recipe-controlled flow protection
+Wrote PPTX: C:\Users\tomsi\bpeai\website\bpeai-creator-apps\artifacts\Chromatogaphy_Skid_evaluation.pptx
+
+>

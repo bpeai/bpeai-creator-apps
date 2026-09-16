@@ -8,6 +8,7 @@ from bpeai_creator_sdk.local_format import format_dir_text, format_result_text
 from bpeai_creator_sdk.local_parse import parse_inputs_heuristic
 from bpeai_creator_sdk.local_run import is_selector_result, repo_py_root
 from bpeai_creator_sdk.sme import (
+    align_pack_meta_with_scenarios,
     append_dir_menu,
     filter_numeric_common_codes,
     is_numeric_dir_code,
@@ -17,11 +18,14 @@ from bpeai_creator_sdk.sme import (
     match_dir_menu,
     normalize_bootstrapped_component,
     normalize_generated_menu,
+    pack_bootstrap_authoring_rules,
+    pack_dir,
     pack_is_loadable,
     prepare_bootstrapped_component,
     resolve_dir_menu,
     resolve_scenario_id,
     stamp_draft_meta,
+    structure_example_snippet,
     validate_dir_code,
     write_dir_catalog_markdown,
     write_pack_file,
@@ -179,6 +183,73 @@ def test_pack_bootstrap_inventory(py_root: Path, examples_root: Path, tmp_path: 
     missing = list_missing_pack_files("demo_pack", py_root=tmp_path, include_optional=False)
     assert "dir_requirements.yaml" in missing
     assert not pack_is_loadable("demo_pack", py_root=tmp_path)
+
+
+def test_equipment_evaluator_stub_is_loadable(py_root: Path, examples_root: Path):
+    assert pack_is_loadable(
+        "equipment_evaluator_stub", py_root=py_root, pack_root=examples_root
+    )
+    pack = load_knowledge_pack(
+        "equipment_evaluator_stub", py_root=py_root, pack_root=examples_root
+    )
+    assert pack.default_scenario == "process_vessel"
+    assert "process_skid" in pack.scenarios
+    assert "Biopharmaceutical & Biologics" in (pack.meta.get("industries") or [])
+    hint = structure_example_snippet("pack.yaml", py_root=py_root)
+    assert "equipment_evaluator_stub" in hint
+    assert "process_vessel" in hint
+    rules = pack_bootstrap_authoring_rules()
+    assert "HOST EQUIPMENT SYSTEM" in rules
+    assert "Biopharmaceutical & Biologics" in rules
+    assert "chromatography_skid" in rules
+
+
+def test_align_pack_meta_uses_system_examples_not_vent_aliases(tmp_path: Path):
+    import yaml
+
+    write_pack_file(
+        "pump_draft",
+        "pack.yaml",
+        stamp_draft_meta(
+            {"label": "Pump draft", "scenario_aliases": {}},
+            pack_id="pump_draft",
+            equipment_system="fluid_transfer",
+        ),
+        py_root=tmp_path,
+        draft=True,
+    )
+    write_pack_file(
+        "pump_draft",
+        "dir_requirements.yaml",
+        {
+            "dir_menus": [
+                {
+                    "menu_id": "cip_return_pump__general__bio",
+                    "scenario_id": "cip_return_pump",
+                    "industry": "Biopharmaceutical & Biologics",
+                    "system_examples": ["CIP Return Pump", "CIP Return Skid"],
+                    "requirements": [
+                        {
+                            "index": 1,
+                            "label": "Duty",
+                            "options": [{"index": 1, "text": "A"}],
+                        }
+                    ],
+                }
+            ]
+        },
+        py_root=tmp_path,
+        draft=True,
+    )
+    assert align_pack_meta_with_scenarios("pump_draft", py_root=tmp_path)
+    meta = yaml.safe_load(
+        (pack_dir("pump_draft", py_root=tmp_path) / "pack.yaml").read_text(encoding="utf-8")
+    )
+    aliases = meta.get("scenario_aliases") or {}
+    terms = [str(t).lower() for t in (aliases.get("cip_return_pump") or [])]
+    assert "cip return pump" in terms
+    assert all("vent" not in t for t in terms)
+    assert meta.get("default_scenario") == "cip_return_pump"
 
 
 def test_normalize_bootstrapped_validation_rules_and_pack_unwrap():

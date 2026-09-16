@@ -55,6 +55,7 @@ def test_pack_id_selector_suffix_is_draft_fallback():
     assert infer_evaluated_item_from_pack_id("vent_filter_expert") == "vent_filter"
     assert infer_evaluated_item_from_pack_id("demo_pack") == ""
     assert infer_evaluated_item_from_pack_id("equipment_evaluator") == ""
+    assert infer_evaluated_item_from_pack_id("equipment_evaluator_stub") == ""
     assert infer_evaluated_item_from_pack_id("equipment_evaluator/pump_selector") == "pump"
 
 

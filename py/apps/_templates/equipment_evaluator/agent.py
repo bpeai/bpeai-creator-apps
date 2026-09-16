@@ -78,6 +78,7 @@ from bpeai_creator_sdk.sme import (
     match_dir_menu,
     missing_report_headings,
     normalize_generated_menu,
+    pack_bootstrap_authoring_rules,
     prepare_bootstrapped_component,
     resolve_dir_menu,
     resolve_industry,
@@ -715,7 +716,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         # AI_HANDSHAKE: pack_bootstrap — authoring-time draft of missing pack YAML.
         hints = component_schema_hints()
         schema_hint = hints.get(filename, "Valid YAML mapping for this pack component.")
-        reference = structure_example_snippet(filename, py_root=py_root)
+        reference = structure_example_snippet(
+            filename, py_root=py_root, stub_name="equipment_evaluator_stub"
+        )
         app_label = getattr(self, "app_id", "equipment_evaluator")
         default_system = (
             "You are a senior life-science process / equipment SME authoring an "
@@ -748,28 +751,11 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"Create the knowledge-pack file `{filename}` for pack_id=`{pack_id}` "
             f"(equipment_system=`{equipment_system}`), used by app `{app_label}`.\n\n"
             f"Structural requirements:\n{schema_hint}\n\n"
-            f"Reference shape from creator-apps `_examples/mixing_stub` "
-            f"(adapt domain content; do not copy mixing-specific options; "
-            f"do not copy website/platform pack content):\n"
+            f"Reference shape from creator-apps `_examples/equipment_evaluator_stub` "
+            f"(adapt domain content; do not copy stub option names; "
+            f"do not copy mixing_stub or website/platform pack content):\n"
             f"{reference}\n\n"
-            "Rules:\n"
-            "- For dir_requirements.yaml emit dir_menus only (5–7 DIR requirements "
-            "and 2+ numeric common_codes with hyphenated indexes + captions; not "
-            "SIP/IT tags). Do not include menus or scenarios keys.\n"
-            "- Include at least 5 equipment options when writing equipment_options.yaml.\n"
-            "- fit_enum.allowed must include best, strong, conditional, limited, "
-            "add-on, special-case.\n"
-            "- report_outline required_headings must follow this order (domain-adapt names): "
-            "Validated DIR; Design basis from DIR code; Mixing objectives and failure modes "
-            "(or domain equivalent); Strong-fit mixing types (or Strong-fit filter types); "
-            "Option evaluation; Recommended basis of design; Preliminary specification; "
-            "Suggested operating recipe for qualification; Do not specify; "
-            "Option evaluation matrix; Vendor / manufacturer shortlist; References reviewed. "
-            "Keep sections[] in the same order; do not collapse manufacturers and references.\n"
-            "- pptx_outline should define 7 slides with a domain-appropriate title_prefix.\n"
-            "- Include search_queries.yaml with domain-appropriate Serper templates "
-            "(no unrelated vendor brand names).\n"
-            "- Mark draft intent via label/description wording where appropriate.\n"
+            f"{pack_bootstrap_authoring_rules()}"
         )
         raw = self.call_openai_json(system=system, user=user)
         if not isinstance(raw, dict):
