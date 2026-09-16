@@ -219,12 +219,15 @@ def pack_bootstrap_authoring_rules() -> str:
         "- fit_enum.allowed must include best, strong, conditional, limited, "
         "add-on, special-case.\n"
         "- report_outline required_headings must follow this order (domain-adapt names): "
-        "Validated DIR; Design basis from DIR code; Mixing objectives and failure modes "
-        "(or domain equivalent); Strong-fit mixing types (or Strong-fit filter types); "
-        "Option evaluation; Recommended basis of design; Preliminary specification; "
-        "Suggested operating recipe for qualification; Do not specify; "
-        "Option evaluation matrix; Vendor / manufacturer shortlist; References reviewed. "
-        "Keep sections[] in the same order; do not collapse manufacturers and references.\n"
+        "Design basis from DIR code; <domain> objectives and failure modes; "
+        "Best-fit <domain>-system shortlist; Option evaluation; "
+        "Recommended preliminary basis of design; "
+        "Suggested operating recipe for qualification; "
+        "Options not recommended as primary basis; "
+        "Preliminary option evaluation matrix; Vendor / manufacturer shortlist; "
+        "References reviewed. Keep sections[] in the same order; do not collapse "
+        "manufacturers and references. Put Validated DIR in the header chips, not "
+        "as a prose body section.\n"
         "- pptx_outline should define 7 slides with a domain-appropriate title_prefix.\n"
         "- Include search_queries.yaml with domain-appropriate Serper templates "
         "(no unrelated vendor brand names).\n"
@@ -239,7 +242,7 @@ def component_schema_hints() -> Dict[str, str]:
         "pack.yaml": (
             "FLAT mapping only for this file (never nest other filenames as keys). "
             "Fields: pack_id, equipment_system, evaluated_item (SME noun for "
-            "{system}_{item}_evaluation filenames, e.g. pump or agitator), "
+            "'{system} {item} Evaluation' filenames, e.g. pump or agitator), "
             "sized_item (SME noun for '{system} {item} Sizing' filenames), "
             "optional artifact_filename_pattern, version, label, description, "
             "industries (list of project_definition_sectors labels: "
@@ -293,11 +296,12 @@ def component_schema_hints() -> Dict[str, str]:
         "report_outline.yaml": (
             "Mapping with required_headings (list of section titles in report order) "
             "and sections ([{id, heading, description}]) kept in the same order. "
-            "Headings follow the evaluation PDF: Validated DIR; Design basis from DIR "
-            "code; <domain> objectives and failure modes; Strong-fit <domain> types; "
-            "Option evaluation; Recommended basis of design; Preliminary specification; "
-            "Suggested operating recipe for qualification; Do not specify; Option "
-            "evaluation matrix; Vendor / manufacturer shortlist; References reviewed."
+            "Headings follow the evaluation PDF: Design basis from DIR "
+            "code; <domain> objectives and failure modes; Best-fit <domain>-system "
+            "shortlist; Option evaluation; Recommended preliminary basis of design; "
+            "Suggested operating recipe for qualification; Options not recommended "
+            "as primary basis; Preliminary option evaluation matrix; Vendor / "
+            "manufacturer shortlist; References reviewed."
         ),
         "pptx_outline.yaml": (
             "Mapping with slide_count (7), title_prefix, slides ([{index, id, title, ...}]), "
@@ -608,16 +612,14 @@ def normalize_bootstrapped_component(
     if filename == "report_outline.yaml":
         if not isinstance(data.get("required_headings"), list):
             data["required_headings"] = [
-                "Validated DIR",
                 "Design basis from DIR code",
                 "Objectives and failure modes",
-                "Strong-fit equipment types",
+                "Best-fit equipment-system shortlist",
                 "Option evaluation",
-                "Recommended basis of design",
-                "Preliminary specification",
+                "Recommended preliminary basis of design",
                 "Suggested operating recipe for qualification",
-                "Do not specify",
-                "Option evaluation matrix",
+                "Options not recommended as primary basis",
+                "Preliminary option evaluation matrix",
                 "Vendor / manufacturer shortlist",
                 "References reviewed",
             ]

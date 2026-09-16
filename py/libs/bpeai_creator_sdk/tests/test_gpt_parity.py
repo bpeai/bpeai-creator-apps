@@ -222,6 +222,90 @@ Specify a jacketed 316L tank with a pitched-blade turbine.
     assert "BPEAI equipment evaluation · project-team summary" not in text
 
 
+def test_cip_system_pump_evaluation_title_and_tables(tmp_path: Path):
+    from pypdf import PdfReader
+
+    from bpeai_creator_sdk.artifacts.names import evaluation_title_lines
+    from bpeai_creator_sdk import build_evaluation_pdf, build_evaluation_pptx
+
+    result = {
+        "system_name": "CIP system",
+        "evaluated_item": "pump",
+        "application": "biopharmaceutical",
+        "dir_code": "3-3-2-1-2-2-4",
+        "selected_model": "High-head hygienic sanitary centrifugal CIP supply pump",
+        "recommended_basis": (
+            "Preliminary: high-head hygienic sanitary centrifugal CIP supply pump "
+            "with VFD, vendor-certified across all recipe system curves."
+        ),
+        "key_specs": [
+            {"key": "hygienic", "value": "Sanitary connections"},
+            {"key": "high-head", "value": "6 to 10 bar differential"},
+            {"key": "variable-speed", "value": "VFD-protected NPSH"},
+            {"key": "drainable", "value": "CIP supply and recirculation"},
+        ],
+        "decoded_dir": [
+            {"label": "Duty", "option_text": "CIP supply and recirculation"},
+            {"label": "Flow envelope", "option_text": "30 to 60 m3/h"},
+        ],
+        "objectives": [
+            "Supply CIP: Achieve qualified flow or line velocity",
+            "Protect NPSH: Stay above vendor NPSHR with margin",
+        ],
+        "failure_modes": ["Cavitation", "Deadhead", "Dry running"],
+        "evaluation_options": [
+            {
+                "name": "High-head sanitary centrifugal",
+                "fit": "best",
+                "industrial_applications": ["CIP supply", "hot caustic recirculation"],
+                "pros": ["Hygienic", "VFD turndown", "Broad vendor availability"],
+                "cons": ["Needs NPSH protection", "Seal-flush duty"],
+                "manufacturers": ["Alfa Laval LKH", "SPX FLOW"],
+            }
+        ],
+        "evaluation_matrix": [
+            {
+                "option": "High-head sanitary centrifugal",
+                "technical_fit": "High",
+                "gmp": "High",
+                "scale_up_risk": "Low",
+                "cost_schedule": "Moderate",
+                "reliability": "Recommended",
+            }
+        ],
+        "preliminary_specs": ["Materials: 316L stainless", "Drive: VFD"],
+        "do_not_specify": ["PD lobe pump: Over-specified for CIP supply"],
+        "manufacturers": ["Alfa Laval LKH", "SPX FLOW"],
+        "datasheet_markdown": """# CIP System Pump Evaluation
+
+## Suggested operating recipe for qualification
+
+- Fill and vent the circuit before starting the pump.
+
+## References reviewed
+
+- Vendor hygienic centrifugal CIP application notes.
+""",
+    }
+    assert evaluation_title_lines(result) == ["CIP System Pump", "Evaluation"]
+    pdf = build_evaluation_pdf(result, output_path=tmp_path / "CIP System Pump Evaluation.pdf")
+    assert pdf.name == "CIP System Pump Evaluation.pdf"
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert "CIP System Pump Evaluation" in text
+    assert "Recommendation in one line" in text
+    assert "1. Design basis from DIR code" in text
+    assert "Best-fit pump-system shortlist" in text
+    assert "High-head sanitary centrifugal" in text
+    assert "Specification item" in text
+    pptx = build_evaluation_pptx(result, output_path=tmp_path / "CIP System Pump Evaluation.pptx")
+    assert pptx.name == "CIP System Pump Evaluation.pptx"
+    prs = Presentation(str(pptx))
+    title_text = "\n".join(shape.text_frame.text for shape in prs.slides[0].shapes if shape.has_text_frame)
+    assert "CIP System Pump" in title_text
+    assert "Evaluation" in title_text
+    assert "Fluid-Transfer" not in title_text
+
+
 def test_format_evaluation_mentions_pptx_prompt():
     text = format_result_text(
         {

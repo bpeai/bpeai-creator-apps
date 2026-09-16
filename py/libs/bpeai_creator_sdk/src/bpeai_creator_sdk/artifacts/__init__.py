@@ -5,6 +5,7 @@ from .names import (
     attach_evaluation_artifact_name,
     attach_sizing_artifact_name,
     evaluation_artifact_stem,
+    evaluation_display_title,
     infer_evaluated_item,
     sizing_artifact_stem,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "attach_sizing_artifact_name",
     "attach_title_hero_image",
     "evaluation_artifact_stem",
+    "evaluation_display_title",
     "infer_evaluated_item",
     "sizing_artifact_stem",
     "build_evaluation_pdf",

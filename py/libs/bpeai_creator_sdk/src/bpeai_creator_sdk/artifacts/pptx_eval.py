@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Mapping
 
+from .names import evaluation_title_lines
+
 # Palette (reference deck)
 NAVY = "17324D"
 TEAL = "00A398"
@@ -308,12 +310,7 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
     dir_code = str(result.get("dir_code") or "")
     recommended = str(result.get("recommended_basis") or result.get("selected_model") or "")
     alternate = str(result.get("alternate_basis") or "")
-    title_lines = system.split()
-    if len(title_lines) >= 2:
-        mid = max(1, len(title_lines) // 2)
-        title_lines = [" ".join(title_lines[:mid]), " ".join(title_lines[mid:])]
-    else:
-        title_lines = [system]
+    title_lines = evaluation_title_lines(result) or [system]
 
     decoded = result.get("decoded_dir") or []
     cards = []
@@ -338,7 +335,7 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
                     }
                 )
 
-    options = [o for o in (result.get("mixing_options") or []) if isinstance(o, Mapping)]
+    options = [o for o in (result.get("evaluation_options") or result.get("mixing_options") or []) if isinstance(o, Mapping)]
     matrix = [m for m in (result.get("evaluation_matrix") or []) if isinstance(m, Mapping)]
     if not matrix:
         for i, opt in enumerate(options[:6], start=1):
@@ -539,7 +536,9 @@ def build_evaluation_pptx(
             center=True,
         )
     title_box = _add_textbox(s1, 658368, 1207008, 6217920, 1400000)
-    lines = _as_list(t1.get("title_lines")) or system.split()
+    lines = evaluation_title_lines(result)
+    if not lines:
+        lines = _as_list(t1.get("title_lines")) or system.split()
     _fill_textbox(
         title_box,
         [_truncate(x, 28) for x in lines[:3]],

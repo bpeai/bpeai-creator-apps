@@ -196,8 +196,11 @@ Return ONLY JSON with this shape:
 
 Rules:
 - Exactly 7 slides in that order/ids.
+- title_lines MUST be the evaluation title `{System} {Item} Evaluation`
+  split so the last line is Evaluation (e.g. ["CIP System Pump", "Evaluation"]).
+  Do not use pack marketing titles.
 - Keep text dense but slide-ready (short labels, no walls of text).
-- HARD length limits: title_lines ≤ 4 words each; subtitle ≤ 18 words;
+- HARD length limits: title_lines ≤ 5 words each; subtitle ≤ 18 words;
   card values ≤ 8 words; process_steps titles ≤ 5 words; process_steps details ≤ 14 words;
   failure_modes ≤ 12 words each; option notes ≤ 12 words;
   recommended_why / cons ≤ 14 words each; decision_logic ≤ 35 words.
@@ -316,7 +319,7 @@ def _option_catalog_block(pack: KnowledgePack) -> str:
 
 
 def _artifact_stem(result: Dict[str, Any]) -> str:
-    return evaluation_artifact_stem(result) or "evaluation"
+    return evaluation_artifact_stem(result) or "Evaluation"
 
 
 def _write_markdown_artifact(result: Dict[str, Any], *, py_root: Path) -> Path | None:  # noqa: ARG001

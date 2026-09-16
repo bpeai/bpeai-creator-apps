@@ -6,6 +6,7 @@ from bpeai_creator_sdk.artifacts.names import (
     attach_evaluation_artifact_name,
     attach_sizing_artifact_name,
     evaluation_artifact_stem,
+    evaluation_display_title,
     infer_evaluated_item,
     infer_evaluated_item_from_pack_id,
     infer_sized_item_from_pack_id,
@@ -33,7 +34,7 @@ def test_pack_evaluated_item_wins_over_identity_and_pack_id():
             {"system_name": "Chromatography Skid"},
             pack=pack,
         )
-        == "Chromatography_Skid_Pump_Evaluation"
+        == "Chromatography Skid Pump Evaluation"
     )
 
 
@@ -64,13 +65,13 @@ def test_does_not_duplicate_item_already_in_system_name():
         {"system_name": "Chromatography Skid Pump", "evaluated_item": "pump"},
         item="pump",
     )
-    assert stem == "Chromatography_Skid_Pump_Evaluation"
+    assert stem == "Chromatography Skid Pump Evaluation"
     assert (
         evaluation_artifact_stem(
             {"system_name": "CIP Return Pump"},
             pack_id="pump_selector",
         )
-        == "CIP_Return_Pump_Evaluation"
+        == "CIP Return Pump Evaluation"
     )
 
 
@@ -82,7 +83,7 @@ def test_app_id_supplies_pump_when_pack_field_and_identity_are_missing():
             "creator_attribution": {"app_id": "pump_selector"},
         }
     )
-    assert stem == "Chromatography_Skid_Pump_Evaluation"
+    assert stem == "Chromatography Skid Pump Evaluation"
 
 
 def test_identity_instance_name_does_not_override_selector_app_id():
@@ -102,7 +103,7 @@ def test_identity_instance_name_does_not_override_selector_app_id():
             },
             pack_id="pump_selector",
         )
-        == "Chromatography_Skid_Pump_Evaluation"
+        == "Chromatography Skid Pump Evaluation"
     )
 
 
@@ -115,7 +116,7 @@ def test_custom_filename_pattern():
     )
     assert (
         evaluation_artifact_stem({"system_name": "Chromatography Skid"}, pack=pack)
-        == "Chromatography_Skid_Pump_tech_eval"
+        == "Chromatography Skid Pump tech eval"
     )
 
 
@@ -153,4 +154,18 @@ def test_attach_stamps_result_fields():
     result = {"system_name": "Chromatography Skid"}
     attach_evaluation_artifact_name(result, pack=pack)
     assert result["evaluated_item"] == "pump"
-    assert result["artifact_stem"] == "Chromatography_Skid_Pump_Evaluation"
+    assert result["artifact_stem"] == "Chromatography Skid Pump Evaluation"
+
+
+def test_cip_system_title_includes_pump():
+    pack = SimpleNamespace(
+        pack_id="pump_selector",
+        evaluated_item="pump",
+        artifact_filename_pattern="",
+        meta={"evaluated_item": "pump"},
+    )
+    result = {"system_name": "CIP system"}
+    assert evaluation_display_title(result, pack=pack) == "CIP System Pump Evaluation"
+    assert evaluation_artifact_stem(result, pack=pack) == "CIP System Pump Evaluation"
+    attach_evaluation_artifact_name(result, pack=pack)
+    assert result["artifact_stem"] == "CIP System Pump Evaluation"

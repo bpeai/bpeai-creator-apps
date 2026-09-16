@@ -1,9 +1,9 @@
 """Deliverable filenames for evaluator and sizing apps.
 
-Evaluator: ``{system}_{item}_Evaluation`` (underscores), e.g.
-``Chromatography_Skid_Pump_Evaluation``. The item noun is omitted when it is
-already a token in the system name (``CIP_Return_Pump_Evaluation``, not
-``CIP_Return_Pump_Pump_Evaluation``).
+Evaluator: ``{system} {item} Evaluation`` (spaces), e.g.
+``CIP System Pump Evaluation``. The item noun is omitted when it is
+already a token in the system name (``CIP Return Pump Evaluation``, not
+``CIP Return Pump Pump Evaluation``).
 
 Sizing: ``{system} {item} Sizing`` (spaces), e.g. ``Buffer Preparation Agitator Sizing``.
 
@@ -17,7 +17,26 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping
 
-DEFAULT_EVALUATION_FILENAME_PATTERN = "{system}_{item}_{family}"
+DEFAULT_EVALUATION_FILENAME_PATTERN = "{system} {item} {family}"
+_ACRONYM_TOKENS = frozenset(
+    {
+        "cip",
+        "sip",
+        "tff",
+        "wfi",
+        "pw",
+        "ro",
+        "uf",
+        "df",
+        "hplc",
+        "hvac",
+        "vfd",
+        "npsh",
+        "aodd",
+        "gmp",
+        "api",
+    }
+)
 DEFAULT_SIZING_FILENAME_PATTERN = "{system} {item} Sizing"
 _UNSAFE_FILENAME = re.compile(r'[\\/:*?"<>|]+')
 _GENERIC_LAST_TOKENS = {"sizing", "sizer", "pack", "stub", "v1", "app", "system"}
@@ -203,11 +222,81 @@ def title_item_noun(text: str) -> str:
     return part
 
 
-def _evaluation_family_token(family: str) -> str:
+def title_system_name(text: str) -> str:
+    """Title-case a system name while keeping CIP / TFF / WFI-style acronyms."""
+    part = display_filename_part(text)
+    if not part:
+        return "Evaluation"
+    words: list[str] = []
+    for raw in part.split():
+        token = raw.strip()
+        if not token:
+            continue
+        lowered = token.lower().rstrip(".")
+        if lowered in _ACRONYM_TOKENS:
+            words.append(lowered.upper())
+        elif token.isupper() and 2 <= len(token) <= 5:
+            words.append(token)
+        elif token[:1].isupper() and token[1:].islower():
+            words.append(token)
+        else:
+            words.append(token[:1].upper() + token[1:].lower() if len(token) > 1 else token.upper())
+    return " ".join(words) or ""
+
+
+def _evaluation_family_label(family: str) -> str:
     raw = str(family or "").strip() or "evaluation"
     if raw.lower() == "evaluation":
-        return filename_token(title_item_noun(raw)) or "Evaluation"
-    return filename_token(raw) or "Evaluation"
+        return "Evaluation"
+    return title_item_noun(raw) or "Evaluation"
+
+
+def evaluation_display_title(
+    result: Mapping[str, Any] | None = None,
+    *,
+    pack: Any = None,
+    family: str = "evaluation",
+    item: str | None = None,
+    pack_id: str = "",
+) -> str:
+    """Visible report title, e.g. ``CIP System Pump Evaluation``."""
+    src = result or {}
+    system = title_system_name(
+        src.get("equipment_system_name") or src.get("system_name") or ""
+    ) or "Equipment"
+    resolved = (
+        item
+        if item is not None
+        else infer_evaluated_item(pack=pack, result=src, pack_id=pack_id)
+    ).strip()
+    if resolved and _item_already_in_system(system, resolved):
+        resolved = ""
+    item_part = title_item_noun(resolved)
+    family_part = _evaluation_family_label(family)
+    if item_part:
+        return f"{system} {item_part} {family_part}".strip()
+    return f"{system} {family_part}".strip()
+
+
+def evaluation_title_lines(
+    result: Mapping[str, Any] | None = None,
+    *,
+    pack: Any = None,
+    family: str = "evaluation",
+    item: str | None = None,
+    pack_id: str = "",
+) -> list[str]:
+    """Split the evaluation title for PPTX title_lines."""
+    title = evaluation_display_title(
+        result, pack=pack, family=family, item=item, pack_id=pack_id
+    )
+    words = title.split()
+    if len(words) >= 3 and words[-1].lower() == "evaluation":
+        return [" ".join(words[:-1]), words[-1]]
+    if len(words) >= 4:
+        mid = max(1, len(words) // 2)
+        return [" ".join(words[:mid]), " ".join(words[mid:])]
+    return [title]
 
 
 def evaluation_artifact_stem(
@@ -219,32 +308,36 @@ def evaluation_artifact_stem(
     pack_id: str = "",
 ) -> str:
     src = result or {}
-    existing = filename_token(src.get("artifact_stem") or "")
-    system = (
-        filename_token(src.get("equipment_system_name") or src.get("system_name") or "")
-        or "evaluation"
-    )
+    existing = display_filename_part(src.get("artifact_stem") or "")
     resolved = (
         item
         if item is not None
         else infer_evaluated_item(pack=pack, result=src, pack_id=pack_id)
     ).strip()
-    if resolved and _item_already_in_system(system, resolved):
-        resolved = ""
-    item_tok = filename_token(title_item_noun(resolved)) if resolved else ""
-    family_tok = _evaluation_family_token(family)
+    title = evaluation_display_title(
+        src, pack=pack, family=family, item=resolved, pack_id=pack_id
+    )
     if existing and item is None and not pack and not pack_id:
-        existing_parts = {p for p in existing.lower().split("_") if p}
-        inferred_missing = bool(item_tok) and item_tok.lower() not in existing_parts
-        if not inferred_missing:
-            return existing
-    pattern = pack_filename_pattern(pack) or DEFAULT_EVALUATION_FILENAME_PATTERN
-    try:
-        raw = pattern.format(system=system, item=item_tok, family=family_tok)
-    except (KeyError, IndexError, ValueError):
-        raw = f"{system}_{item_tok}_{family_tok}" if item_tok else f"{system}_{family_tok}"
-    stem = re.sub(r"_+", "_", filename_token(raw)).strip("_")
-    return stem or "Evaluation"
+        existing_l = existing.lower()
+        item_l = title_item_noun(resolved).lower()
+        if item_l and item_l not in existing_l.split():
+            return title
+        return existing
+    pattern = pack_filename_pattern(pack)
+    if pattern and "{" in pattern:
+        system = title_system_name(
+            src.get("equipment_system_name") or src.get("system_name") or ""
+        )
+        item_part = title_item_noun(resolved)
+        if resolved and _item_already_in_system(system, resolved):
+            item_part = ""
+        family_part = _evaluation_family_label(family)
+        try:
+            raw = pattern.format(system=system, item=item_part, family=family_part)
+        except (KeyError, IndexError, ValueError):
+            raw = title
+        return display_filename_part(raw) or title
+    return title
 
 
 def attach_evaluation_artifact_name(
