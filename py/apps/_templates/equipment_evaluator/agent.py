@@ -80,15 +80,19 @@ from bpeai_creator_sdk.sme import (
     normalize_generated_menu,
     pack_bootstrap_authoring_rules,
     prepare_bootstrapped_component,
+    python_dir_alignments,
     resolve_dir_menu,
     resolve_industry,
     resolve_scenario_id,
     resolve_variant_id,
+    scenario_id_from_system_name,
     stamp_draft_meta,
     structure_example_snippet,
     thin_report_sections,
     validate_dir_code,
     write_pack_file,
+    apply_dir_route_decision,
+    catalog_summaries,
 )
 from bpeai_creator_sdk.sme.dir_catalog import catalog_row_to_dir_menu
 from bpeai_creator_sdk.tools import enrich_search_hits_with_excerpts, format_search_context
@@ -123,6 +127,26 @@ Rules:
   each with a caption that decodes the selection in one sentence (GPT style).
 - Do NOT use mnemonic tags (SIP, IT, BPE) as common_codes.
 - Prefer industrially realistic options for life-science equipment selection.
+"""
+
+DIR_ROUTE_SCHEMA_CONTRACT = """Decide whether this query reuses an existing DIR catalog row or needs a new scenario.
+
+Return ONLY JSON:
+{
+  "action": "reuse" | "create",
+  "menu_id": "existing menu_id when action=reuse, else empty",
+  "scenario_id": "existing id when reuse; slug of the typed host when create",
+  "alignments": ["one-line notes of spelling, host, or sector alignments"]
+}
+
+Rules:
+- Reuse when the typed host is the same equipment system as a catalog row in the
+  same official sector (fuzzy spelling and CIP system vs CIP skid are reuse).
+- Create when the host is distinct (CIP Return Pump vs chromatography_skid) or
+  the official sector differs.
+- scenario_id for create must be a slug of the typed system name (cip_system).
+- Do not invent official sector names; Python sets industry.
+- alignments must mention any fuzzy mapping you applied.
 """
 
 PPTX_SLIDE_SCHEMA_CONTRACT = """Convert this evaluation JSON into a presentation slide pack.
@@ -451,6 +475,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 pack_id,
                 py_root=py_root,
                 equipment_system=eq_system,
+                system_name=system_name,
+                application=application_raw,
             )
 
         app_check = check_application(pack, application_raw)
@@ -560,6 +586,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         *,
         py_root: Path,
         equipment_system: str = "",
+        system_name: str = "",
+        application: str = "",
     ) -> tuple[KnowledgePack, List[str]]:
         """Load pack; LLM-create any missing YAML/README as draft-for-approval.
 
@@ -609,6 +637,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                         filename,
                         equipment_system=eq,
                         py_root=py_root,
+                        system_name=system_name,
+                        application=application,
                     )
                     created.append(filename)
                 except Exception as exc:
@@ -667,6 +697,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         equipment_system: str,
         py_root: Path,
         overwrite: bool = False,
+        system_name: str = "",
+        application: str = "",
     ) -> Path:
         """Generate one missing pack file via LLM (or a minimal README fallback)."""
         if filename == "README.md":
@@ -687,12 +719,16 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             filename,
             equipment_system=equipment_system,
             py_root=py_root,
+            system_name=system_name,
+            application=application,
         )
         payload = prepare_bootstrapped_component(
             filename,
             payload,
             pack_id=pack_id,
             equipment_system=equipment_system,
+            system_name=system_name,
+            application=application,
         )
         if filename == "pack.yaml":
             payload = stamp_draft_meta(
@@ -714,6 +750,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         *,
         equipment_system: str,
         py_root: Path,
+        system_name: str = "",
+        application: str = "",
     ) -> Dict[str, Any]:
         """LLM function: return JSON/YAML-mappable content for one pack file."""
         # AI_HANDSHAKE: pack_bootstrap — authoring-time draft of missing pack YAML.
@@ -758,7 +796,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"(adapt domain content; do not copy stub option names; "
             f"do not copy mixing_stub or website/platform pack content):\n"
             f"{reference}\n\n"
-            f"{pack_bootstrap_authoring_rules()}"
+            f"{pack_bootstrap_authoring_rules(system_name=system_name, application=application)}"
         )
         raw = self.call_openai_json(system=system, user=user)
         if not isinstance(raw, dict):
@@ -772,6 +810,39 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             return {"fragments": raw}
         return raw
 
+    def _route_dir_menu_llm(
+        self,
+        pack: KnowledgePack,
+        *,
+        system_name: str,
+        application: str,
+        canonical_industry: str,
+    ) -> tuple[DirMenu | None, List[str]]:
+        summaries = catalog_summaries(pack)
+        if not summaries:
+            return None, []
+        self.status("Checking existing DIR scenarios for a match…")
+        user = (
+            f"Typed host: {system_name}\n"
+            f"Typed application/sector: {application}\n"
+            f"Official sector: {canonical_industry}\n\n"
+            f"Existing DIR catalog:\n{json.dumps(summaries, ensure_ascii=False)[:20000]}\n\n"
+            f"{DIR_ROUTE_SCHEMA_CONTRACT}"
+        )
+        default_system = (
+            "You route DIR questionnaires to existing catalog rows or create a new "
+            "host scenario. Return ONLY JSON."
+        )
+        system = pack.call_fragment("dir_route", "system", default=default_system) or default_system
+        try:
+            raw = self.call_openai_json(system=system, user=user)
+        except Exception as exc:
+            return None, [f"DIR match router unavailable ({exc})."]
+        menu, alignments = apply_dir_route_decision(
+            pack, raw if isinstance(raw, dict) else {}, canonical_industry=canonical_industry
+        )
+        return menu, alignments
+
     def _resolve_or_generate_dir_menu(
         self,
         pack: KnowledgePack,
@@ -783,27 +854,48 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         industry: str | None,
         force_generate: bool = False,
     ) -> tuple[DirMenu, List[str]]:
-        """Reuse a catalog fingerprint hit, or Serper+LLM generate a draft menu.
-
-        Local filesystem packs and website DB payloads share this path: match
-        ``dir_menus`` (aliases / system_examples / explicit scenario) then
-        generate on miss. Do not treat ``default_scenario`` or mirrored
-        ``menus[]`` as a hit — that made hydrate vs YAML diverge.
-        """
+        """Reuse a catalog hit, LLM-route fuzzy cases, or generate a new host menu."""
         notes: List[str] = []
+        canonical = resolve_industry(pack, industry=industry, application=application)
+        typed_sector = str(industry or application or "").strip()
         if not force_generate:
             hit = match_dir_menu(
                 pack,
                 system_name=system_name,
                 scenario_id=scenario_id,
                 equipment_system_variant=equipment_system_variant,
-                industry=industry,
+                industry=canonical,
                 application=application,
                 allow_draft=True,
             )
             if hit is not None:
+                notes.extend(
+                    python_dir_alignments(
+                        typed_sector=typed_sector,
+                        canonical_industry=canonical,
+                        system_name=system_name,
+                        menu=hit,
+                    )
+                )
                 return hit, notes
-            # Legacy packs with no list catalog: reuse authored menus/scenarios.
+            if pack.dir_menus:
+                routed, route_notes = self._route_dir_menu_llm(
+                    pack,
+                    system_name=system_name,
+                    application=application,
+                    canonical_industry=canonical,
+                )
+                notes.extend(route_notes)
+                if routed is not None:
+                    notes.extend(
+                        python_dir_alignments(
+                            typed_sector=typed_sector,
+                            canonical_industry=canonical,
+                            system_name=system_name,
+                            menu=routed,
+                        )
+                    )
+                    return routed, notes
             if not pack.dir_menus:
                 legacy = resolve_dir_menu(
                     pack,
@@ -820,14 +912,24 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 ):
                     return legacy, notes
 
+        create_sid = (scenario_id or "").strip() or scenario_id_from_system_name(system_name)
         try:
             menu = self._generate_and_persist_dir_menu(
                 pack,
                 system_name=system_name,
                 application=application,
-                scenario_id=scenario_id,
+                scenario_id=create_sid,
                 equipment_system_variant=equipment_system_variant,
-                industry=industry,
+                industry=canonical,
+            )
+            notes.extend(
+                python_dir_alignments(
+                    typed_sector=typed_sector,
+                    canonical_industry=canonical,
+                    system_name=system_name,
+                    menu=menu,
+                    created=True,
+                )
             )
             notes.append(
                 f"Generated draft DIR menu '{menu.menu_id or menu.scenario_id}' "
@@ -850,21 +952,18 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 if fallback.requirements and fallback.scenario_id == explicit:
                     notes.append(f"Fell back to explicit scenario '{explicit}'.")
                     return fallback, notes
-            # Do not substitute default_scenario / mirrored menus (that presented
-            # process_vessel_mixing as if it were Crystallizer).
-            slug = re.sub(r"[^a-z0-9]+", "_", system_name.strip().lower()).strip("_")
+            slug = scenario_id_from_system_name(system_name)
             variant = resolve_variant_id(
                 pack,
                 system_name,
                 equipment_system_variant,
                 application=application,
             )
-            ind = resolve_industry(pack, industry=industry, application=application)
             return (
                 DirMenu(
                     scenario_id=slug or "unresolved",
                     equipment_system_variant=variant,
-                    industry=ind,
+                    industry=canonical,
                     label=f"DIR generation failed for {system_name}",
                     lifecycle="pending",
                     requirements=[],
@@ -884,15 +983,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         equipment_system_variant: str | None,
         industry: str | None,
     ) -> DirMenu:
-        sid = (scenario_id or "").strip() or resolve_scenario_id(
-            pack, system_name, application=application
-        )
-        # Mint a scenario id from the system name so catalogs grow per case.
-        # Use the slug as-is (bioreactor), not a "_dir" suffix.
-        if not scenario_id and sid == pack.default_scenario:
-            slug = re.sub(r"[^a-z0-9]+", "_", system_name.strip().lower()).strip("_")
-            if slug and slug not in {"process_vessel", "process"}:
-                sid = slug
+        sid = (scenario_id or "").strip() or scenario_id_from_system_name(system_name)
         variant = resolve_variant_id(
             pack,
             system_name,
@@ -1045,9 +1136,14 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 f"I’ll assume {application} unless you specify otherwise. "
                 f"Reply with a hyphen-separated DIR code (e.g. {example})."
             ),
+            "dir_alignments": [],
         }
         if warning:
             out["sme_warnings"] = [warning]
+            align_bits = [w.strip() for w in warning.split(" | ") if w.strip()]
+            if align_bits:
+                out["dir_alignments"] = align_bits
+                out["message"] = " ".join(align_bits) + " " + out["message"]
             if not validation_error and "DIR generation failed" in warning:
                 validation_error = warning
         if validation_error:

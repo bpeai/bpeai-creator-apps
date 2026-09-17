@@ -10,6 +10,7 @@ from bpeai_creator_sdk.local_run import is_selector_result, repo_py_root
 from bpeai_creator_sdk.sme import (
     align_pack_meta_with_scenarios,
     append_dir_menu,
+    apply_dir_route_decision,
     filter_numeric_common_codes,
     is_numeric_dir_code,
     knowledge_pack_from_dict,
@@ -22,7 +23,9 @@ from bpeai_creator_sdk.sme import (
     pack_dir,
     pack_is_loadable,
     prepare_bootstrapped_component,
+    python_dir_alignments,
     resolve_dir_menu,
+    scenario_id_from_system_name,
     resolve_scenario_id,
     stamp_draft_meta,
     structure_example_snippet,
@@ -322,6 +325,39 @@ def test_bootstrap_dir_requirements_emits_dir_menus_only():
     assert fixed["dir_menus"][0]["common_codes"][0]["code"] == "1"
 
 
+def test_bootstrap_dir_requirements_clamps_to_query_host():
+    payload = {
+        "dir_menus": [
+            {
+                "menu_id": "chromatography_skid__x",
+                "scenario_id": "chromatography_skid",
+                "system_examples": ["Chromatography Skid"],
+                "requirements": [
+                    {"index": 1, "label": "Duty", "options": [{"index": 1, "text": "A"}]}
+                ],
+            },
+            {
+                "menu_id": "cip_system__x",
+                "scenario_id": "cip_system",
+                "system_examples": ["CIP system"],
+                "requirements": [
+                    {"index": 1, "label": "Duty", "options": [{"index": 1, "text": "A"}]}
+                ],
+            },
+        ]
+    }
+    fixed = normalize_bootstrapped_component(
+        "dir_requirements.yaml",
+        payload,
+        pack_id="pump_selector",
+        equipment_system="fluid_transfer",
+        system_name="CIP system",
+        application="Biopharmaceutical",
+    )
+    assert len(fixed["dir_menus"]) == 1
+    assert fixed["dir_menus"][0]["scenario_id"] == "cip_system"
+
+
 def test_bootstrap_dir_requirements_promotes_legacy_scenarios():
     legacy_only = {
         "scenarios": {
@@ -522,15 +558,6 @@ def test_match_dir_menu_requires_exact_industry_and_all_system_keywords(mixing_s
         )
         is None
     )
-    assert (
-        match_dir_menu(
-            mixing_stub,
-            system_name="Media Preparation Vessel",
-            application="Biopharmaceutical & Biologics",
-            allow_draft=True,
-        )
-        is None
-    )
     hit = match_dir_menu(
         mixing_stub,
         system_name="Media Preparation Vessel",
@@ -539,6 +566,22 @@ def test_match_dir_menu_requires_exact_industry_and_all_system_keywords(mixing_s
     )
     assert hit is not None
     assert hit.scenario_id == "media_preparation"
+    official = match_dir_menu(
+        mixing_stub,
+        system_name="Media Preparation Vessel",
+        application="Biopharmaceutical & Biologics",
+        allow_draft=True,
+    )
+    assert official is not None
+    assert official.scenario_id == "media_preparation"
+    short = match_dir_menu(
+        mixing_stub,
+        system_name="Media Preparation Vessel",
+        application="Biopharmaceutical",
+        allow_draft=True,
+    )
+    assert short is not None
+    assert short.scenario_id == "media_preparation"
 
 
 def test_match_dir_menu_rejects_partial_chromatography_example_overlap(mixing_stub):
@@ -679,6 +722,77 @@ def test_append_dir_menu_and_catalog_md(mixing_stub, tmp_path: Path):
     text = md.read_text(encoding="utf-8")
     assert "demo_dir__general__biopharmaceuticals" in text
     assert "draft_generated" in text
+
+
+def test_append_dir_menu_dedups_same_scenario_and_sector(mixing_stub, tmp_path: Path):
+    import shutil
+
+    dest = tmp_path / "mixing_stub"
+    shutil.copytree(mixing_stub.path, dest)
+    pack = load_knowledge_pack("mixing_stub", pack_root=tmp_path)
+    seed = pack.dir_menus[0]
+    first = {
+        "menu_id": "cip_return_pump__general__bio_a",
+        "status": "draft_generated",
+        "scenario_id": "cip_return_pump",
+        "industry": "Biopharmaceutical & Biologics",
+        "system_examples": ["CIP Return Pump"],
+        "label": "First",
+        "requirements": seed.get("requirements") or [],
+        "common_codes": seed.get("common_codes") or [],
+    }
+    second = dict(first)
+    second["menu_id"] = "cip_return_pump__general__bio_b"
+    second["label"] = "Second"
+    append_dir_menu(pack, first, write_markdown=False)
+    append_dir_menu(pack, second, write_markdown=False)
+    rows = [
+        m
+        for m in pack.dir_menus
+        if str(m.get("scenario_id") or "") == "cip_return_pump"
+    ]
+    assert len(rows) == 1
+    assert rows[0]["label"] == "Second"
+
+
+def test_apply_dir_route_decision_reuses_and_rejects_other_sector(mixing_stub):
+    menu, notes = apply_dir_route_decision(
+        mixing_stub,
+        {
+            "action": "reuse",
+            "menu_id": mixing_stub.dir_menus[0]["menu_id"],
+            "scenario_id": "media_preparation",
+            "alignments": ["Fuzzy host match"],
+        },
+        canonical_industry="Biopharmaceutical & Biologics",
+    )
+    assert menu is not None
+    assert menu.scenario_id == "media_preparation"
+    assert "Fuzzy host match" in notes
+    skipped, skip_notes = apply_dir_route_decision(
+        mixing_stub,
+        {
+            "action": "reuse",
+            "menu_id": mixing_stub.dir_menus[0]["menu_id"],
+        },
+        canonical_industry="Industrial Biotechnology",
+    )
+    assert skipped is None
+    assert any("different official sector" in n for n in skip_notes)
+
+
+def test_scenario_id_from_system_name_slugs_host():
+    assert scenario_id_from_system_name("CIP system") == "cip_system"
+    assert scenario_id_from_system_name("CIP Return Pump") == "cip_return_pump"
+
+
+def test_python_dir_alignments_maps_short_sector():
+    notes = python_dir_alignments(
+        typed_sector="Biopharmaceutical",
+        canonical_industry="Biopharmaceutical & Biologics",
+    )
+    assert notes
+    assert "Biopharmaceutical & Biologics" in notes[0]
 
 
 def test_equipment_evaluator_generates_dir_on_catalog_miss(mixing_stub, tmp_path: Path, monkeypatch):

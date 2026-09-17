@@ -33,6 +33,14 @@ def format_dir_text(result: Mapping[str, Any]) -> str:
             lines.append(f"Try code:   {suggested}")
 
     warnings = result.get("sme_warnings") or []
+    alignments = result.get("dir_alignments") or []
+    if isinstance(alignments, list) and alignments:
+        lines.append("")
+        lines.append("DIR alignments")
+        lines.append("─" * 40)
+        for note in alignments:
+            if str(note).strip():
+                lines.append(f"• {note}")
     if isinstance(warnings, list) and warnings:
         lines.append("")
         lines.append("SME warnings")

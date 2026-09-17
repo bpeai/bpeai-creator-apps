@@ -16,6 +16,7 @@ from .pack_loader import (
     _best_alias_match,
     _norm,
     _taxonomy_sector_pairs,
+    resolve_industry,
     resolve_variant_id,
 )
 from .validate import is_numeric_dir_code, validate_dir_code
@@ -309,6 +310,150 @@ def industry_is_exact_match(row_industry: str, selected: str) -> bool:
     return bool(row_id and selected_id and row_id == selected_id)
 
 
+def _industry_sector_key(text: str) -> str:
+    """Map informal or official sector strings onto a stable taxonomy id."""
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    sid = _yaml_sector_id(raw)
+    if sid:
+        return sid
+    key = _norm(raw)
+    if "small molecule" in key:
+        return _yaml_sector_id("Pharmaceutical / Small Molecule") or "pharmaceutical_small_molecule"
+    if "biopharm" in key or key in {"biologics", "biopharmaceuticals", "biopharmaceutical"}:
+        return _yaml_sector_id("Biopharmaceutical & Biologics") or "biopharmaceutical_biologics"
+    if "industrial" in key and "biotech" in key:
+        return _yaml_sector_id("Industrial Biotechnology") or "industrial_biotechnology"
+    if "diagnostic" in key:
+        return _yaml_sector_id("Diagnostics & Laboratory Products") or "diagnostics_lab_products"
+    if "animal" in key or "veterinary" in key:
+        return _yaml_sector_id("Animal Health / Veterinary") or "animal_health_veterinary"
+    if "nutraceut" in key or "consumer health" in key:
+        return _yaml_sector_id("Consumer Health / Nutraceutical") or "consumer_health_nutraceutical"
+    return key
+
+
+def industries_compatible(
+    row_industry: str,
+    selected: str,
+    pack: KnowledgePack | None = None,
+) -> bool:
+    """True when row and query name the same official life-science sector."""
+    if not selected:
+        return True
+    if industry_is_exact_match(row_industry, selected):
+        return True
+    left = _industry_sector_key(row_industry)
+    right = _industry_sector_key(selected)
+    if left and right and left == right:
+        return True
+    if pack is None:
+        return False
+    mapped_left = resolve_industry(pack, industry=row_industry, application=row_industry)
+    mapped_right = resolve_industry(pack, industry=selected, application=selected)
+    return _industry_sector_key(mapped_left) == _industry_sector_key(mapped_right)
+
+
+def scenario_id_from_system_name(system_name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", str(system_name or "").strip().lower()).strip("_")
+    return slug or "unresolved"
+
+
+def catalog_summaries(pack: KnowledgePack) -> List[Dict[str, Any]]:
+    """Compact existing DIR rows for the match-or-create router."""
+    out: List[Dict[str, Any]] = []
+    for row in dir_menus(pack):
+        examples = row.get("system_examples") or []
+        if not isinstance(examples, list):
+            examples = []
+        out.append(
+            {
+                "menu_id": str(row.get("menu_id") or ""),
+                "scenario_id": str(row.get("scenario_id") or ""),
+                "industry": str(row.get("industry") or ""),
+                "system_examples": [str(x) for x in examples[:8] if str(x).strip()],
+                "label": str(row.get("label") or ""),
+                "summary": str(row.get("summary") or "")[:240],
+            }
+        )
+    return out
+
+
+def python_dir_alignments(
+    *,
+    typed_sector: str,
+    canonical_industry: str,
+    system_name: str = "",
+    menu: DirMenu | None = None,
+    created: bool = False,
+) -> List[str]:
+    notes: List[str] = []
+    typed = str(typed_sector or "").strip()
+    canonical = str(canonical_industry or "").strip()
+    if typed and canonical and _norm(typed) != _norm(canonical):
+        notes.append(f"Mapped '{typed}' to official sector '{canonical}'.")
+    if menu is not None:
+        host = str(system_name or "").strip()
+        if created:
+            notes.append(
+                f"Created DIR scenario '{menu.scenario_id}' for {menu.industry}."
+            )
+        else:
+            notes.append(
+                f"Reused DIR scenario '{menu.scenario_id}' ({menu.industry})."
+            )
+            slug = scenario_id_from_system_name(host)
+            if host and slug != _norm(str(menu.scenario_id or "")):
+                notes.append(
+                    f"Typed host '{host}' aligned to existing scenario '{menu.scenario_id}'."
+                )
+    return notes
+
+
+def apply_dir_route_decision(
+    pack: KnowledgePack,
+    raw: Mapping[str, Any] | None,
+    *,
+    canonical_industry: str,
+) -> tuple[DirMenu | None, List[str]]:
+    """Interpret LLM reuse/create JSON. Returns (menu, alignments) or (None, alignments)."""
+    data = raw if isinstance(raw, Mapping) else {}
+    alignments = [
+        str(item).strip()
+        for item in (data.get("alignments") or [])
+        if str(item).strip()
+    ]
+    action = str(data.get("action") or "").strip().lower()
+    if action != "reuse":
+        return None, alignments
+    menu_id = str(data.get("menu_id") or "").strip()
+    scenario_id = str(data.get("scenario_id") or "").strip()
+    rows = dir_menus(pack)
+    chosen: Mapping[str, Any] | None = None
+    if menu_id:
+        for row in rows:
+            if str(row.get("menu_id") or "") == menu_id:
+                chosen = row
+                break
+    if chosen is None and scenario_id:
+        for row in rows:
+            if _norm(str(row.get("scenario_id") or "")) != _norm(scenario_id):
+                continue
+            if industries_compatible(str(row.get("industry") or ""), canonical_industry, pack):
+                chosen = row
+                break
+    if chosen is None:
+        alignments.append("Router reuse skipped — catalog row not found.")
+        return None, alignments
+    if not industries_compatible(str(chosen.get("industry") or ""), canonical_industry, pack):
+        alignments.append(
+            "Router reuse skipped — existing row is a different official sector."
+        )
+        return None, alignments
+    return catalog_row_to_dir_menu(chosen), alignments
+
+
 def _row_system_keywords(row: Mapping[str, Any]) -> set[str]:
     parts = [str(row.get("scenario_id") or "")]
     examples = row.get("system_examples") or []
@@ -355,7 +500,12 @@ def match_dir_menu(
         allowed_ids=set(pack.scenarios.keys()),
     )
     sid = explicit_sid or alias_sid or ""
-    selected_industry = _selected_industry(industry, application)
+    raw_selected = _selected_industry(industry, application)
+    selected_industry = (
+        resolve_industry(pack, industry=industry, application=application)
+        if raw_selected
+        else ""
+    )
 
     variant = resolve_variant_id(
         pack, system_name, equipment_system_variant, application=application
@@ -377,7 +527,7 @@ def match_dir_menu(
             continue
         if not isinstance(row.get("requirements"), list) or not row.get("requirements"):
             continue
-        if not industry_is_exact_match(str(row.get("industry") or ""), selected_industry):
+        if not industries_compatible(str(row.get("industry") or ""), selected_industry, pack):
             continue
         if not system_keywords_covered(system_name, row):
             continue
@@ -627,9 +777,16 @@ def append_dir_menu(
         data["dir_menus"] = menus
 
     mid = str(row.get("menu_id") or "")
+    sid = _norm(str(row.get("scenario_id") or ""))
+    industry = str(row.get("industry") or "")
     replaced = False
     for i, existing in enumerate(menus):
-        if isinstance(existing, dict) and str(existing.get("menu_id") or "") == mid and mid:
+        if not isinstance(existing, dict):
+            continue
+        same_id = bool(mid) and str(existing.get("menu_id") or "") == mid
+        same_host = bool(sid) and _norm(str(existing.get("scenario_id") or "")) == sid
+        same_sector = industries_compatible(str(existing.get("industry") or ""), industry, pack)
+        if same_id or (same_host and same_sector):
             menus[i] = dict(row)
             replaced = True
             break

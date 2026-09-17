@@ -8,6 +8,7 @@ of visual template references (PPTX/PDF) into pack ``references/style/``.
 """
 
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
@@ -193,17 +194,34 @@ def _canonical_industry_labels() -> List[str]:
     return [label for _sid, label in _taxonomy_sector_pairs()]
 
 
-def pack_bootstrap_authoring_rules() -> str:
+def pack_bootstrap_authoring_rules(
+    *,
+    system_name: str = "",
+    application: str = "",
+) -> str:
     """Shared LLM rules so bootstrap does not copy mixing/vent ontology."""
     industries = "; ".join(_canonical_industry_labels())
+    query = ""
+    host = str(system_name or "").strip()
+    sector = str(application or "").strip()
+    if host:
+        slug = re.sub(r"[^a-z0-9]+", "_", host.lower()).strip("_") or "host_system"
+        query = (
+            f"- Current user query host: `{host}`"
+            + (f"; typed sector/application: `{sector}`." if sector else ".")
+            + f" For dir_requirements.yaml emit EXACTLY ONE dir_menus row; "
+            f"scenario_id=`{slug}`; industry=the matching project_definition_sectors "
+            f"label; system_examples must include `{host}`.\n"
+        )
     return (
         "Rules:\n"
+        f"{query}"
         "- scenario_id names a HOST EQUIPMENT SYSTEM (skid or equipment item used "
         "as a system), not an operation. Use ids such as process_vessel, "
         "cip_return_pump, chromatography_skid, tff_skid, cip_skid. Do not use "
         "transfer, dosing, venting, cleaning, or mixing as scenario_ids.\n"
-        "- Emit one dir_menus row per distinct host system; do not collapse "
-        "chromatography, TFF, and CIP into one generic transfer scenario.\n"
+        "- Emit one dir_menus row for the current query host; do not collapse "
+        "distinct hosts, and do not pad the catalog with unused sector examples.\n"
         "- scenario_aliases map those system ids to names users type "
         "(e.g. CIP Return Pump, Chromatography Skid). Never alias a liquid-pump "
         "system to vent / vapor equipment.\n"
@@ -215,6 +233,11 @@ def pack_bootstrap_authoring_rules() -> str:
         "- For dir_requirements.yaml emit dir_menus only (5–7 DIR requirements "
         "and 2+ numeric common_codes with hyphenated indexes + captions; not "
         "SIP/IT tags). Do not include menus or scenarios keys.\n"
+        "- dir_requirements.yaml must contain EXACTLY ONE dir_menus row for the "
+        "current user host system and official sector. scenario_id is the slug of "
+        "that host (cip_system for 'CIP system'). Do not invent extra unused hosts "
+        "such as chromatography_skid, tff_skid, or fermentation_skid just to cover "
+        "other sectors.\n"
         "- Include at least 5 equipment options when writing equipment_options.yaml.\n"
         "- fit_enum.allowed must include best, strong, conditional, limited, "
         "add-on, special-case.\n"
@@ -254,11 +277,13 @@ def component_schema_hints() -> Dict[str, str]:
             "(list), prompt_hooks as an object {system_role: string, emphasize: [strings]}."
         ),
         "dir_requirements.yaml": (
-            "Emit dir_menus only (list catalog). Do NOT include legacy menus or "
+            "Emit EXACTLY ONE dir_menus row for the current user host/sector "
+            "(list catalog). Do NOT include legacy menus or "
             "scenarios maps — the loader synthesizes those from dir_menus. "
+            "Do not add extra hosts to cover unused sectors. "
             "dir_menus: ["
             "{menu_id, status (approved|draft_generated), scenario_id "
-            "(host equipment system such as cip_return_pump or chromatography_skid, "
+            "(slug of the typed host, e.g. cip_system, "
             "never an operation such as transfer or venting), "
             "equipment_system_variant, industry (a project_definition_sectors "
             f"label: {industries}), system_examples (user-typed system names), "
@@ -491,6 +516,8 @@ def normalize_bootstrapped_component(
     *,
     pack_id: str = "",
     equipment_system: str = "",
+    system_name: str = "",
+    application: str = "",
 ) -> Dict[str, Any]:
     """Coerce common LLM draft mistakes into loader-compatible shapes."""
     data = unwrap_component_payload(filename, payload)
@@ -554,7 +581,30 @@ def normalize_bootstrapped_component(
         return data
 
     if filename == "dir_requirements.yaml":
-        return dir_requirements_dir_menus_only(data)
+        data = dir_requirements_dir_menus_only(data)
+        host = str(system_name or "").strip()
+        menus = data.get("dir_menus")
+        if host and isinstance(menus, list) and len(menus) > 1:
+            host_l = host.lower()
+            slug = re.sub(r"[^a-z0-9]+", "_", host_l).strip("_")
+            scored: List[tuple[int, Dict[str, Any]]] = []
+            for row in menus:
+                if not isinstance(row, Mapping):
+                    continue
+                blob = " ".join(
+                    [
+                        str(row.get("scenario_id") or ""),
+                        " ".join(str(x) for x in (row.get("system_examples") or [])),
+                        str(row.get("label") or ""),
+                    ]
+                ).lower()
+                score = blob.count(host_l) * 3
+                if slug and slug in blob.replace(" ", "_"):
+                    score += 5
+                scored.append((score, dict(row)))
+            scored.sort(key=lambda x: x[0], reverse=True)
+            data["dir_menus"] = [scored[0][1]] if scored else menus[:1]
+        return data
 
     if filename == "equipment_options.yaml":
         if "options" not in data and isinstance(data.get("equipment_options"), list):
@@ -696,6 +746,8 @@ def prepare_bootstrapped_component(
     *,
     pack_id: str = "",
     equipment_system: str = "",
+    system_name: str = "",
+    application: str = "",
 ) -> Dict[str, Any]:
     """Normalize LLM JSON and raise if still structurally unusable."""
     normalized = normalize_bootstrapped_component(
@@ -703,6 +755,8 @@ def prepare_bootstrapped_component(
         payload,
         pack_id=pack_id,
         equipment_system=equipment_system,
+        system_name=system_name,
+        application=application,
     )
     issues = component_payload_issues(filename, normalized)
     if issues:
