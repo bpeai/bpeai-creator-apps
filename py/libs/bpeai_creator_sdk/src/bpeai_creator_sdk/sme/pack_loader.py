@@ -73,6 +73,17 @@ def _slot_values_from_decoded(
         out[str(slot_name)] = value
     return out
 
+
+def _prompt_join(value: Any, *, limit: int = 8, sep: str = ", ") -> str:
+    """Flatten a YAML string or list into a compact prompt fragment."""
+    if value is None or value == "":
+        return ""
+    if isinstance(value, (list, tuple)):
+        parts = [str(v).strip() for v in value if str(v).strip()]
+        return sep.join(parts[:limit])
+    return str(value).strip()
+
+
 APPROVED_LIFECYCLES = frozenset({"approved", "APPROVED"})
 
 
@@ -273,6 +284,70 @@ class KnowledgePack:
             if name:
                 names.append(name)
         return names
+
+    def option_catalog_prompt_block(self) -> str:
+        """SME catalog text for evaluate prompts: names plus fit, duties, and vendors."""
+        lines: List[str] = []
+        for opt in self.option_catalog():
+            name = str(opt.get("name") or "").strip()
+            if not name:
+                continue
+            bits = [f"- {name}"]
+            fit = _prompt_join(opt.get("typical_fit"))
+            if fit:
+                bits.append(f"typical_fit: {fit}")
+            tags = _prompt_join(opt.get("tags"))
+            if tags:
+                bits.append(f"tags: {tags}")
+            apps = _prompt_join(opt.get("industrial_applications"), sep="; ")
+            if apps:
+                bits.append(f"known applications: {apps}")
+            use_when = _prompt_join(opt.get("use_when"), sep="; ")
+            if use_when:
+                bits.append(f"use when: {use_when}")
+            avoid = _prompt_join(
+                opt.get("avoid_when") or opt.get("not_typical_for"), sep="; "
+            )
+            if avoid:
+                bits.append(f"omit unless DIR needs it: {avoid}")
+            mfrs = _prompt_join(opt.get("manufacturers"), limit=6)
+            if mfrs:
+                bits.append(f"vendors: {mfrs}")
+            lines.append(" | ".join(bits))
+        guidance = self.equipment_options.get("shortlist_guidance") or []
+        if isinstance(guidance, list) and guidance:
+            lines.append("Shortlist rules:")
+            lines.extend(f"- {g}" for g in guidance if str(g).strip())
+        elif isinstance(guidance, str) and guidance.strip():
+            lines.append("Shortlist rules:")
+            lines.append(f"- {guidance.strip()}")
+        defaults = self.equipment_options.get("do_not_specify_defaults") or []
+        if defaults:
+            lines.append("Default exclusions (adapt to DIR):")
+            lines.extend(f"- {d}" for d in defaults)
+        return "\n".join(lines)
+
+    def shortlist_count_warning(self, options: Sequence[Any]) -> str:
+        """Soft warning when evaluate returned fewer options than the pack asks for."""
+        named = [
+            o
+            for o in (options or [])
+            if isinstance(o, Mapping) and str(o.get("name") or "").strip()
+        ]
+        outline = self.report_outline or {}
+        raw_min = outline.get("min_evaluation_options")
+        if raw_min in (None, ""):
+            raw_min = outline.get("min_mixing_options") or 3
+        try:
+            min_opts = int(raw_min)
+        except (TypeError, ValueError):
+            min_opts = 3
+        if len(named) >= min_opts:
+            return ""
+        return (
+            f"Shortlist has {len(named)} option(s); expected at least {min_opts} "
+            "industry-standard options for this duty."
+        )
 
     def _normalize_common_codes(self, raw: Any) -> List[Dict[str, str]]:
         out: List[Dict[str, str]] = []

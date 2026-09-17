@@ -141,10 +141,14 @@ Return ONLY JSON:
 
 Rules:
 - Reuse when the typed host is the same equipment system as a catalog row in the
-  same official sector (fuzzy spelling and CIP system vs CIP skid are reuse).
-- Create when the host is distinct (CIP Return Pump vs chromatography_skid) or
-  the official sector differs.
-- scenario_id for create must be a slug of the typed system name (cip_system).
+  same official sector. Fuzzy spelling is reuse (CIP system vs CIP skid).
+- A packaged skid/system is not the same host as a standalone equipment item:
+  CIP Skid, CIP Skid Pump, CIP Skid Supply Pump, and CIP Skid Return Pump reuse
+  the CIP Skid row. CIP Supply Pump or CIP Return Pump (no "skid") is a distinct
+  host and must not reuse the CIP Skid row.
+- Create when the host is distinct (CIP Return Pump vs CIP Skid; CIP Return Pump
+  vs chromatography_skid) or the official sector differs.
+- scenario_id for create must be a slug of the typed system name (cip_return_pump).
 - Do not invent official sector names; Python sets industry.
 - alignments must mention any fuzzy mapping you applied.
 """
@@ -288,7 +292,10 @@ MUST be arrays of strings (e.g. "Material: 316L stainless"), never objects.
 
 Requirements (depth bar — do not produce thin one-line sections):
 - Use the decoded DIR; do not invent a different volume/vessel/duty.
-- List at least 5 realistic options; mark one as recommended basis (fit=best).
+- Shortlist 3–5 industry-standard options known to be used or sold for THIS
+  application and DIR duty. Aim for at least 3. Five is a good maximum. Include
+  more only when additional strong candidates exist. Do not pad with exotic,
+  poorly fitting, or unproven types. Mark one as recommended basis (fit=best).
 - Per option: >=2 industrial_applications, >=3 pros, >=2 cons/watchouts,
   >=2 manufacturers with product-line hints when known, plus why fit changes for THIS DIR.
 - Include qualitative scale-up / performance reasoning appropriate to the equipment system.
@@ -329,17 +336,7 @@ def _suggest_tag(system_name: str, equipment_system: str) -> str:
 
 
 def _option_catalog_block(pack: KnowledgePack) -> str:
-    lines: List[str] = []
-    for opt in pack.option_catalog():
-        name = opt.get("name") or ""
-        mfrs = opt.get("manufacturers") or []
-        mfr_s = ", ".join(str(m) for m in mfrs[:6]) if isinstance(mfrs, list) else ""
-        lines.append(f"- {name}" + (f" | vendors: {mfr_s}" if mfr_s else ""))
-    defaults = pack.equipment_options.get("do_not_specify_defaults") or []
-    if defaults:
-        lines.append("Default exclusions (adapt to DIR):")
-        lines.extend(f"- {d}" for d in defaults)
-    return "\n".join(lines)
+    return pack.option_catalog_prompt_block()
 
 
 def _artifact_stem(result: Dict[str, Any]) -> str:
@@ -1302,7 +1299,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             default_repair = (
                 "The previous JSON evaluation needs a deeper datasheet_markdown.\n"
                 "Also ensure failure_modes has >=3 items, each evaluation_options entry meets the "
-                "depth bar, and weave search citations (title + URL) into rationale and markdown.\n"
+                "depth bar, the shortlist has 3–5 industry-standard options for this duty "
+                "(at least 3; do not pad), the report states industry best practice for this duty, "
+                "and weave search citations (title + URL) into rationale and markdown.\n"
                 "Return the FULL corrected JSON object (same schema) with a complete "
                 "datasheet_markdown that includes ALL required headings."
             )
@@ -1356,6 +1355,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             basis.append("creator_references")
             result["source_basis"] = basis
         warnings = [w for w in [app_warning, *opt_check.warnings] if w]
+        count_w = pack.shortlist_count_warning(opts)
+        if count_w:
+            warnings.append(count_w)
         still_missing = missing_report_headings(
             str(result.get("datasheet_markdown") or ""),
             headings,

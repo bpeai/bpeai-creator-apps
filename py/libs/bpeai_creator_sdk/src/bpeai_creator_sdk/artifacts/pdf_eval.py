@@ -713,6 +713,15 @@ def write_evaluation_report_pdf(
                         styles["body"],
                     )
                 )
+        practice_md = _markdown_section(markdown, "industry best practice")
+        if practice_md:
+            story.append(
+                Paragraph(f"{n}. Industry best practice for this duty", styles["h"])
+            )
+            n += 1
+            intro = _section_intro(practice_md)
+            if intro:
+                story.append(Paragraph(_inline_md(intro), styles["body"]))
         short_md = _markdown_section(
             markdown, "best-fit", "strong-fit", "system shortlist"
         )

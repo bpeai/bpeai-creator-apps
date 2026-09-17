@@ -584,6 +584,27 @@ def test_match_dir_menu_requires_exact_industry_and_all_system_keywords(mixing_s
     assert short.scenario_id == "media_preparation"
 
 
+def test_cip_skid_and_standalone_cip_pump_use_different_dir_menus(py_root: Path):
+    pack = load_knowledge_pack("pump_selector", py_root=py_root)
+    expected = {
+        "CIP Skid": "cip_skid",
+        "CIP Skid Pump": "cip_skid",
+        "CIP Skid Supply Pump": "cip_skid",
+        "CIP Skid Return Pump": "cip_skid",
+        "CIP Return Pump": "cip_pump",
+        "CIP Supply Pump": "cip_pump",
+    }
+    for host, scenario_id in expected.items():
+        hit = match_dir_menu(
+            pack,
+            system_name=host,
+            application="Biopharmaceutical",
+            allow_draft=True,
+        )
+        assert hit is not None, host
+        assert hit.scenario_id == scenario_id, (host, hit.scenario_id)
+
+
 def test_match_dir_menu_rejects_partial_chromatography_example_overlap(mixing_stub):
     seed = mixing_stub.dir_menus[0]
     payload = {
@@ -1120,6 +1141,41 @@ def test_format_dir_text():
     assert "DIR generation failed (boom)" in text
     assert format_result_text({"phase": "dir_requirements", "requirements": []}).startswith(
         "Design Input"
+    )
+
+
+def test_option_catalog_prompt_block_includes_fit_duties_and_shortlist_rules():
+    pack = knowledge_pack_from_dict(
+        "pump_selector",
+        {
+            "meta": {"pack_id": "pump_selector", "equipment_system": "fluid_transfer"},
+            "equipment_options": {
+                "options": [
+                    {
+                        "name": "Hygienic end-suction centrifugal pump",
+                        "typical_fit": "best",
+                        "tags": ["CIP supply"],
+                        "industrial_applications": ["CIP supply circulation"],
+                        "use_when": ["Flooded suction CIP supply"],
+                        "avoid_when": ["CIP return with air"],
+                        "manufacturers": ["Alfa Laval LKH family"],
+                    }
+                ],
+                "shortlist_guidance": ["Shortlist 3–5 industry-standard options."],
+                "do_not_specify_defaults": ["Do not specify a final model"],
+            },
+            "report_outline": {"min_evaluation_options": 3},
+        },
+    )
+    text = pack.option_catalog_prompt_block()
+    assert "typical_fit: best" in text
+    assert "CIP supply" in text
+    assert "Alfa Laval LKH family" in text
+    assert "omit unless DIR needs it" in text
+    assert "Shortlist 3" in text
+    assert pack.shortlist_count_warning([{"name": "A"}, {"name": "B"}])
+    assert not pack.shortlist_count_warning(
+        [{"name": "A"}, {"name": "B"}, {"name": "C"}]
     )
 
 
