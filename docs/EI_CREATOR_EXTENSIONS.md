@@ -48,8 +48,16 @@ Assembled by `KnowledgePack.build_system_prompt()`. Optional pack meta
 
 ### Per-call instructions — `prompt_fragments.yaml` → `calls`
 
-SME-owned system/instruction text for `dir_generate`, `evaluate`,
+SME-owned system/instruction text for `dir_generate`, `dir_route`, `evaluate`,
 `evaluate_repair`, `pptx`, `pack_bootstrap`. See AI handshakes doc for keys.
+
+**DIR host identity:** packs own example host names (CIP Skid vs CIP Return Pump,
+chromatography skid vs chromatography feed pump). The **template** owns the
+reuse/create policy on `dir_route` (synonym of the same host → reuse; named
+package plus a component noun → reuse the package; standalone duty items with
+different inputs → create; different package or official sector → create).
+Do not hard-code CIP-only reuse rules in pack YAML as if they were the platform
+contract.
 
 ### Web search — `search_queries.yaml`
 

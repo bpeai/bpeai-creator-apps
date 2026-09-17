@@ -588,11 +588,12 @@ def test_cip_skid_and_standalone_cip_pump_use_different_dir_menus(py_root: Path)
     pack = load_knowledge_pack("pump_selector", py_root=py_root)
     expected = {
         "CIP Skid": "cip_skid",
+        "CIP System": "cip_skid",
         "CIP Skid Pump": "cip_skid",
         "CIP Skid Supply Pump": "cip_skid",
         "CIP Skid Return Pump": "cip_skid",
-        "CIP Return Pump": "cip_pump",
-        "CIP Supply Pump": "cip_pump",
+        "CIP Return Pump": "cip_return_pump",
+        "CIP Supply Pump": "cip_supply_pump",
     }
     for host, scenario_id in expected.items():
         hit = match_dir_menu(
@@ -603,6 +604,127 @@ def test_cip_skid_and_standalone_cip_pump_use_different_dir_menus(py_root: Path)
         )
         assert hit is not None, host
         assert hit.scenario_id == scenario_id, (host, hit.scenario_id)
+
+
+def _schema_contract_chunk(path: Path, name: str) -> str:
+    text = path.read_text(encoding="utf-8")
+    start = text.find(f"{name} = ")
+    assert start != -1, f"{name} missing in {path}"
+    end = text.find('"""', start)
+    assert end != -1, path
+    end = text.find('"""', end + 3)
+    assert end != -1, path
+    return text[start:end]
+
+
+def test_dir_route_schema_contract_is_host_identity_not_cip_only(py_root: Path):
+    paths = [
+        py_root / "apps" / "_templates" / "equipment_evaluator" / "agent.py",
+        py_root / "apps" / "_templates" / "equipment_sizing" / "agent.py",
+    ]
+    pump_copy = py_root / "apps" / "equipment_evaluator" / "pump_selector" / "agent.py"
+    if pump_copy.is_file():
+        paths.append(pump_copy)
+    for path in paths:
+        chunk = _schema_contract_chunk(path, "DIR_ROUTE_SCHEMA_CONTRACT")
+        lowered = chunk.lower()
+        assert "host equipment system" in lowered, path
+        assert "package + component" in lowered, path
+        assert "standalone duty" in lowered, path
+        assert "chromatography" in lowered, path
+        assert "tff" in lowered, path
+        assert "cip skid, cip system, cip skid pump" not in lowered, path
+
+
+def test_dir_generate_schema_contract_uses_typed_host_only(py_root: Path):
+    paths = [
+        py_root / "apps" / "_templates" / "equipment_evaluator" / "agent.py",
+        py_root / "apps" / "_templates" / "equipment_sizing" / "agent.py",
+    ]
+    pump_copy = py_root / "apps" / "equipment_evaluator" / "pump_selector" / "agent.py"
+    if pump_copy.is_file():
+        paths.append(pump_copy)
+    for path in paths:
+        chunk = _schema_contract_chunk(path, "DIR_GENERATE_SCHEMA_CONTRACT")
+        lowered = chunk.lower()
+        assert "this typed host" in lowered, path
+        assert "do not copy" in lowered, path
+        assert "chromatography" in lowered, path
+
+
+def test_chromatography_feed_pump_python_miss_documents_dir_route_create(mixing_stub):
+    """Python stays strict; LLM dir_route (not run in CI) decides reuse vs create.
+
+    Expected LLM actions for this catalog (golden, no live model):
+      Chromatography Skid → reuse chromatography_skid (Python hit)
+      Chromatography Skid Pump → reuse chromatography_skid (package + component)
+      Chromatography Feed Pump → create chromatography_feed_pump (standalone duty)
+    """
+    seed = mixing_stub.dir_menus[0]
+    payload = {
+        "meta": dict(mixing_stub.meta),
+        "dir_requirements": {
+            "dir_menus": list(mixing_stub.dir_menus)
+            + [
+                {
+                    "menu_id": "chromatography_skid__stirred_tank_general__biopharmaceuticals",
+                    "status": "draft_generated",
+                    "scenario_id": "chromatography_skid",
+                    "equipment_system_variant": "stirred_tank_general",
+                    "industry": "Biopharmaceuticals",
+                    "system_examples": [
+                        "Chromatography Skid",
+                        "Chromatography System",
+                    ],
+                    "requirements": seed.get("requirements") or [],
+                    "common_codes": seed.get("common_codes") or [],
+                }
+            ],
+        },
+        "equipment_options": mixing_stub.equipment_options,
+        "validation_rules": mixing_stub.validation_rules,
+        "prompt_fragments": mixing_stub.prompt_fragments,
+    }
+    pack = knowledge_pack_from_dict("mixing_stub", payload, path=mixing_stub.path)
+    skid = match_dir_menu(
+        pack,
+        system_name="Chromatography Skid",
+        application="Biopharmaceuticals",
+        allow_draft=True,
+    )
+    assert skid is not None
+    assert skid.scenario_id == "chromatography_skid"
+    assert (
+        match_dir_menu(
+            pack,
+            system_name="Chromatography Skid Pump",
+            application="Biopharmaceuticals",
+            allow_draft=True,
+        )
+        is None
+    )
+    assert (
+        match_dir_menu(
+            pack,
+            system_name="Chromatography Feed Pump",
+            application="Biopharmaceuticals",
+            allow_draft=True,
+        )
+        is None
+    )
+    reused, _ = apply_dir_route_decision(
+        pack,
+        {"action": "reuse", "scenario_id": "chromatography_skid"},
+        canonical_industry="Biopharmaceuticals",
+    )
+    assert reused is not None
+    assert reused.scenario_id == "chromatography_skid"
+    created, _ = apply_dir_route_decision(
+        pack,
+        {"action": "create", "scenario_id": "chromatography_feed_pump"},
+        canonical_industry="Biopharmaceuticals",
+    )
+    assert created is None
 
 
 def test_match_dir_menu_rejects_partial_chromatography_example_overlap(mixing_stub):

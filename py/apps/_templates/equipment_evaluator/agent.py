@@ -127,9 +127,19 @@ Rules:
   each with a caption that decodes the selection in one sentence (GPT style).
 - Do NOT use mnemonic tags (SIP, IT, BPE) as common_codes.
 - Prefer industrially realistic options for life-science equipment selection.
+- Tailor the questionnaire to THIS typed host (system_name / scenario id hint).
+- scenario_id and system_examples must describe this host only. Do not copy
+  another catalog row's id or examples (do not put CIP Skid on a standalone
+  CIP Return Pump menu; do not put Chromatography Skid on a feed-pump menu).
+- The questionnaire may be similar to a sibling host, but requirements must
+  match THIS duty (supply vs return, feed vs eluate, vessel vs inline mixer).
 """
 
 DIR_ROUTE_SCHEMA_CONTRACT = """Decide whether this query reuses an existing DIR catalog row or needs a new scenario.
+
+A DIR scenario is the HOST EQUIPMENT SYSTEM whose design inputs are being collected —
+not the process (CIP, TFF, chromatography) and not the evaluated technology type
+(pump family, agitator impeller, filter media).
 
 Return ONLY JSON:
 {
@@ -140,16 +150,24 @@ Return ONLY JSON:
 }
 
 Rules:
-- Reuse when the typed host is the same equipment system as a catalog row in the
-  same official sector. Fuzzy spelling is reuse (CIP system vs CIP skid).
-- A packaged skid/system is not the same host as a standalone equipment item:
-  CIP Skid, CIP Skid Pump, CIP Skid Supply Pump, and CIP Skid Return Pump reuse
-  the CIP Skid row. CIP Supply Pump or CIP Return Pump (no "skid") is a distinct
-  host and must not reuse the CIP Skid row.
-- Create when the host is distinct (CIP Return Pump vs CIP Skid; CIP Return Pump
-  vs chromatography_skid) or the official sector differs.
-- scenario_id for create must be a slug of the typed system name (cip_return_pump).
-- Do not invent official sector names; Python sets industry.
+- Reuse spelling variants and synonyms of the SAME host in the same official
+  sector (CIP System vs CIP Skid; Media Prep vs Media Preparation Vessel).
+- Package + component reuses the package row. If the typed name is an existing
+  catalog host plus a component noun (pump, agitator, filter, exchanger, valve),
+  reuse that host. Do not create a new scenario for a component of a named
+  skid/system (CIP Skid Return Pump → CIP Skid; Chromatography Skid Pump →
+  Chromatography Skid; TFF Skid Recirculation Pump → TFF Skid).
+- Standalone duty items are distinct hosts. If the typed name is a specific
+  equipment item NOT prefixed by that package name, and no catalog row lists it,
+  CREATE. Two standalone items with different duties get two scenarios even when
+  questionnaires would look similar (CIP Supply Pump vs CIP Return Pump;
+  chromatography feed pump vs eluate pump).
+- Different packages CREATE (CIP Skid vs chromatography_skid; mixing vessel vs
+  TFF skid).
+- Different official sector CREATE. Do not invent official sector names; Python
+  sets industry.
+- scenario_id for create must be a slug of the typed system name
+  (cip_return_pump), not an existing package id.
 - alignments must mention any fuzzy mapping you applied.
 """
 
@@ -818,14 +836,18 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         summaries = catalog_summaries(pack)
         if not summaries:
             return None, []
+        # AI_HANDSHAKE: dir_route — reuse vs create host scenario after Python catalog miss.
         self.status("Checking existing DIR scenarios for a match…")
+        sme_route = pack.call_fragment("dir_route", "instructions")
         user = (
             f"Typed host: {system_name}\n"
             f"Typed application/sector: {application}\n"
             f"Official sector: {canonical_industry}\n\n"
             f"Existing DIR catalog:\n{json.dumps(summaries, ensure_ascii=False)[:20000]}\n\n"
-            f"{DIR_ROUTE_SCHEMA_CONTRACT}"
         )
+        if sme_route:
+            user += f"{sme_route}\n\n"
+        user += DIR_ROUTE_SCHEMA_CONTRACT
         default_system = (
             "You route DIR questionnaires to existing catalog rows or create a new "
             "host scenario. Return ONLY JSON."
