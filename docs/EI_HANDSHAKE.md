@@ -145,6 +145,8 @@ Bare `equipment_selector_v1` results remain valid. SDK adapters
   "artifacts": {
     "markdown_s3_key": "…",
     "markdown_url": "https://…",
+    "docx_s3_key": "…",
+    "docx_url": "https://…",
     "pdf_s3_key": "…",
     "pdf_url": "https://…",
     "pptx_s3_key": "…",

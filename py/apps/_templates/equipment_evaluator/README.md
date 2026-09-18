@@ -68,22 +68,22 @@ LLM bootstrap shape examples use `py/knowledge/_examples/equipment_evaluator_stu
 (host-system scenarios and project-definition sector labels). Do not copy mixing_stub
 as a starter pack.
 
-Artifacts (markdown + PDF + optional PPTX) write under `./artifacts/` (gitignored).
+Artifacts (markdown + Word `.docx` + optional PPTX) write under `./artifacts/` (gitignored).
 
 ## Phases
 
 | Phase | Trigger | Result |
 |-------|---------|--------|
 | DIR | no `dir_code`, or `phase=dir` | Match catalog or generate draft questionnaire + captioned numeric common codes |
-| Evaluate | valid `dir_code` | GPT-parity `equipment_selector_v1` + sectioned `datasheet_markdown` (+ `.md` / `.pdf`) |
+| Evaluate | valid `dir_code` | GPT-parity `equipment_selector_v1` + sectioned `datasheet_markdown` (+ `.md` / `.docx`) |
 | PPTX | `pptx` / `y` in local chat, or `deliverable=pptx` | 7-slide deck with auto-fit fonts |
 | generate_dir | `phase=generate_dir` | Force catalog generate/persist for the fingerprint |
 
 ## Portal vs local formats
 
-- Hub / portal: `datasheet_markdown` → S3 `.md` only
-- Local: also writes a URS-style PDF (`eval_pdf.py` → SDK `pdf_eval.py`); PPTX is local authoring unless product adds binary upload
-- Filenames: `{system}_{evaluated_item}_evaluation.{md,pdf,pptx}` — set `evaluated_item` in `pack.yaml` (SME)
+- Hub / portal: `datasheet_markdown` → S3 `.md`; Word report uploads when `docx_path` is present
+- Local: writes an editable Word report (`docx_eval.py`); Save as PDF in Word if a locked copy is needed
+- Filenames: `{system}_{evaluated_item}_evaluation.{md,docx,pptx}` — set `evaluated_item` in `pack.yaml` (SME)
 
 ## Reference PPTX and creator content
 

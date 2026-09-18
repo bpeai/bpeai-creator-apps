@@ -72,7 +72,7 @@ python py/tools/local_chat.py --app <your_slug>
 ```
 
 Helpers: `local_env`, `local_parse`, `local_format`, `local_run`, `llm` (multi-provider JSON).  
-Artifacts helpers: `build_evaluation_pdf`, `build_evaluation_pptx`, `list_reference_decks`,
+Artifacts helpers: `build_evaluation_docx`, `build_evaluation_pptx`, `list_reference_decks`,
 `replace_reference_deck`.
 
 LLM provider adapter (v1): default `CREATOR_LLM_PROVIDER=openai`. Optional allowlisted

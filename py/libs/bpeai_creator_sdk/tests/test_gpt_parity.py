@@ -153,20 +153,20 @@ def test_slide3_objective_cards_keep_long_titles(tmp_path: Path):
     assert "bar controlled" in joined
 
 
-def test_build_evaluation_pdf_and_reference_decks(tmp_path: Path, mixing_pack):
-    from bpeai_creator_sdk import build_evaluation_pdf, list_reference_decks
+def test_build_evaluation_docx_and_reference_decks(tmp_path: Path, mixing_pack):
+    from bpeai_creator_sdk import build_evaluation_docx, list_reference_decks
 
-    pdf = build_evaluation_pdf(
+    docx = build_evaluation_docx(
         {
             "system_name": "Media Prep Vessel",
             "dir_code": "2-1-2-3-1-1",
             "datasheet_markdown": "# Design basis\n\nSelection implication narrative.\n\n## Option evaluation\n\n- Hydrofoil best fit\n",
             "selected_model": "Hydrofoil",
         },
-        output_path=tmp_path / "eval.pdf",
+        output_path=tmp_path / "eval.docx",
     )
-    assert pdf.is_file()
-    assert pdf.stat().st_size > 500
+    assert docx.is_file()
+    assert docx.stat().st_size > 500
 
     decks = list_reference_decks(mixing_pack.path, outline=mixing_pack.pptx_outline)
     assert decks
@@ -174,11 +174,10 @@ def test_build_evaluation_pdf_and_reference_decks(tmp_path: Path, mixing_pack):
 
 
 def test_evaluation_pdf_urs_layout(tmp_path: Path):
-    from pypdf import PdfReader
+    from bpeai_creator_sdk import build_evaluation_docx
+    from bpeai_creator_sdk.artifacts import evaluation_docx_text
 
-    from bpeai_creator_sdk import build_evaluation_pdf
-
-    pdf = build_evaluation_pdf(
+    docx = build_evaluation_docx(
         {
             "system_name": "Conditioning & Mixing Tank",
             "application": "Biopharmaceuticals",
@@ -209,10 +208,10 @@ Specify a jacketed 316L tank with a pitched-blade turbine.
 2.5 m3 is the working volume, not a heading.
 """,
         },
-        output_path=tmp_path / "conditioning.pdf",
+        output_path=tmp_path / "conditioning.docx",
     )
-    assert pdf.is_file()
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert docx.is_file()
+    text = evaluation_docx_text(docx)
     assert "Conditioning & Mixing Tank" in text
     assert "Recommendation in one line" in text
     assert "Pitched-blade turbine" in text
@@ -223,10 +222,9 @@ Specify a jacketed 316L tank with a pitched-blade turbine.
 
 
 def test_cip_system_pump_evaluation_title_and_tables(tmp_path: Path):
-    from pypdf import PdfReader
-
     from bpeai_creator_sdk.artifacts.names import evaluation_title_lines
-    from bpeai_creator_sdk import build_evaluation_pdf, build_evaluation_pptx
+    from bpeai_creator_sdk import build_evaluation_docx, build_evaluation_pptx
+    from bpeai_creator_sdk.artifacts import evaluation_docx_text
 
     result = {
         "system_name": "CIP system",
@@ -294,9 +292,9 @@ def test_cip_system_pump_evaluation_title_and_tables(tmp_path: Path):
 """,
     }
     assert evaluation_title_lines(result) == ["CIP System Pump", "Evaluation"]
-    pdf = build_evaluation_pdf(result, output_path=tmp_path / "CIP System Pump Evaluation.pdf")
-    assert pdf.name == "CIP System Pump Evaluation.pdf"
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    docx = build_evaluation_docx(result, output_path=tmp_path / "CIP System Pump Evaluation.docx")
+    assert docx.name == "CIP System Pump Evaluation.docx"
+    text = evaluation_docx_text(docx)
     assert "CIP System Pump Evaluation" in text
     assert "Recommendation in one line" in text
     assert "1. Design basis from DIR code" in text
@@ -329,9 +327,8 @@ def test_cip_system_pump_evaluation_title_and_tables(tmp_path: Path):
 
 
 def test_pdf_objectives_table_ignores_wrong_markdown_and_uses_json(tmp_path: Path):
-    from pypdf import PdfReader
-
-    from bpeai_creator_sdk import build_evaluation_pdf
+    from bpeai_creator_sdk import build_evaluation_docx
+    from bpeai_creator_sdk.artifacts import evaluation_docx_text
 
     result = {
         "system_name": "CIP Return Pump",
@@ -369,8 +366,8 @@ def test_pdf_objectives_table_ignores_wrong_markdown_and_uses_json(tmp_path: Pat
 Failure modes: dry running damages seals.
 """,
     }
-    pdf = build_evaluation_pdf(result, output_path=tmp_path / "cip-return-objectives.pdf")
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    docx = build_evaluation_docx(result, output_path=tmp_path / "cip-return-objectives.docx")
+    text = evaluation_docx_text(docx)
     assert "Step" in text
     assert "Objective" in text
     assert "Key control" in text
@@ -381,9 +378,8 @@ Failure modes: dry running damages seals.
 
 
 def test_pdf_objectives_table_uses_matching_markdown(tmp_path: Path):
-    from pypdf import PdfReader
-
-    from bpeai_creator_sdk import build_evaluation_pdf
+    from bpeai_creator_sdk import build_evaluation_docx
+    from bpeai_creator_sdk.artifacts import evaluation_docx_text
 
     result = {
         "system_name": "Media Preparation Vessel",
@@ -415,8 +411,8 @@ def test_pdf_objectives_table_uses_matching_markdown(tmp_path: Path):
 | 2 | Wet dry powder | Avoid dry rafts, fisheyes, wall/baffle deposits, and dust release. |
 """,
     }
-    pdf = build_evaluation_pdf(result, output_path=tmp_path / "media-prep-objectives.pdf")
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    docx = build_evaluation_docx(result, output_path=tmp_path / "media-prep-objectives.docx")
+    text = evaluation_docx_text(docx)
     assert "Step" in text
     assert "Objective" in text
     assert "Key control" in text
@@ -427,9 +423,8 @@ def test_pdf_objectives_table_uses_matching_markdown(tmp_path: Path):
 
 
 def test_pdf_unknown_tbd_design_basis_states_assumption(tmp_path: Path):
-    from pypdf import PdfReader
-
-    from bpeai_creator_sdk import build_evaluation_pdf
+    from bpeai_creator_sdk import build_evaluation_docx
+    from bpeai_creator_sdk.artifacts import evaluation_docx_text
 
     result = {
         "system_name": "CIP Return Pump",
@@ -461,17 +456,16 @@ def test_pdf_unknown_tbd_design_basis_states_assumption(tmp_path: Path):
         ],
         "datasheet_markdown": "# CIP Return Pump Evaluation\n",
     }
-    pdf = build_evaluation_pdf(result, output_path=tmp_path / "tbd.pdf")
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    docx = build_evaluation_docx(result, output_path=tmp_path / "tbd.docx")
+    text = evaluation_docx_text(docx)
     assert "Unknown / TBD" in text
     assert "most likely" in text.lower()
     assert "Product-contact CIP return" in text
 
 
 def test_pdf_exclusions_table_is_two_column_technology_reason(tmp_path: Path):
-    from pypdf import PdfReader
-
-    from bpeai_creator_sdk import build_evaluation_pdf
+    from bpeai_creator_sdk import build_evaluation_docx
+    from bpeai_creator_sdk.artifacts import evaluation_docx_text
 
     result = {
         "system_name": "CIP Return Pump",
@@ -501,8 +495,8 @@ def test_pdf_exclusions_table_is_two_column_technology_reason(tmp_path: Path):
 | Air-operated double-diaphragm pump: Poor CIP return NPSH and drainability |
 """,
     }
-    pdf = build_evaluation_pdf(result, output_path=tmp_path / "cip-return-exclusions.pdf")
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    docx = build_evaluation_docx(result, output_path=tmp_path / "cip-return-exclusions.docx")
+    text = evaluation_docx_text(docx)
     assert "Technology" in text
     assert "Reason not primary for this DIR" in text
     assert "Rotary-lobe pump" in text
@@ -513,9 +507,8 @@ def test_pdf_exclusions_table_is_two_column_technology_reason(tmp_path: Path):
 
 
 def test_pdf_exclusions_splits_long_technology_names_from_json(tmp_path: Path):
-    from pypdf import PdfReader
-
-    from bpeai_creator_sdk import build_evaluation_pdf
+    from bpeai_creator_sdk import build_evaluation_docx
+    from bpeai_creator_sdk.artifacts import evaluation_docx_text
 
     result = {
         "system_name": "CIP Return Pump",
@@ -531,8 +524,8 @@ def test_pdf_exclusions_splits_long_technology_names_from_json(tmp_path: Path):
         ],
         "datasheet_markdown": "# CIP Return Pump Evaluation\n",
     }
-    pdf = build_evaluation_pdf(result, output_path=tmp_path / "cip-return-excl-json.pdf")
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    docx = build_evaluation_docx(result, output_path=tmp_path / "cip-return-excl-json.docx")
+    text = evaluation_docx_text(docx)
     blob = " ".join(text.split())
     assert "Technology" in text
     assert "Reason not primary for this DIR" in text

@@ -170,7 +170,7 @@ application/domain**. First run LLM-bootstraps a missing pack using your `.env`
 keys (`OPENAI_API_KEY`, `SERPER_API_KEY`) — do not have Cursor write that YAML.
 - Type system name and application, then a DIR code; recommendation prints as readable text
 - After evaluation, reply `pptx` / `y` for a 7-slide deck (local artifact)
-- Artifacts write under `./artifacts/` (gitignored): markdown + PDF report; optional PPTX
+- Artifacts write under `./artifacts/` (gitignored): markdown + Word report; optional PPTX
 - Optional: copy `.env.example` → `.env` and set personal `OPENAI_API_KEY` (never commit)
 - For evaluator depth: `OPENAI_CREATOR_MODEL=gpt-5.6-sol` and `OPENAI_CREATOR_MAX_OUTPUT_TOKENS=16000` (code default is `gpt-5.6-sol`)
 - Or set `llm_model` / `llm_provider` in `manifest.json` (applied by `local_chat` / `run_agent`)

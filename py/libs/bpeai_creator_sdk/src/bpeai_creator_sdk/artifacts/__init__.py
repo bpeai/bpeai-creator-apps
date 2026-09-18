@@ -1,4 +1,4 @@
-"""Artifact helpers for creator apps (PPTX / PDF evaluation deliverables)."""
+"""Artifact helpers for creator apps (PPTX / DOCX evaluation deliverables)."""
 
 from .hero_image import attach_title_hero_image, render_title_hero
 from .names import (
@@ -9,7 +9,11 @@ from .names import (
     infer_evaluated_item,
     sizing_artifact_stem,
 )
-from .pdf_eval import build_evaluation_pdf, write_evaluation_report_pdf
+from .docx_eval import (
+    build_evaluation_docx,
+    evaluation_docx_text,
+    write_evaluation_report_docx,
+)
 from .pptx_eval import build_evaluation_pptx, build_slide_pack_from_evaluation
 from .reference_decks import (
     list_reference_decks,
@@ -25,8 +29,9 @@ __all__ = [
     "evaluation_display_title",
     "infer_evaluated_item",
     "sizing_artifact_stem",
-    "build_evaluation_pdf",
-    "write_evaluation_report_pdf",
+    "build_evaluation_docx",
+    "evaluation_docx_text",
+    "write_evaluation_report_docx",
     "build_evaluation_pptx",
     "build_slide_pack_from_evaluation",
     "list_reference_decks",

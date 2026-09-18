@@ -54,7 +54,7 @@ from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
     attach_sizing_artifact_name,
     attach_title_hero_image,
-    build_evaluation_pdf,
+    build_evaluation_docx,
     build_evaluation_pptx,
     build_slide_pack_from_evaluation,
     sizing_artifact_stem,
@@ -499,12 +499,12 @@ def _write_markdown_artifact(result: Dict[str, Any], *, py_root: Path) -> Path |
     return target
 
 
-def _write_pdf_artifact(result: Dict[str, Any]) -> Path | None:
+def _write_docx_artifact(result: Dict[str, Any]) -> Path | None:
     md = (result.get("datasheet_markdown") or "").strip()
     if not md and not result.get("selected_model"):
         return None
-    target = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(result)}.pdf"
-    return build_evaluation_pdf(result, output_path=target)
+    target = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(result)}.docx"
+    return build_evaluation_docx(result, output_path=target)
 
 
 class EquipmentSizingAgent(CreatorAppBase):
@@ -681,12 +681,12 @@ class EquipmentSizingAgent(CreatorAppBase):
                 if md_path:
                     artifacts["markdown_path"] = str(md_path)
                 try:
-                    self.status("Writing sizing PDF…")
-                    pdf_path = _write_pdf_artifact(result)
-                    if pdf_path:
-                        artifacts["pdf_path"] = str(pdf_path.resolve())
+                    self.status("Writing sizing Word report…")
+                    docx_path = _write_docx_artifact(result)
+                    if docx_path:
+                        artifacts["docx_path"] = str(docx_path.resolve())
                 except Exception as exc:
-                    self.status(f"PDF export skipped ({exc})")
+                    self.status(f"DOCX export skipped ({exc})")
                 result["artifacts"] = artifacts
                 result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
             result.setdefault("template_family", getattr(self, "template_family", "equipment_sizing"))
@@ -787,12 +787,12 @@ class EquipmentSizingAgent(CreatorAppBase):
                 artifacts["markdown_path"] = str(md_path)
             try:
                 # HANDSHAKE: self.status(...) → SSE event "status" (progress line).
-                self.status("Writing sizing PDF…")
-                pdf_path = _write_pdf_artifact(result)
-                if pdf_path:
-                    artifacts["pdf_path"] = str(pdf_path.resolve())
+                self.status("Writing sizing Word report…")
+                docx_path = _write_docx_artifact(result)
+                if docx_path:
+                    artifacts["docx_path"] = str(docx_path.resolve())
             except Exception as exc:
-                self.status(f"PDF export skipped ({exc})")
+                self.status(f"DOCX export skipped ({exc})")
             result["artifacts"] = artifacts
             result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
         return result
