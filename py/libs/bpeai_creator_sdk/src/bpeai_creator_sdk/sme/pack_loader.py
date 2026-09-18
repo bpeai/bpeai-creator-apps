@@ -323,7 +323,10 @@ class KnowledgePack:
             lines.append(f"- {guidance.strip()}")
         defaults = self.equipment_options.get("do_not_specify_defaults") or []
         if defaults:
-            lines.append("Default exclusions (adapt to DIR):")
+            lines.append(
+                "Typical options not recommended as primary basis "
+                "(adapt to DIR; emit Technology: reason strings, not procurement caveats):"
+            )
             lines.extend(f"- {d}" for d in defaults)
         return "\n".join(lines)
 

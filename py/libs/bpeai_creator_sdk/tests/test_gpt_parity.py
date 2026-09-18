@@ -282,6 +282,12 @@ def test_cip_system_pump_evaluation_title_and_tables(tmp_path: Path):
 
 - Fill and vent the circuit before starting the pump.
 
+## Options not recommended as primary basis
+
+| Technology | Reason not primary for this DIR |
+| --- | --- |
+| PD lobe pump | Over-specified for CIP supply |
+
 ## References reviewed
 
 - Vendor hygienic centrifugal CIP application notes.
@@ -297,6 +303,17 @@ def test_cip_system_pump_evaluation_title_and_tables(tmp_path: Path):
     assert "Best-fit pump-system shortlist" in text
     assert "High-head sanitary centrifugal" in text
     assert "Specification item" in text
+    assert "PD lobe pump" in text
+    assert "Over-specified for CIP supply" in text
+    assert "Technology" in text
+    assert "Reason not primary for this DIR" in text
+    assert "VFD turndown" in text
+    assert "Needs NPSH protection" in text
+    assert "Selected basis:" in text
+    assert "<br" not in text.lower()
+    assert "<b>" not in text.lower()
+    assert "</b>" not in text.lower()
+    assert "&lt;b" not in text.lower()
     pptx = build_evaluation_pptx(result, output_path=tmp_path / "CIP System Pump Evaluation.pptx")
     assert pptx.name == "CIP System Pump Evaluation.pptx"
     prs = Presentation(str(pptx))
@@ -304,6 +321,224 @@ def test_cip_system_pump_evaluation_title_and_tables(tmp_path: Path):
     assert "CIP System Pump" in title_text
     assert "Evaluation" in title_text
     assert "Fluid-Transfer" not in title_text
+    assert "Step" in text
+    assert "Objective" in text
+    assert "Key control" in text
+    assert "Supply CIP" in text
+    assert "Achieve qualified flow" in text
+
+
+def test_pdf_objectives_table_ignores_wrong_markdown_and_uses_json(tmp_path: Path):
+    from pypdf import PdfReader
+
+    from bpeai_creator_sdk import build_evaluation_pdf
+
+    result = {
+        "system_name": "CIP Return Pump",
+        "evaluated_item": "pump",
+        "dir_code": "2-2-2-2-2-2",
+        "selected_model": "Hygienic self-priming centrifugal",
+        "recommended_basis": "Hygienic self-priming centrifugal for CIP return.",
+        "objectives": [
+            "Establish return flow: Meet qualified circuit velocity or other approved cleaning criterion.",
+            "Maintain stable operation: Control startup, liquid-full, minimum-flow, and changing-pressure cases.",
+            "Manage intermittent gas: Recover prime without persistent air-lock, damaging vibration, or uncontrolled cycling.",
+            "Protect NPSH margin: Evaluate highest temperature, lowest suction level, and maximum credible flow.",
+        ],
+        "failure_modes": [
+            "Loss of prime or air-lock collapses return flow and cleaning exposure.",
+            "Cavitation under hot, low-suction conditions damages seals and internals.",
+        ],
+        "evaluation_options": [
+            {
+                "name": "Hygienic self-priming centrifugal",
+                "fit": "best",
+                "pros": ["Air handling"],
+                "cons": ["NPSH"],
+            }
+        ],
+        "datasheet_markdown": """# CIP Return Pump Evaluation
+
+## Pump objectives and failure modes
+
+| Topic | Description |
+| --- | --- |
+| Do not assume flooded suction | CIP return may see air and two-phase flow |
+| Loss of prime | collapses return flow |
+
+Failure modes: dry running damages seals.
+""",
+    }
+    pdf = build_evaluation_pdf(result, output_path=tmp_path / "cip-return-objectives.pdf")
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert "Step" in text
+    assert "Objective" in text
+    assert "Key control" in text
+    assert "Establish return flow" in text
+    assert "Meet qualified circuit velocity" in text
+    assert "Protect NPSH margin" in text
+    assert "Do not assume flooded suction" not in text
+
+
+def test_pdf_objectives_table_uses_matching_markdown(tmp_path: Path):
+    from pypdf import PdfReader
+
+    from bpeai_creator_sdk import build_evaluation_pdf
+
+    result = {
+        "system_name": "Media Preparation Vessel",
+        "evaluated_item": "agitator",
+        "dir_code": "2-1-2-3-1-1",
+        "selected_model": "Top-entry axial hydrofoil",
+        "recommended_basis": "Top-entry VFD sanitary agitator with a low-shear axial hydrofoil.",
+        "objectives": ["Wrong JSON objective: should not appear"],
+        "failure_modes": ["Surface vortexing and foam."],
+        "evaluation_options": [
+            {
+                "name": "Top-entry axial hydrofoil",
+                "fit": "best",
+                "pros": ["Low foam"],
+                "cons": ["Seal care"],
+            }
+        ],
+        "datasheet_markdown": """# Media Preparation Vessel
+
+## Mixing objectives and failure modes
+
+| Topic | Description |
+| --- | --- |
+| Ignore this | Wrong first table |
+
+| Step | Objective | Key control |
+| --- | --- | --- |
+| 1 | Charge water/WFI/PW | Establish recirculating axial flow before powder charge. |
+| 2 | Wet dry powder | Avoid dry rafts, fisheyes, wall/baffle deposits, and dust release. |
+""",
+    }
+    pdf = build_evaluation_pdf(result, output_path=tmp_path / "media-prep-objectives.pdf")
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert "Step" in text
+    assert "Objective" in text
+    assert "Key control" in text
+    assert "Charge water/WFI/PW" in text
+    assert "Establish recirculating axial flow" in text
+    assert "Wrong JSON objective" not in text
+    assert "Ignore this" not in text
+
+
+def test_pdf_unknown_tbd_design_basis_states_assumption(tmp_path: Path):
+    from pypdf import PdfReader
+
+    from bpeai_creator_sdk import build_evaluation_pdf
+
+    result = {
+        "system_name": "CIP Return Pump",
+        "evaluated_item": "pump",
+        "dir_code": "4-1-2",
+        "selected_model": "Hygienic self-priming centrifugal",
+        "recommended_basis": "Preliminary self-priming hygienic centrifugal for CIP return.",
+        "rationale": "Fit",
+        "creator_attribution": {"display_name": "test", "app_id": "pump_selector"},
+        "decoded_dir": [
+            {
+                "label": "Return flow envelope",
+                "option_text": "Unknown / TBD — not yet defined",
+                "unknown": True,
+            },
+            {
+                "label": "Hygienic duty",
+                "option_text": "Product-contact CIP return",
+                "unknown": False,
+            },
+        ],
+        "evaluation_options": [
+            {
+                "name": "Hygienic self-priming centrifugal",
+                "fit": "best",
+                "pros": ["Air handling"],
+                "cons": ["NPSH"],
+            }
+        ],
+        "datasheet_markdown": "# CIP Return Pump Evaluation\n",
+    }
+    pdf = build_evaluation_pdf(result, output_path=tmp_path / "tbd.pdf")
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert "Unknown / TBD" in text
+    assert "most likely" in text.lower()
+    assert "Product-contact CIP return" in text
+
+
+def test_pdf_exclusions_table_is_two_column_technology_reason(tmp_path: Path):
+    from pypdf import PdfReader
+
+    from bpeai_creator_sdk import build_evaluation_pdf
+
+    result = {
+        "system_name": "CIP Return Pump",
+        "evaluated_item": "pump",
+        "dir_code": "2-2-2-2-2-2",
+        "selected_model": "Hygienic self-priming liquid-ring",
+        "recommended_basis": "Hygienic self-priming liquid-ring pump for CIP return.",
+        "evaluation_options": [
+            {
+                "name": "Hygienic self-priming liquid-ring",
+                "fit": "best",
+                "pros": ["Air handling"],
+                "cons": ["NPSH"],
+            }
+        ],
+        "do_not_specify": [
+            "Close-clearance hygienic circumferential-piston pump: Pulsation and overpressure on CIP return.",
+            "Peristaltic hose pump: Not a hygienic CIP-return duty pump.",
+        ],
+        "datasheet_markdown": """# CIP Return Pump Evaluation
+
+## Options not recommended as primary basis
+
+| Do not specify as primary basis |
+| --- |
+| Rotary-lobe pump: Over-specified for low-viscosity CIP return with air |
+| Air-operated double-diaphragm pump: Poor CIP return NPSH and drainability |
+""",
+    }
+    pdf = build_evaluation_pdf(result, output_path=tmp_path / "cip-return-exclusions.pdf")
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    assert "Technology" in text
+    assert "Reason not primary for this DIR" in text
+    assert "Rotary-lobe pump" in text
+    assert "Over-specified for low-viscosity CIP return with air" in text
+    assert "Air-operated double-diaphragm pump" in text
+    # One-column leftover heading must not be the table.
+    assert "Do not specify as primary basis" not in text
+
+
+def test_pdf_exclusions_splits_long_technology_names_from_json(tmp_path: Path):
+    from pypdf import PdfReader
+
+    from bpeai_creator_sdk import build_evaluation_pdf
+
+    result = {
+        "system_name": "CIP Return Pump",
+        "evaluated_item": "pump",
+        "dir_code": "2-2-2-2-2-2",
+        "selected_model": "Hygienic self-priming liquid-ring",
+        "recommended_basis": "Hygienic self-priming liquid-ring pump for CIP return.",
+        "evaluation_options": [
+            {"name": "Hygienic self-priming liquid-ring", "fit": "best", "pros": ["Air"], "cons": ["NPSH"]}
+        ],
+        "do_not_specify": [
+            "Close-clearance hygienic circumferential-piston pump: Pulsation and overpressure on CIP return."
+        ],
+        "datasheet_markdown": "# CIP Return Pump Evaluation\n",
+    }
+    pdf = build_evaluation_pdf(result, output_path=tmp_path / "cip-return-excl-json.pdf")
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
+    blob = " ".join(text.split())
+    assert "Technology" in text
+    assert "Reason not primary for this DIR" in text
+    assert "Close-clearance hygienic circumferential-piston pump" in blob
+    assert "Pulsation and overpressure on CIP return." in blob
+    assert "Close-clearance hygienic circumferential-piston pump: Pulsation" not in blob
 
 
 def test_format_evaluation_mentions_pptx_prompt():

@@ -232,7 +232,9 @@ def pack_bootstrap_authoring_rules(
         "in equipment_options.yaml.\n"
         "- For dir_requirements.yaml emit dir_menus only (5–7 DIR requirements "
         "and 2+ numeric common_codes with hyphenated indexes + captions; not "
-        "SIP/IT tags). Do not include menus or scenarios keys.\n"
+        "SIP/IT tags). Each requirement must end with an "
+        "'Unknown / TBD — not yet defined' option for undecided project inputs. "
+        "Do not include menus or scenarios keys.\n"
         "- dir_requirements.yaml must contain EXACTLY ONE dir_menus row for the "
         "current user host system and official sector. scenario_id is the slug of "
         "that host (cip_system for 'CIP system'). Do not invent extra unused hosts "
@@ -251,6 +253,10 @@ def pack_bootstrap_authoring_rules(
         "References reviewed. Keep sections[] in the same order; do not collapse "
         "manufacturers and references. Put Validated DIR in the header chips, not "
         "as a prose body section.\n"
+        "- exclusions_rule and equipment_options.yaml do_not_specify_defaults list "
+        "catalog technology types that are often not the primary basis, as "
+        "'Technology: reason' strings. They are not procurement caveats "
+        "(do not specify manufacturer/model/NPSH).\n"
         "- pptx_outline should define 7 slides with a domain-appropriate title_prefix.\n"
         "- Include search_queries.yaml with domain-appropriate Serper templates "
         "(no unrelated vendor brand names).\n"
@@ -297,7 +303,9 @@ def component_schema_hints() -> Dict[str, str]:
         ),
         "equipment_options.yaml": (
             "Mapping with options: [{id, name, tags, typical_fit, manufacturers}], "
-            "do_not_specify_defaults (list), manufacturers_examples (list)."
+            "do_not_specify_defaults (list of 'Technology: reason not primary' "
+            "strings for catalog types often rejected as primary basis — not "
+            "procurement caveats), manufacturers_examples (list)."
         ),
         "validation_rules.yaml": (
             "Mapping where dir_code, application, equipment_option_name, and "
@@ -312,7 +320,9 @@ def component_schema_hints() -> Dict[str, str]:
             "Mapping with fragments as a flat string map: {role, scope, "
             "evaluation_goals, application_default, workflow, output_style, "
             "depth_requirements, response_outline, exclusions_rule}. Each value is "
-            "a string (not nested objects with label/content). Optional calls: map for "
+            "a string (not nested objects with label/content). exclusions_rule must "
+            "tell the evaluate LLM to list rejected catalog technologies as "
+            "'Technology: reason' pairs (not manufacturer/model caveats). Optional calls: map for "
             "per-handshake SME text: dir_generate.{system,instructions} (runtime "
             "one-menu JSON with requirements[], not a dir_menus YAML wrapper), "
             "evaluate.user_instructions, evaluate_repair.instructions, "

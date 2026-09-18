@@ -13,6 +13,7 @@ from bpeai_creator_sdk.sme import (
     apply_dir_route_decision,
     filter_numeric_common_codes,
     is_numeric_dir_code,
+    is_unknown_tbd_option,
     knowledge_pack_from_dict,
     list_missing_pack_files,
     load_knowledge_pack,
@@ -205,6 +206,8 @@ def test_equipment_evaluator_stub_is_loadable(py_root: Path, examples_root: Path
     assert "HOST EQUIPMENT SYSTEM" in rules
     assert "Biopharmaceutical & Biologics" in rules
     assert "chromatography_skid" in rules
+    assert "Technology: reason" in rules
+    assert "Unknown / TBD" in rules
 
 
 def test_align_pack_meta_uses_system_examples_not_vent_aliases(tmp_path: Path):
@@ -586,6 +589,9 @@ def test_match_dir_menu_requires_exact_industry_and_all_system_keywords(mixing_s
 
 def test_cip_skid_and_standalone_cip_pump_use_different_dir_menus(py_root: Path):
     pack = load_knowledge_pack("pump_selector", py_root=py_root)
+    ids = {str(row.get("scenario_id") or "") for row in pack.dir_menus}
+    if not {"cip_skid", "cip_supply_pump", "cip_return_pump"} <= ids:
+        pytest.skip("pump_selector pack does not include the CIP host trio")
     expected = {
         "CIP Skid": "cip_skid",
         "CIP System": "cip_skid",
@@ -634,6 +640,20 @@ def test_dir_route_schema_contract_is_host_identity_not_cip_only(py_root: Path):
         assert "chromatography" in lowered, path
         assert "tff" in lowered, path
         assert "cip skid, cip system, cip skid pump" not in lowered, path
+
+
+def test_evaluation_schema_contract_requires_step_objective_key_control(py_root: Path):
+    paths = [
+        py_root / "apps" / "_templates" / "equipment_evaluator" / "agent.py",
+        py_root / "apps" / "_templates" / "equipment_sizing" / "agent.py",
+    ]
+    pump_copy = py_root / "apps" / "equipment_evaluator" / "pump_selector" / "agent.py"
+    if pump_copy.is_file():
+        paths.append(pump_copy)
+    for path in paths:
+        chunk = _schema_contract_chunk(path, "EVALUATION_SCHEMA_CONTRACT")
+        assert "Step | Objective | Key control" in chunk, path
+        assert "objectives[] strings MUST be" in chunk, path
 
 
 def test_dir_generate_schema_contract_uses_typed_host_only(py_root: Path):
@@ -832,6 +852,8 @@ def test_normalize_generated_menu_unwraps_dir_menus_wrapper():
     assert row["label"] == "Crystallizer Mixing DIR"
     assert len(row["requirements"]) == 3
     assert row["industry"] == "Pharmaceutical / Small Molecule"
+    for req in row["requirements"]:
+        assert is_unknown_tbd_option(req["options"][-1]["text"])
 
 
 def test_append_dir_menu_and_catalog_md(mixing_stub, tmp_path: Path):
@@ -1213,6 +1235,46 @@ def test_validate_dir_code_out_of_range(mixing_stub):
     assert not result.ok
 
 
+def test_dir_menus_include_unknown_tbd_option(mixing_stub):
+    from bpeai_creator_sdk.sme.dir_catalog import catalog_row_to_dir_menu
+
+    menu = catalog_row_to_dir_menu(mixing_stub.dir_menus[0])
+    for req in menu.requirements:
+        texts = [str(opt.get("text") or "") for opt in req["options"]]
+        assert any(is_unknown_tbd_option(text) for text in texts)
+        assert is_unknown_tbd_option(texts[-1])
+
+
+def test_validate_dir_code_unknown_tbd_selection(mixing_stub):
+    from bpeai_creator_sdk.sme.dir_catalog import catalog_row_to_dir_menu
+
+    menu = catalog_row_to_dir_menu(mixing_stub.dir_menus[0])
+    tbd = int(menu.requirements[0]["options"][-1]["index"])
+    result = validate_dir_code(
+        mixing_stub,
+        "media_preparation",
+        f"{tbd}-1-2",
+        requirements=menu.requirements,
+        common_codes=menu.common_codes,
+    )
+    assert result.ok
+    assert result.decoded[0]["unknown"] is True
+    assert result.decoded[1]["unknown"] is False
+
+
+def test_common_codes_do_not_select_unknown_tbd(mixing_stub):
+    from bpeai_creator_sdk.sme.dir_catalog import catalog_row_to_dir_menu, synthesize_common_codes
+
+    menu = catalog_row_to_dir_menu(mixing_stub.dir_menus[0])
+    tbd_parts = [str(req["options"][-1]["index"]) for req in menu.requirements]
+    codes = synthesize_common_codes(menu.requirements, system_name="Media Prep")
+    assert codes
+    for row in codes:
+        parts = str(row["code"]).split("-")
+        for part, tbd in zip(parts, tbd_parts):
+            assert part != tbd
+
+
 def test_parse_dir_code_heuristic():
     parsed = parse_inputs_heuristic("2-1-2-3-1-1")
     assert parsed.get("dir_code") == "2-1-2-3-1-1"
@@ -1284,7 +1346,7 @@ def test_option_catalog_prompt_block_includes_fit_duties_and_shortlist_rules():
                     }
                 ],
                 "shortlist_guidance": ["Shortlist 3–5 industry-standard options."],
-                "do_not_specify_defaults": ["Do not specify a final model"],
+                "do_not_specify_defaults": ["Rotary-lobe pump: Over-specified for this DIR"],
             },
             "report_outline": {"min_evaluation_options": 3},
         },
@@ -1292,7 +1354,8 @@ def test_option_catalog_prompt_block_includes_fit_duties_and_shortlist_rules():
     text = pack.option_catalog_prompt_block()
     assert "typical_fit: best" in text
     assert "CIP supply" in text
-    assert "Alfa Laval LKH family" in text
+    assert "Rotary-lobe pump" in text
+    assert "Typical options not recommended as primary basis" in text
     assert "omit unless DIR needs it" in text
     assert "Shortlist 3" in text
     assert pack.shortlist_count_warning([{"name": "A"}, {"name": "B"}])

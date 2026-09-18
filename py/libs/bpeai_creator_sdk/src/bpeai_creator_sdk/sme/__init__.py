@@ -74,7 +74,10 @@ from .validate import (
     OptionCheck,
     check_application,
     check_equipment_option_names,
+    ensure_unknown_tbd_options,
     is_numeric_dir_code,
+    is_unknown_tbd_option,
+    unknown_dir_guidance,
     validate_dir_code,
 )
 
@@ -109,7 +112,9 @@ __all__ = [
     "format_creator_content_block",
     "ids_equivalent",
     "index_is_current",
+    "ensure_unknown_tbd_options",
     "is_numeric_dir_code",
+    "is_unknown_tbd_option",
     "knowledge_pack_from_dict",
     "knowledge_root",
     "list_missing_pack_files",
@@ -141,6 +146,7 @@ __all__ = [
     "synthesize_common_codes",
     "template_references_root",
     "thin_report_sections",
+    "unknown_dir_guidance",
     "unwrap_loaded_component",
     "validate_dir_code",
     "write_dir_catalog_markdown",

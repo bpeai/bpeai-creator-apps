@@ -19,7 +19,12 @@ from .pack_loader import (
     resolve_industry,
     resolve_variant_id,
 )
-from .validate import is_numeric_dir_code, validate_dir_code
+from .validate import (
+    ensure_unknown_tbd_options,
+    is_numeric_dir_code,
+    is_unknown_tbd_option,
+    validate_dir_code,
+)
 
 DRAFT_USABLE_STATUSES = frozenset(
     {
@@ -60,6 +65,24 @@ def _option_max_for_req(req: Mapping[str, Any]) -> int:
         if not max_idx:
             max_idx = len(opts)
     return max_idx
+
+
+def _engineering_option_max(req: Mapping[str, Any]) -> int:
+    """Highest option index excluding Unknown / TBD, so starters stay concrete."""
+    opts = req.get("options") if isinstance(req, Mapping) else None
+    max_idx = 0
+    if not isinstance(opts, list):
+        return _option_max_for_req(req)
+    for opt in opts:
+        if not isinstance(opt, Mapping):
+            continue
+        if is_unknown_tbd_option(str(opt.get("text") or opt.get("label") or "")):
+            continue
+        try:
+            max_idx = max(max_idx, int(opt.get("index") or 0))
+        except (TypeError, ValueError):
+            continue
+    return max_idx or _option_max_for_req(req)
 
 
 def filter_numeric_common_codes(
@@ -111,7 +134,7 @@ def synthesize_common_codes(
     def _clamp(indices: Sequence[int]) -> str:
         parts: List[str] = []
         for i, req in enumerate(reqs):
-            max_i = _option_max_for_req(req) or 1
+            max_i = _engineering_option_max(req) or 1
             want = indices[i] if i < len(indices) else 1
             parts.append(str(min(max(1, int(want)), max_i)))
         return "-".join(parts)
@@ -126,6 +149,8 @@ def synthesize_common_codes(
                 if not isinstance(opt, Mapping):
                     continue
                 ot = str(opt.get("text") or "").lower()
+                if is_unknown_tbd_option(ot):
+                    continue
                 if any(w in ot for w in words):
                     try:
                         out[i] = int(opt.get("index") or out[i])
@@ -142,7 +167,7 @@ def synthesize_common_codes(
         ),
         (
             _bias(
-                [min(3, _option_max_for_req(r) or 3) for r in reqs],
+                [min(3, _engineering_option_max(r) or 3) for r in reqs],
                 ("large", "sterile", "integrity", "fit", "in-line", "inline", "bidirectional", "high"),
             ),
             f"Large-scale GMP / sterile barrier / FIT-capable bias ({application or 'life science'}).",
@@ -153,7 +178,7 @@ def synthesize_common_codes(
         ),
         (
             _bias(
-                [2 if i < n // 2 else min(2, _option_max_for_req(reqs[i]) or 2) for i in range(n)],
+                [2 if i < n // 2 else min(2, _engineering_option_max(reqs[i]) or 2) for i in range(n)],
                 ("moderate", "pilot", "reusable", "autoclave", "local"),
             ),
             f"Pilot / mid-scale reusable housing bias for {system_name or 'this system'}.",
@@ -230,7 +255,9 @@ def catalog_row_to_dir_menu(row: Mapping[str, Any]) -> DirMenu:
         industry=str(row.get("industry") or ""),
         label=str(row.get("label") or row.get("scenario_id") or "DIR menu"),
         lifecycle=status,
-        requirements=[r for r in (row.get("requirements") or []) if isinstance(r, dict)],
+        requirements=ensure_unknown_tbd_options(
+            [r for r in (row.get("requirements") or []) if isinstance(r, dict)]
+        ),
         common_codes=list(row.get("common_codes") or [])
         if isinstance(row.get("common_codes"), list)
         else [],
@@ -672,6 +699,7 @@ def normalize_generated_menu(
         )
     if len(norm_reqs) < 3:
         raise ValueError("Generated DIR requirements missing usable options.")
+    norm_reqs = ensure_unknown_tbd_options(norm_reqs)
 
     codes = filter_numeric_common_codes(raw.get("common_codes") or [], requirements=norm_reqs)
     if len(codes) < 2:
@@ -682,7 +710,7 @@ def normalize_generated_menu(
             parts = []
             for i, req in enumerate(norm_reqs):
                 opts = req.get("options") or []
-                max_i = len(opts) if opts else 1
+                max_i = _engineering_option_max(req) or 1
                 want = indices[i] if i < len(indices) else 1
                 parts.append(str(min(max(1, want), max_i)))
             return {"code": "-".join(parts), "caption": caption}
@@ -709,6 +737,8 @@ def normalize_generated_menu(
                 opts = req.get("options") or []
                 for opt in opts:
                     ot = str(opt.get("text") or "").lower()
+                    if is_unknown_tbd_option(ot):
+                        continue
                     if any(w in ot for w in target_words):
                         parts[i] = str(int(opt.get("index") or parts[i]))
                         break

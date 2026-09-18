@@ -16,7 +16,7 @@ fragments:
   response_outline: >
     Include design basis, options, and recommendation.
   exclusions_rule: >
-    List do_not_specify items when relevant.
+    List catalog types not recommended as primary basis as Technology: reason strings.
 
 calls:
   dir_generate:

@@ -74,8 +74,32 @@ def _esc(text: Any) -> str:
     )
 
 
+_KEEP_TAG_RE = re.compile(
+    r"</?(?:b|i|u|br|super|sub|strike)\s*/?>"
+    r"|<font\b[^<>]*>|</font>"
+    r"|<link\b[^<>]*>|</link>",
+    re.IGNORECASE,
+)
+
+
 def _inline_md(text: str) -> str:
-    s = _esc(text)
+    s = str(text or "")
+    kept: list[str] = []
+
+    def _stash(match: re.Match[str]) -> str:
+        kept.append(match.group(0))
+        return f"\x00TAG{len(kept) - 1}\x00"
+
+    s = _KEEP_TAG_RE.sub(_stash, s)
+    s = _esc(s)
+    for i, tag in enumerate(kept):
+        if re.fullmatch(r"<br\s*/?>", tag, re.I):
+            restored = "<br/>"
+        elif re.fullmatch(r"</?(?:b|i|u)>", tag, re.I):
+            restored = tag.lower()
+        else:
+            restored = tag
+        s = s.replace(f"\x00TAG{i}\x00", restored)
     s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
     s = re.sub(r"`([^`]+)`", r"<font face='Courier'>\1</font>", s)
     s = re.sub(
@@ -200,7 +224,13 @@ def _decoded_rows(result: Mapping[str, Any]) -> list[Mapping[str, Any]]:
 
 
 def _has_structured_eval(result: Mapping[str, Any]) -> bool:
-    return bool(_eval_options(result) or result.get("evaluation_matrix") or _decoded_rows(result))
+    return bool(
+        _eval_options(result)
+        or result.get("evaluation_matrix")
+        or _decoded_rows(result)
+        or _as_str_list(result.get("objectives"))
+        or _as_str_list(result.get("failure_modes"))
+    )
 
 
 def _item_noun(result: Mapping[str, Any]) -> str:
@@ -233,7 +263,10 @@ def _markdown_section(markdown: str, *needles: str) -> str:
     return "\n".join(parts).strip()
 
 
-def _table_widths(n: int, usable: float) -> list[float]:
+def _table_widths(n: int, usable: float, headers: Sequence[str] | None = None) -> list[float]:
+    blob = " ".join(str(h or "").lower() for h in (headers or []))
+    if n == 3 and "step" in blob and "objective" in blob:
+        return [usable * 0.14, usable * 0.38, usable * 0.48]
     if n <= 1:
         return [usable]
     if n == 2:
@@ -304,7 +337,200 @@ def _rating_dots(value: Any) -> str:
     return ("●" * n) + ("○" * (5 - n))
 
 
-def _extract_md_table(text: str) -> tuple[list[str], list[list[str]]] | None:
+def _header_blob(headers: Sequence[str]) -> str:
+    return " ".join(str(h or "").lower() for h in headers)
+
+
+def _is_step_objective_control_table(headers: Sequence[str]) -> bool:
+    """True when a markdown table is Step / Objective / Key control (not DIR or exclusions)."""
+    if len(headers) < 2:
+        return False
+    blob = _header_blob(headers)
+    if "objective" not in blob:
+        return False
+    if any(bad in blob for bad in ("dir element", "technology", "selected basis", "reason not")):
+        return False
+    return "control" in blob or "step" in blob or "detail" in blob
+
+
+def _split_tech_reason(text: str) -> tuple[str, str]:
+    """Split 'Technology: reason' without the short-label limit used for objectives."""
+    raw = str(text or "").strip()
+    if not raw:
+        return "", ""
+    for sep in (": ", " — ", " – ", " - ", ":"):
+        if sep in raw:
+            left, right = raw.split(sep, 1)
+            left, right = left.strip().strip("-*• "), right.strip()
+            if left and right:
+                return left, right
+    return raw, ""
+
+
+def _is_technology_reason_table(headers: Sequence[str]) -> bool:
+    if len(headers) < 2:
+        return False
+    blob = _header_blob(headers)
+    if any(bad in blob for bad in ("dir element", "selected basis", "step", "objective", "specification")):
+        return False
+    has_tech = any(tok in blob for tok in ("technology", "type", "option", "pump", "equipment"))
+    has_reason = any(
+        tok in blob for tok in ("reason", "why", "not primary", "not evaluated", "rationale")
+    )
+    return has_tech and has_reason
+
+
+def _exclusion_pair(item: Any) -> tuple[str, str]:
+    if isinstance(item, Mapping):
+        tech = str(
+            item.get("technology")
+            or item.get("name")
+            or item.get("type")
+            or item.get("option")
+            or ""
+        ).strip()
+        reason = str(
+            item.get("reason") or item.get("why") or item.get("detail") or item.get("value") or ""
+        ).strip()
+        if tech:
+            return tech, reason
+        text = str(item.get("text") or "").strip()
+        return _split_tech_reason(text) if text else ("", "")
+    return _split_tech_reason(str(item or ""))
+
+
+def _coerce_exclusion_rows(
+    headers: Sequence[str], rows: Sequence[Sequence[str]]
+) -> list[list[str]]:
+    if _is_technology_reason_table(headers):
+        tech_i = _column_index(headers, "technology", "type", "option", "pump", "equipment") or 0
+        reason_i = _column_index(
+            headers, "reason", "why", "not primary", "not evaluated", "rationale"
+        )
+        if reason_i is None:
+            reason_i = 1 if len(headers) > 1 else 0
+        out: list[list[str]] = []
+        for row in rows:
+            cells = list(row) + [""] * 3
+            tech = str(cells[tech_i] or "").strip()
+            reason = str(cells[reason_i] or "").strip() if reason_i != tech_i else ""
+            if not reason:
+                tech, reason = _split_tech_reason(tech)
+            if tech:
+                out.append([tech, reason])
+        return out
+    if len(headers) == 1:
+        out = []
+        for row in rows:
+            tech, reason = _split_tech_reason(str(row[0] if row else ""))
+            if tech:
+                out.append([tech, reason])
+        if any(reason for _tech, reason in out):
+            return out
+    return []
+
+
+def _exclusion_rows(section: str, excluded: Sequence[Any]) -> list[list[str]]:
+    for headers, rows in _iter_md_tables(section):
+        coerced = _coerce_exclusion_rows(headers, rows)
+        if coerced:
+            return coerced
+    out: list[list[str]] = []
+    for item in excluded:
+        tech, reason = _exclusion_pair(item)
+        if tech:
+            out.append([tech, reason])
+    return out
+
+
+def _column_index(headers: Sequence[str], *needles: str) -> int | None:
+    lowered = [str(h or "").lower() for h in headers]
+    for needle in needles:
+        for i, header in enumerate(lowered):
+            if needle in header:
+                return i
+    return None
+
+
+def _coerce_objective_rows(
+    headers: Sequence[str], rows: Sequence[Sequence[str]]
+) -> list[list[str]]:
+    step_i = _column_index(headers, "step")
+    obj_i = _column_index(headers, "objective", "action", "title")
+    ctrl_i = _column_index(headers, "control", "detail", "how")
+    if obj_i is None:
+        obj_i = 1 if len(headers) > 1 else 0
+    if ctrl_i is None:
+        ctrl_i = 2 if len(headers) > 2 else (1 if obj_i == 0 and len(headers) > 1 else obj_i)
+    out: list[list[str]] = []
+    for i, row in enumerate(rows, start=1):
+        cells = list(row) + [""] * 4
+        step = str(cells[step_i] if step_i is not None else i).strip() or str(i)
+        num = re.match(r"^(\d+)\.?\s*$", step)
+        step_out = num.group(1) if num else (str(i) if step_i is None else step)
+        objective = str(cells[obj_i] or "").strip()
+        control = str(cells[ctrl_i] or "").strip() if ctrl_i != obj_i else ""
+        if objective:
+            out.append([step_out, objective, control])
+    return out
+
+
+def _process_steps_from_result(result: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
+    if not isinstance(result, Mapping):
+        return []
+    raw = result.get("process_steps")
+    if isinstance(raw, list):
+        steps = [row for row in raw if isinstance(row, Mapping) and (row.get("title") or row.get("detail"))]
+        if steps:
+            return steps
+    slides = result.get("slides")
+    if not isinstance(slides, list):
+        pack = result.get("pptx") or result.get("slide_pack")
+        slides = pack.get("slides") if isinstance(pack, Mapping) else []
+    for slide in slides or []:
+        if not isinstance(slide, Mapping):
+            continue
+        sid = str(slide.get("id") or slide.get("heading") or "").lower()
+        if "objective" not in sid and "failure" not in sid:
+            continue
+        steps = [row for row in (slide.get("process_steps") or []) if isinstance(row, Mapping)]
+        if steps:
+            return steps
+    return []
+
+
+def _objective_rows(
+    section: str,
+    objectives: Sequence[str],
+    result: Mapping[str, Any] | None = None,
+) -> list[list[str]]:
+    for headers, rows in _iter_md_tables(section):
+        if _is_step_objective_control_table(headers):
+            coerced = _coerce_objective_rows(headers, rows)
+            if coerced:
+                return coerced
+    steps = _process_steps_from_result(result)
+    if steps:
+        out: list[list[str]] = []
+        for i, step in enumerate(steps, start=1):
+            title = str(step.get("title") or step.get("objective") or "").strip()
+            detail = str(step.get("detail") or step.get("control") or step.get("key_control") or "").strip()
+            if title or detail:
+                out.append([str(step.get("n") or i), title, detail])
+        if out:
+            return out
+    out = []
+    for idx, obj in enumerate(objectives, start=1):
+        left, right = _split_labeled(obj)
+        if right:
+            out.append([str(idx), left, right])
+        elif str(obj).strip():
+            out.append([str(idx), str(obj).strip(), ""])
+    return out
+
+
+def _iter_md_tables(text: str) -> list[tuple[list[str], list[list[str]]]]:
+    tables: list[tuple[list[str], list[list[str]]]] = []
     lines = (text or "").splitlines()
     i = 0
     while i < len(lines):
@@ -322,10 +548,15 @@ def _extract_md_table(text: str) -> tuple[list[str], list[list[str]]] | None:
                     rows.append(_split_table_row(lines[i]))
                 i += 1
             if headers and rows:
-                return headers, rows
+                tables.append((headers, rows))
             continue
         i += 1
-    return None
+    return tables
+
+
+def _extract_md_table(text: str) -> tuple[list[str], list[list[str]]] | None:
+    tables = _iter_md_tables(text)
+    return tables[0] if tables else None
 
 
 def _section_intro(text: str) -> str:
@@ -510,7 +741,7 @@ def write_evaluation_report_pdf(
         if not headers or not rows:
             return
         n = len(headers)
-        widths = _table_widths(n, usable)
+        widths = _table_widths(n, usable, headers)
         data = [[Paragraph(_inline_md(h), styles["th"]) for h in headers]]
         for row in rows:
             padded = list(row) + [""] * n
@@ -676,13 +907,31 @@ def write_evaluation_report_pdf(
             if intro:
                 story.append(Paragraph(_inline_md(intro), styles["body"]))
             basis_rows = []
+            unknown_any = False
             for row in decoded:
+                unknown = bool(row.get("unknown"))
+                unknown_any = unknown_any or unknown
+                selected = str(row.get("option_text") or row.get("value") or "")
+                implication = str(row.get("implication") or row.get("mixing_implication") or "")
+                if unknown and not implication:
+                    implication = (
+                        "Assume the most likely industrial case for this duty; "
+                        "confirm when project data exist."
+                    )
                 basis_rows.append(
                     [
                         str(row.get("label") or ""),
-                        str(row.get("option_text") or row.get("value") or ""),
-                        str(row.get("implication") or row.get("mixing_implication") or ""),
+                        selected,
+                        implication,
                     ]
+                )
+            if unknown_any and not intro:
+                story.append(
+                    Paragraph(
+                        "Unknown / TBD selections are not yet defined by project engineering. "
+                        "The evaluation assumes the most likely case and states consequences.",
+                        styles["body"],
+                    )
                 )
             add_md_table_or(
                 story,
@@ -693,19 +942,14 @@ def write_evaluation_report_pdf(
         objectives = _as_str_list(result.get("objectives"))
         failures = _as_str_list(result.get("failure_modes"))
         obj_md = _markdown_section(markdown, "objectives and failure")
-        if objectives or failures or _extract_md_table(obj_md):
+        obj_rows = _objective_rows(obj_md, objectives, result)
+        if obj_rows or failures:
             story.append(
                 Paragraph(f"{n}. {item_noun.title()} objectives and failure modes", styles["h"])
             )
             n += 1
-            obj_rows = []
-            for idx, obj in enumerate(objectives, start=1):
-                left, right = _split_labeled(obj)
-                if right:
-                    obj_rows.append([str(idx), left, right])
-                else:
-                    obj_rows.append([str(idx), obj, ""])
-            add_md_table_or(story, obj_md, ("Step", "Objective", "Key control"), obj_rows)
+            if obj_rows:
+                add_table(story, ("Step", "Objective", "Key control"), obj_rows)
             if failures:
                 story.append(
                     Paragraph(
@@ -806,7 +1050,7 @@ def write_evaluation_report_pdf(
             n += 1
             if rec_basis:
                 selected_box = Table(
-                    [[Paragraph(_inline_md(f"<b>Selected basis:</b> {_esc(rec_basis)}"), styles["rec_body"])]],
+                    [[Paragraph(f"<b>Selected basis:</b> {_inline_md(rec_basis)}", styles["rec_body"])]],
                     colWidths=[usable],
                 )
                 selected_box.setStyle(
@@ -847,20 +1091,17 @@ def write_evaluation_report_pdf(
                 stripped = line.strip()
                 if stripped and not stripped.startswith("|") and not _heading_text(stripped):
                     story.append(Paragraph(_inline_md(stripped.lstrip("-* ")), styles["bullet"]))
-        excluded = _as_str_list(result.get("do_not_specify"))
+        excluded_raw = result.get("do_not_specify")
+        excluded = excluded_raw if isinstance(excluded_raw, list) else _as_str_list(excluded_raw)
         excl_md = _markdown_section(
             markdown, "not recommended", "do not specify"
         )
-        if excluded or _extract_md_table(excl_md):
+        excl_rows = _exclusion_rows(excl_md, excluded)
+        if excl_rows:
             story.append(Paragraph(f"{n}. Options not recommended as primary basis", styles["h"]))
             n += 1
-            excl_rows = []
-            for item in excluded:
-                left, right = _split_labeled(item)
-                excl_rows.append([left, right])
-            add_md_table_or(
+            add_table(
                 story,
-                excl_md,
                 ("Technology", "Reason not primary for this DIR"),
                 excl_rows,
             )

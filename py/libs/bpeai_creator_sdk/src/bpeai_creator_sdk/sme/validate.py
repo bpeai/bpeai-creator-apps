@@ -33,6 +33,91 @@ def _requirement_count(scenario: Mapping[str, Any]) -> int:
     return len(reqs) if isinstance(reqs, list) else 0
 
 
+UNKNOWN_TBD_TEXT = "Unknown / TBD — not yet defined"
+_UNKNOWN_TBD_RE = re.compile(
+    r"unknown\s*/\s*tbd|\btbd\b.*\bunknown\b|\bunknown\b.*\btbd\b"
+    r"|not yet defined|to be determined|to be defined",
+    re.I,
+)
+
+
+def is_unknown_tbd_option(text: str) -> bool:
+    """True when an option is the Unknown / TBD project-progress choice."""
+    t = re.sub(r"\s+", " ", str(text or "").strip().lower())
+    if not t:
+        return False
+    if t in {"unknown", "tbd", "n/a", "na"}:
+        return True
+    return bool(_UNKNOWN_TBD_RE.search(t))
+
+
+def ensure_unknown_tbd_options(
+    requirements: Sequence[Mapping[str, Any]] | None,
+) -> List[Dict[str, Any]]:
+    """Append a final Unknown / TBD choice to each DIR requirement if missing."""
+    out: List[Dict[str, Any]] = []
+    for req in requirements or []:
+        if not isinstance(req, Mapping):
+            continue
+        row = dict(req)
+        raw_opts = row.get("options") or []
+        opts: List[Dict[str, Any]] = []
+        max_idx = 0
+        has_tbd = False
+        if isinstance(raw_opts, list):
+            for i, opt in enumerate(raw_opts):
+                if isinstance(opt, str):
+                    item = {"index": i + 1, "text": opt}
+                elif isinstance(opt, Mapping):
+                    try:
+                        idx = int(opt.get("index") or i + 1)
+                    except (TypeError, ValueError):
+                        idx = i + 1
+                    item = {"index": idx, "text": str(opt.get("text") or opt.get("label") or "")}
+                else:
+                    continue
+                if is_unknown_tbd_option(item["text"]):
+                    has_tbd = True
+                    if not str(item["text"] or "").strip():
+                        item["text"] = UNKNOWN_TBD_TEXT
+                max_idx = max(max_idx, int(item["index"] or 0))
+                opts.append(item)
+        if opts and not has_tbd:
+            opts.append({"index": max(max_idx, len(opts)) + 1, "text": UNKNOWN_TBD_TEXT})
+        row["options"] = opts
+        out.append(row)
+    return out
+
+
+def unknown_dir_guidance(decoded: Sequence[Mapping[str, Any]] | None) -> str:
+    """Evaluate-prompt block when the user selected Unknown / TBD on any DIR item."""
+    rows = [
+        row
+        for row in (decoded or [])
+        if isinstance(row, Mapping) and row.get("unknown")
+    ]
+    if not rows:
+        return ""
+    lines = [
+        "Unknown / TBD DIR selections (project engineering is not far enough along "
+        "to decide these):"
+    ]
+    for row in rows:
+        label = str(row.get("label") or "Requirement").strip()
+        text = str(row.get("option_text") or UNKNOWN_TBD_TEXT).strip()
+        lines.append(f"- {label}: {text}")
+    lines.append(
+        "For each Unknown/TBD item, assume the most likely industrial case for THIS "
+        "host and duty. In the Design basis table write Selected basis as "
+        "'Unknown / TBD (assumed: <most likely case>)' and put the consequences if "
+        "that assumption is wrong in the Implication column (technology, sizing, "
+        "utilities, or risk). State the same assumptions in design_basis and in "
+        "PPTX design-basis cards. Do not treat Unknown as a technology type and do "
+        "not invent a different DIR."
+    )
+    return "\n".join(lines) + "\n\n"
+
+
 def _option_max(requirement: Mapping[str, Any]) -> int:
     options = requirement.get("options") or []
     if not isinstance(options, list) or not options:
@@ -71,6 +156,7 @@ def validate_dir_code(
         requirements = scenario.get("requirements") or []
     if not isinstance(requirements, list) or not requirements:
         return DirValidation(ok=False, error=f"Scenario '{scenario_id}' has no requirements.")
+    requirements = ensure_unknown_tbd_options(requirements)
 
     if common_codes is None:
         common = pack.common_codes(scenario_id)
@@ -133,6 +219,7 @@ def validate_dir_code(
                 "label": req.get("label"),
                 "option_index": idx,
                 "option_text": opt_text,
+                "unknown": is_unknown_tbd_option(opt_text),
             }
         )
 

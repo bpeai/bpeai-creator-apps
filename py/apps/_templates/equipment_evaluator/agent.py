@@ -93,6 +93,7 @@ from bpeai_creator_sdk.sme import (
     write_pack_file,
     apply_dir_route_decision,
     catalog_summaries,
+    unknown_dir_guidance,
 )
 from bpeai_creator_sdk.sme.dir_catalog import catalog_row_to_dir_menu
 from bpeai_creator_sdk.tools import enrich_search_hits_with_excerpts, format_search_context
@@ -122,9 +123,12 @@ Return ONLY JSON:
 
 Rules:
 - 5–8 requirements tailored to system_name + application (not generic boilerplate).
-- 4–7 options per requirement; indexes start at 1.
+- 3–6 engineering options per requirement, then a FINAL option
+  "Unknown / TBD — not yet defined" for inputs the project has not decided yet.
+  Indexes start at 1. Python will add Unknown/TBD if it is missing.
 - common_codes MUST be hyphen-separated numeric starters matching requirement count,
   each with a caption that decodes the selection in one sentence (GPT style).
+  Do not use the Unknown/TBD index in common_codes.
 - Do NOT use mnemonic tags (SIP, IT, BPE) as common_codes.
 - Prefer industrially realistic options for life-science equipment selection.
 - Tailor the questionnaire to THIS typed host (system_name / scenario id hint).
@@ -250,6 +254,8 @@ Rules:
   card values ≤ 8 words; process_steps titles ≤ 5 words; process_steps details ≤ 14 words;
   failure_modes ≤ 12 words each; option notes ≤ 12 words;
   recommended_why / cons ≤ 14 words each; decision_logic ≤ 35 words.
+- If decoded DIR rows are Unknown / TBD, design_basis card values must be
+  "Unknown/TBD (assumed: …)" and selection_implication must name consequences.
 - Align strictly with the evaluation content (DIR, options, recommendation).
 - Use project-team summary tone similar to a professional engineering deck.
 - Prefer product-line manufacturer hints when present in the evaluation.
@@ -279,7 +285,7 @@ Return JSON matching equipment_selector_v1 WITH these GPT-parity fields populate
   "failure_modes": ["at least 3 concrete failure modes for THIS DIR"],
   "recommended_basis": "One-line recommended basis of design",
   "alternate_basis": "One-line alternate / backup",
-  "do_not_specify": ["…"],
+  "do_not_specify": ["Technology name: reason not primary for this DIR"],
   "preliminary_specs": ["Material: 316L stainless", "Cleaning: CIP/SIP capable"],
   "evaluation_matrix": [
     {"option": "…", "technical_fit": "Best|Strong|…", "gmp": "High|…",
@@ -310,6 +316,11 @@ MUST be arrays of strings (e.g. "Material: 316L stainless"), never objects.
 
 Requirements (depth bar — do not produce thin one-line sections):
 - Use the decoded DIR; do not invent a different volume/vessel/duty.
+- If a decoded DIR row has "unknown": true (user selected Unknown / TBD), assume
+  the most likely industrial case for THIS host and duty. In the Design basis
+  markdown table write Selected basis as "Unknown / TBD (assumed: …)" and put
+  the consequences if that assumption is wrong in the Implication column.
+  Repeat those assumptions in design_basis. Do not treat Unknown as a technology.
 - Shortlist 3–5 industry-standard options known to be used or sold for THIS
   application and DIR duty. Aim for at least 3. Five is a good maximum. Include
   more only when additional strong candidates exist. Do not pad with exotic,
@@ -319,6 +330,16 @@ Requirements (depth bar — do not produce thin one-line sections):
 - Include qualitative scale-up / performance reasoning appropriate to the equipment system.
 - Weave industrial search citations into rationale and datasheet_markdown as (title + URL).
 - Include alternate_basis, do_not_specify, preliminary_specs, evaluation_matrix.
+- do_not_specify is the "Options not recommended as primary basis" table. Each
+  string MUST be "Technology name: reason not primary for this DIR" for catalog
+  types that are NOT in the 3–5 evaluation_options shortlist (or were considered
+  and rejected as primary). Example: "Rotary-lobe pump: Over-specified for
+  low-viscosity CIP return with air." The datasheet Markdown table MUST have
+  exactly two columns titled Technology | Reason not primary for this DIR —
+  never a single column of colon-separated "Technology: reason" rows. Do not
+  put procurement caveats (do not specify manufacturer, model, impeller
+  diameter, NPSH, setpoints) in this array; those belong in assumptions or
+  preliminary_specs notes.
 - preliminary_specs must be strings like "Material: 316L", not {key, value} objects.
 - Prefer SME catalog option names and manufacturer product-line hints when appropriate.
 - Treat user-supplied equipment system name, item name, and item tag as given.
@@ -328,9 +349,21 @@ Requirements (depth bar — do not produce thin one-line sections):
   (from the knowledge pack report_outline) with SUBSTANTIVE multi-sentence bodies
   (no one-line stubs).
 - Match the reference evaluation-report structure: numbered sections; Markdown
-  tables for DIR basis, shortlist, preliminary specification, comparison matrix,
-  and vendor shortlist; labeled Industrial applications / Pros / Cons or watchouts /
+  tables for DIR basis; objectives and failure modes (exactly three columns:
+  Step | Objective | Key control); shortlist, preliminary specification,
+  comparison matrix, vendor shortlist, and options not recommended as primary
+  basis (exactly two columns: Technology | Reason not primary for this DIR);
+  labeled Industrial applications / Pros / Cons or watchouts /
   Manufacturers blocks for every option; concise qualification-recipe bullets.
+- objectives[] strings MUST be "Objective name: key control" (colon-separated),
+  matching PPTX slide 3 process_steps. Example: "Establish return flow: Meet
+  qualified circuit velocity or other approved cleaning criterion."
+- The "objectives and failure modes" datasheet section MUST include a Markdown
+  table with exactly those three columns. Step is 1, 2, 3, … (same numbering as
+  the slides). Objective is the short action name; Key control is how it is
+  achieved. Failure modes are a sentence AFTER the table, not extra table rows.
+  Do not put DIR basis, exclusions, constraints, or failure-mode notes in this
+  table.
 - Do not use HTML, ASCII-art tables, or prose pretending to be a table. Emit valid
   Markdown tables with a header-divider row so the deterministic PDF renderer can
   reproduce the reference report layout.
@@ -1268,6 +1301,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             f"Equipment system variant: {menu.equipment_system_variant}\n"
             f"Validated DIR code: {dir_code}\n"
             f"Decoded DIR:\n{json.dumps(dir_check.decoded, indent=2)}\n\n"
+            f"{unknown_dir_guidance(dir_check.decoded)}"
             f"DIR requirement structure:\n{json.dumps(requirements, indent=2)}\n\n"
             f"SME equipment options catalog:\n{_option_catalog_block(pack)}\n\n"
             f"Required datasheet_markdown headings: {heading_block}\n\n"
@@ -1340,6 +1374,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 f"Reference report section blueprint:\n{outline_block}\n\n"
                 "Use valid Markdown tables for comparative/specification content, "
                 "including the required header-divider row.\n\n"
+                f"{unknown_dir_guidance(dir_check.decoded)}"
                 f"Industrial search references:\n{search_context[:20000]}\n\n"
             )
             if creator_block:
@@ -1359,9 +1394,8 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         apply_user_identity(result, getattr(self, "_identity_inputs", None))
         result["phase"] = "evaluation"
         result["dir_code"] = dir_code
-        result["system_name"] = str(
-            result.get("equipment_system_name") or system_name
-        )
+        result["system_name"] = system_name
+        result["equipment_system_name"] = system_name
         result["application"] = application
         result["knowledge_pack"] = pack.pack_id
         # HANDSHAKE: artifact_stem / evaluated_item — pack.yaml evaluated_item + system name.

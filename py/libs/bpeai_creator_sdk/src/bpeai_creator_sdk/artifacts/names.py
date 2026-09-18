@@ -262,7 +262,7 @@ def evaluation_display_title(
     """Visible report title, e.g. ``CIP System Pump Evaluation``."""
     src = result or {}
     system = title_system_name(
-        src.get("equipment_system_name") or src.get("system_name") or ""
+        src.get("system_name") or src.get("equipment_system_name") or ""
     ) or "Equipment"
     resolved = (
         item
@@ -326,14 +326,19 @@ def evaluation_artifact_stem(
     pattern = pack_filename_pattern(pack)
     if pattern and "{" in pattern:
         system = title_system_name(
-            src.get("equipment_system_name") or src.get("system_name") or ""
+            src.get("system_name") or src.get("equipment_system_name") or ""
         )
         item_part = title_item_noun(resolved)
         if resolved and _item_already_in_system(system, resolved):
             item_part = ""
         family_part = _evaluation_family_label(family)
         try:
-            raw = pattern.format(system=system, item=item_part, family=family_part)
+            raw = pattern.format(
+                system=system,
+                item=item_part,
+                family=family_part,
+                artifact=family_part,
+            )
         except (KeyError, IndexError, ValueError):
             raw = title
         return display_filename_part(raw) or title
@@ -413,7 +418,7 @@ def sizing_artifact_stem(
     if existing and item is None and not pack:
         return existing
     system = (
-        display_filename_part(src.get("equipment_system_name") or src.get("system_name") or "")
+        display_filename_part(src.get("system_name") or src.get("equipment_system_name") or "")
         or "Vessel"
     )
     resolved = (item if item is not None else infer_sized_item(pack=pack, result=src)).strip()
@@ -422,7 +427,9 @@ def sizing_artifact_stem(
     item_part = title_item_noun(resolved)
     pattern = pack_filename_pattern(pack) or DEFAULT_SIZING_FILENAME_PATTERN
     try:
-        raw = pattern.format(system=system, item=item_part, family="Sizing")
+        raw = pattern.format(
+            system=system, item=item_part, family="Sizing", artifact="Sizing"
+        )
     except (KeyError, IndexError, ValueError):
         raw = f"{system} {item_part} Sizing" if item_part else f"{system} Sizing"
     stem = display_filename_part(raw)

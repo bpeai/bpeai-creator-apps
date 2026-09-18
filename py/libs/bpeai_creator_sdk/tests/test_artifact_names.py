@@ -169,3 +169,32 @@ def test_cip_system_title_includes_pump():
     assert evaluation_artifact_stem(result, pack=pack) == "CIP System Pump Evaluation"
     attach_evaluation_artifact_name(result, pack=pack)
     assert result["artifact_stem"] == "CIP System Pump Evaluation"
+
+
+def test_typed_system_name_wins_over_llm_equipment_system_name():
+    pack = SimpleNamespace(
+        pack_id="pump_selector",
+        evaluated_item="pump",
+        artifact_filename_pattern="{system} {item} {family}",
+        meta={"evaluated_item": "pump"},
+    )
+    result = {
+        "system_name": "CIP Return Pump",
+        "equipment_system_name": "CIP Pump",
+        "evaluated_item": "pump",
+    }
+    assert evaluation_display_title(result, pack=pack) == "CIP Return Pump Evaluation"
+    assert evaluation_artifact_stem(result, pack=pack) == "CIP Return Pump Evaluation"
+
+
+def test_artifact_placeholder_in_filename_pattern():
+    pack = SimpleNamespace(
+        pack_id="pump_selector",
+        evaluated_item="pump",
+        artifact_filename_pattern="{system} {item} {artifact}",
+        meta={"evaluated_item": "pump"},
+    )
+    assert (
+        evaluation_artifact_stem({"system_name": "CIP Return Pump"}, pack=pack)
+        == "CIP Return Pump Evaluation"
+    )

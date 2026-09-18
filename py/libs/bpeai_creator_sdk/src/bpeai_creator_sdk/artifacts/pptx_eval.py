@@ -54,6 +54,16 @@ def _truncate(text: str, limit: int) -> str:
     return text[: max(0, limit - 1)].rstrip() + "…"
 
 
+def _split_labeled(text: str) -> tuple[str, str]:
+    raw = str(text or "").strip()
+    for sep in (" — ", " – ", ": ", " - "):
+        if sep in raw:
+            left, right = raw.split(sep, 1)
+            if 1 <= len(left.split()) <= 8:
+                return left.strip(), right.strip()
+    return raw, ""
+
+
 def _emu_to_inches(emu: int) -> float:
     return float(emu) / 914400.0
 
@@ -316,12 +326,16 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
     cards = []
     for row in decoded[:6]:
         if isinstance(row, Mapping):
+            value = str(row.get("option_text") or "")
+            if row.get("unknown") and "assumed" not in value.lower():
+                value = value or "Unknown / TBD"
             cards.append(
                 {
                     "label": str(row.get("label") or "").upper(),
-                    "value": str(row.get("option_text") or ""),
+                    "value": value,
                     "accent": "objective" in str(row.get("label") or "").lower()
-                    or "duty" in str(row.get("label") or "").lower(),
+                    or "duty" in str(row.get("label") or "").lower()
+                    or bool(row.get("unknown")),
                 }
             )
     if not cards:
@@ -353,7 +367,14 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
 
     process_steps = []
     for i, obj in enumerate(_as_list(result.get("objectives"))[:4], start=1):
-        process_steps.append({"n": i, "title": _truncate(obj, 40), "detail": _truncate(obj, 80)})
+        left, right = _split_labeled(obj)
+        process_steps.append(
+            {
+                "n": i,
+                "title": _truncate(left, 40),
+                "detail": _truncate(right or obj, 80),
+            }
+        )
     if not process_steps:
         process_steps = [
             {"n": 1, "title": "Charge", "detail": "Controlled liquid charge"},
