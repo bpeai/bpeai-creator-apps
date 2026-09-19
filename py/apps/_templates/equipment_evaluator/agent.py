@@ -62,6 +62,7 @@ from bpeai_creator_sdk.artifacts import (
 from bpeai_creator_sdk.local_run import repo_py_root
 from bpeai_creator_sdk.sme import (
     CONTENT_FOLDER_PROMPT,
+    DIR_GENERATE_TYPED_HOST_RULES,
     DirMenu,
     KnowledgePack,
     align_pack_to_app,
@@ -71,6 +72,7 @@ from bpeai_creator_sdk.sme import (
     check_equipment_option_names,
     component_schema_hints,
     creator_content_prompt_block,
+    dir_generate_identity_prompt,
     ensure_creator_pack_assets,
     list_missing_pack_files,
     load_knowledge_pack,
@@ -84,6 +86,7 @@ from bpeai_creator_sdk.sme import (
     resolve_dir_menu,
     resolve_industry,
     resolve_scenario_id,
+    resolve_variant_hint,
     resolve_variant_id,
     scenario_id_from_system_name,
     stamp_draft_meta,
@@ -101,13 +104,15 @@ from bpeai_creator_sdk.tools import enrich_search_hits_with_excerpts, format_sea
 # Template-owned JSON schema contracts (deliverable). SME voice/search live in the pack —
 # see docs/EI_AI_HANDSHAKES.md and prompt_fragments.yaml → calls / search_queries.yaml.
 
-DIR_GENERATE_SCHEMA_CONTRACT = """Author a Design Input Requirements (DIR) questionnaire for this equipment case.
+DIR_GENERATE_SCHEMA_CONTRACT = (
+    """Author a Design Input Requirements (DIR) questionnaire for this equipment case.
 
 Return ONLY JSON:
 {
   "label": "short menu title",
   "summary": "1-2 sentence design-scope summary",
   "system_examples": ["alias1", "alias2"],
+  "equipment_system_variant": "coarse host-class id for THIS typed host",
   "common_codes": [
     {"code": "2-1-3-1-2", "caption": "One-line decode of this starter selection"},
     {"code": "3-1-2-1-1", "caption": "One-line decode of alternate starter"}
@@ -137,7 +142,11 @@ Rules:
   CIP Return Pump menu; do not put Chromatography Skid on a feed-pump menu).
 - The questionnaire may be similar to a sibling host, but requirements must
   match THIS duty (supply vs return, feed vs eluate, vessel vs inline mixer).
-"""
+""".rstrip()
+    + "\n"
+    + DIR_GENERATE_TYPED_HOST_RULES
+    + "\n"
+)
 
 DIR_ROUTE_SCHEMA_CONTRACT = """Decide whether this query reuses an existing DIR catalog row or needs a new scenario.
 
@@ -1032,13 +1041,21 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         industry: str | None,
     ) -> DirMenu:
         sid = (scenario_id or "").strip() or scenario_id_from_system_name(system_name)
-        variant = resolve_variant_id(
+        variant_hint = resolve_variant_hint(
             pack,
             system_name,
             equipment_system_variant,
             application=application,
         )
         ind = resolve_industry(pack, industry=industry, application=application)
+        identity = dir_generate_identity_prompt(
+            system_name=system_name,
+            application=application,
+            industry=ind,
+            equipment_system=pack.equipment_system,
+            scenario_id=sid,
+            variant_hint=variant_hint,
+        )
 
         # AI_HANDSHAKE: dir_search — Serper before DIR questionnaire generation.
         self.status("Researching design inputs for DIR questionnaire…")
@@ -1054,7 +1071,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 snippets.append(hit)
         search_context = format_search_context(snippets, limit=12)
         creator_block = self._creator_content_block(
-            pack, system_name, application, pack.equipment_system, sid, variant
+            pack, system_name, application, pack.equipment_system, sid, variant_hint or ""
         )
 
         # AI_HANDSHAKE: dir_generate — LLM authors DIR menu JSON.
@@ -1066,11 +1083,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         system = pack.call_fragment("dir_generate", "system", default=default_dir_system) or default_dir_system
         sme_dir_instructions = pack.call_fragment("dir_generate", "instructions")
         user = (
-            f"System name: {system_name}\n"
-            f"Application / industry: {application} / {ind}\n"
-            f"Equipment system: {pack.equipment_system}\n"
-            f"Scenario id hint: {sid}\n"
-            f"Variant hint: {variant}\n\n"
+            f"{identity}"
             f"Industrial search context:\n{search_context or '(none)'}\n\n"
         )
         if creator_block:
@@ -1088,17 +1101,13 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 system_name=system_name,
                 application=application,
                 scenario_id=sid,
-                variant=variant,
+                variant=variant_hint or "",
                 industry=ind,
             )
         except ValueError as exc:
             self.status("Retrying DIR questionnaire with a stricter schema…")
             repair_user = (
-                f"System name: {system_name}\n"
-                f"Application / industry: {application} / {ind}\n"
-                f"Equipment system: {pack.equipment_system}\n"
-                f"Scenario id hint: {sid}\n"
-                f"Variant hint: {variant}\n\n"
+                f"{identity}"
                 f"Your previous JSON was unusable ({exc}).\n\n"
                 f"{DIR_GENERATE_SCHEMA_CONTRACT}\n"
                 "Do not wrap the menu in dir_menus or dir_requirements.yaml."
@@ -1111,7 +1120,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 system_name=system_name,
                 application=application,
                 scenario_id=sid,
-                variant=variant,
+                variant=variant_hint or "",
                 industry=ind,
             )
         # Persist: filesystem packs write YAML; DB-hydrated packs POST to internal API.

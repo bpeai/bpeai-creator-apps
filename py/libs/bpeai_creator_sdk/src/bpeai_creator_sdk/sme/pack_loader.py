@@ -561,6 +561,27 @@ def resolve_scenario_id(
     raise KeyError(f"Pack '{pack.pack_id}' has no scenarios")
 
 
+def resolve_variant_hint(
+    pack: KnowledgePack,
+    system_name: str,
+    variant: str | None = None,
+    *,
+    application: str | None = None,
+) -> str | None:
+    """Return a variant only when the user supplied it or aliases match the typed host.
+
+    Pack ``default_variant`` is the first-query / bootstrap leftover. Using it as a
+    DIR-generate hint for an unmatched host (e.g. BL2-LS after a downstream draft)
+    steers the LLM toward the wrong process area.
+    """
+    explicit = (variant or "").strip()
+    if explicit:
+        return explicit
+    text = _alias_match_text(system_name, application)
+    aliases = pack.meta.get("variant_aliases") or {}
+    return _best_alias_match(aliases if isinstance(aliases, dict) else {}, text)
+
+
 def resolve_variant_id(
     pack: KnowledgePack,
     system_name: str,
@@ -568,16 +589,14 @@ def resolve_variant_id(
     *,
     application: str | None = None,
 ) -> str:
-    """Resolve equipment_system_variant from explicit input or system/application aliases."""
-    explicit = (variant or "").strip()
-    if explicit:
-        return explicit
-    text = _alias_match_text(system_name, application)
-    aliases = pack.meta.get("variant_aliases") or {}
-    matched = _best_alias_match(aliases if isinstance(aliases, dict) else {}, text)
-    if matched:
-        return matched
-    return pack.default_variant
+    """Resolve equipment_system_variant from explicit input, aliases, or pack default.
+
+    Use ``resolve_variant_hint`` when authoring a *new* DIR menu so the pack default
+    is not treated as evidence for an unmatched host.
+    """
+    return resolve_variant_hint(
+        pack, system_name, variant, application=application
+    ) or pack.default_variant
 
 
 # project_definition_sectors.yaml — canonical industry / sector labels.

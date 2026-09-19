@@ -28,7 +28,7 @@ so the hub stays compatible.
 | `dir_search` | DIR catalog miss / `generate_dir` | Research before questionnaire | Serper | `search_queries.yaml` → `dir_generate.templates` |
 | `creator_content` | DIR generate + evaluate | Supplemental SME PDFs/docs | Pack index | `references/content/` (does **not** replace Serper) |
 | `dir_route` | Python catalog miss (`match_dir_menu`) | Reuse vs create **host** scenario | LLM | optional `calls.dir_route.system` / `instructions` (hints only; template owns the host-identity contract) |
-| `dir_generate` | DIR catalog miss / `generate_dir` (after `dir_route` create) | Author DIR questionnaire JSON | LLM | `calls.dir_generate.system` + `calls.dir_generate.instructions` |
+| `dir_generate` | DIR catalog miss / `generate_dir` (after `dir_route` create) | Author DIR questionnaire JSON. Python passes a variant hint only when the typed host matched pack aliases or the caller supplied one — never `default_variant` for an unmatched host. | LLM | `calls.dir_generate.system` + `calls.dir_generate.instructions` |
 | `evaluate_search` | Valid DIR → evaluate | Industrial references | Serper | `search_queries.yaml` → `evaluate.*` |
 | `evaluate` | Valid DIR → evaluate | Full `equipment_selector_v1` | LLM | `fragments.*` (system) + `calls.evaluate.user_instructions` |
 | `evaluate_repair` | Thin/missing report headings after evaluate | Deepen `datasheet_markdown` | LLM | Same system as evaluate + `calls.evaluate_repair.instructions` |

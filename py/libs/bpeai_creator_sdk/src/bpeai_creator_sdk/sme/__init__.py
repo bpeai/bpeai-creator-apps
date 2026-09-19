@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from .dir_catalog import (
+    DIR_GENERATE_TYPED_HOST_RULES,
     append_dir_menu,
     apply_dir_route_decision,
     catalog_summaries,
     coerce_generated_dir_payload,
+    dir_generate_identity_prompt,
+    dir_generate_variant_prompt_block,
     ensure_common_codes_for_requirements,
     filter_numeric_common_codes,
     match_dir_menu,
@@ -13,6 +16,7 @@ from .dir_catalog import (
     synthesize_common_codes,
     menu_id_for,
     normalize_generated_menu,
+    variant_for_generated_menu,
     write_dir_catalog_markdown,
 )
 from .pack_align import (
@@ -64,6 +68,7 @@ from .pack_loader import (
     resolve_dir_menu,
     resolve_industry,
     resolve_scenario_id,
+    resolve_variant_hint,
     resolve_variant_id,
     unwrap_loaded_component,
 )
@@ -87,6 +92,7 @@ __all__ = [
     "CONTENT_FOLDER_PROMPT",
     "CREATOR_CONTENT_GUIDANCE",
     "DirMenu",
+    "DIR_GENERATE_TYPED_HOST_RULES",
     "DirValidation",
     "KnowledgePack",
     "OPTIONAL_PACK_FILES",
@@ -105,6 +111,8 @@ __all__ = [
     "component_schema_hints",
     "content_dir",
     "creator_content_prompt_block",
+    "dir_generate_identity_prompt",
+    "dir_generate_variant_prompt_block",
     "ensure_common_codes_for_requirements",
     "ensure_creator_pack_assets",
     "ensure_nested_references",
@@ -135,6 +143,7 @@ __all__ = [
     "resolve_dir_menu",
     "resolve_industry",
     "resolve_scenario_id",
+    "resolve_variant_hint",
     "resolve_variant_id",
     "retrieve_creator_chunks",
     "rewrite_app_pack_pointers",
@@ -148,6 +157,7 @@ __all__ = [
     "thin_report_sections",
     "unknown_dir_guidance",
     "unwrap_loaded_component",
+    "variant_for_generated_menu",
     "validate_dir_code",
     "write_dir_catalog_markdown",
     "write_pack_file",

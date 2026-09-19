@@ -17,7 +17,7 @@ from .pack_loader import (
     _norm,
     _taxonomy_sector_pairs,
     resolve_industry,
-    resolve_variant_id,
+    resolve_variant_hint,
 )
 from .validate import (
     ensure_unknown_tbd_options,
@@ -387,6 +387,70 @@ def scenario_id_from_system_name(system_name: str) -> str:
     return slug or "unresolved"
 
 
+DIR_GENERATE_TYPED_HOST_RULES = """
+- equipment_system_variant is a coarse HOST-SYSTEM CLASS for THIS typed host
+  (for example cell_culture_suite or hygienic_process_header), not an operation
+  and not an evaluated technology type. Include it in the JSON.
+- A Variant hint is provided ONLY when the typed host matched pack aliases or
+  the caller supplied it. If the prompt says there is no variant hint, do NOT
+  reuse pack default_variant or another catalog row's variant.
+- Typed system_name and scenario id hint take precedence over any example host,
+  scenario_id, or process area named in earlier SME instructions.
+""".strip()
+
+
+def dir_generate_variant_prompt_block(variant_hint: str | None) -> str:
+    """Prompt lines for DIR generate: hint only when Python actually matched."""
+    hint = str(variant_hint or "").strip()
+    if hint:
+        return (
+            f"Variant hint: {hint}\n"
+            "Use this equipment_system_variant — it matched the typed host or "
+            "was supplied explicitly.\n"
+        )
+    return (
+        "Variant hint: (none — unmatched host; do not reuse pack "
+        "default_variant or another catalog row's variant)\n"
+        "Propose equipment_system_variant as a coarse host-system class for "
+        "THIS typed host. Not an operation and not an evaluated technology type.\n"
+    )
+
+
+def dir_generate_identity_prompt(
+    *,
+    system_name: str,
+    application: str,
+    industry: str,
+    equipment_system: str,
+    scenario_id: str,
+    variant_hint: str | None,
+) -> str:
+    """Shared identity block so evaluator and sizing generate the same way."""
+    return (
+        f"System name: {system_name}\n"
+        f"Application / industry: {application} / {industry}\n"
+        f"Equipment system: {equipment_system}\n"
+        f"Scenario id hint: {scenario_id}\n"
+        f"{dir_generate_variant_prompt_block(variant_hint)}\n"
+    )
+
+
+def variant_for_generated_menu(
+    raw: Mapping[str, Any],
+    *,
+    hinted_variant: str | None,
+) -> str:
+    """Prefer a real hint; otherwise accept the LLM's host-class variant."""
+    hint = str(hinted_variant or "").strip()
+    if hint:
+        return scenario_id_from_system_name(hint)
+    proposed = raw.get("equipment_system_variant") or raw.get("variant") or ""
+    slug = scenario_id_from_system_name(str(proposed))
+    if slug and slug != "unresolved":
+        return slug
+    return "general_duty"
+
+
 def catalog_summaries(pack: KnowledgePack) -> List[Dict[str, Any]]:
     """Compact existing DIR rows for the match-or-create router."""
     out: List[Dict[str, Any]] = []
@@ -534,7 +598,7 @@ def match_dir_menu(
         else ""
     )
 
-    variant = resolve_variant_id(
+    variant = resolve_variant_hint(
         pack, system_name, equipment_system_variant, application=application
     )
 
@@ -565,7 +629,7 @@ def match_dir_menu(
             score += 100
         if explicit_sid and scenario_hit:
             score += 20
-        if _norm(str(row.get("equipment_system_variant") or "")) == _norm(variant):
+        if variant and _norm(str(row.get("equipment_system_variant") or "")) == _norm(variant):
             score += 40
         score += min(40, 5 * len(_significant_keywords(system_name)))
         scored.append((score, row))
@@ -751,9 +815,10 @@ def normalize_generated_menu(
             seen.add(c["code"])
             codes.append(c)
 
+    effective_variant = variant_for_generated_menu(raw, hinted_variant=variant)
     mid = str(raw.get("menu_id") or "").strip() or menu_id_for(
         scenario_id=scenario_id,
-        variant=variant,
+        variant=effective_variant,
         industry=industry,
         system_name=system_name,
     )
@@ -768,7 +833,7 @@ def normalize_generated_menu(
         "menu_id": mid,
         "status": "draft_generated",
         "scenario_id": scenario_id,
-        "equipment_system_variant": variant,
+        "equipment_system_variant": effective_variant,
         "industry": industry,
         "system_examples": examples[:8],
         "label": str(raw.get("label") or f"{system_name} DIR ({industry})"),

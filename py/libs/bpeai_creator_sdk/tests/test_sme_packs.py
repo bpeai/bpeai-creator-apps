@@ -11,6 +11,7 @@ from bpeai_creator_sdk.sme import (
     align_pack_meta_with_scenarios,
     append_dir_menu,
     apply_dir_route_decision,
+    dir_generate_variant_prompt_block,
     filter_numeric_common_codes,
     is_numeric_dir_code,
     is_unknown_tbd_option,
@@ -26,11 +27,14 @@ from bpeai_creator_sdk.sme import (
     prepare_bootstrapped_component,
     python_dir_alignments,
     resolve_dir_menu,
+    resolve_variant_hint,
+    resolve_variant_id,
     scenario_id_from_system_name,
     resolve_scenario_id,
     stamp_draft_meta,
     structure_example_snippet,
     validate_dir_code,
+    variant_for_generated_menu,
     write_dir_catalog_markdown,
     write_pack_file,
 )
@@ -208,6 +212,7 @@ def test_equipment_evaluator_stub_is_loadable(py_root: Path, examples_root: Path
     assert "chromatography_skid" in rules
     assert "Technology: reason" in rules
     assert "Unknown / TBD" in rules
+    assert "CURRENT typed host" in rules
 
 
 def test_align_pack_meta_uses_system_examples_not_vent_aliases(tmp_path: Path):
@@ -819,6 +824,7 @@ def test_normalize_generated_menu_requires_numeric_common_codes():
         industry="biopharmaceutical",
     )
     assert row["status"] == "draft_generated"
+    assert row["equipment_system_variant"] == "general"
     assert len(row["common_codes"]) >= 2
     assert all(is_numeric_dir_code(c["code"], requirement_count=3) for c in row["common_codes"])
     assert filter_numeric_common_codes([{"code": "SIP"}], requirements=row["requirements"]) == []
@@ -854,6 +860,65 @@ def test_normalize_generated_menu_unwraps_dir_menus_wrapper():
     assert row["industry"] == "Pharmaceutical / Small Molecule"
     for req in row["requirements"]:
         assert is_unknown_tbd_option(req["options"][-1]["text"])
+
+
+def test_resolve_variant_hint_skips_pack_default(mixing_stub):
+    assert mixing_stub.default_variant == "general_mixing"
+    assert (
+        resolve_variant_hint(
+            mixing_stub, "BL2-LS", application="cell culture"
+        )
+        is None
+    )
+    assert (
+        resolve_variant_id(mixing_stub, "BL2-LS", application="cell culture")
+        == "general_mixing"
+    )
+    assert (
+        resolve_variant_hint(mixing_stub, "media prep vessel", application="mixing")
+        == "general_mixing"
+    )
+    none_block = dir_generate_variant_prompt_block(None)
+    assert "none" in none_block.lower()
+    assert "general_mixing" not in none_block
+    hinted = dir_generate_variant_prompt_block("hygienic_process_header")
+    assert "Variant hint: hygienic_process_header" in hinted
+
+
+def test_normalize_generated_menu_uses_llm_variant_when_unmatched():
+    reqs = [
+        {
+            "index": i,
+            "label": f"R{i}",
+            "options": [{"index": 1, "text": "a"}, {"index": 2, "text": "b"}],
+        }
+        for i in range(1, 4)
+    ]
+    raw = {
+        "label": "BL2-LS DIR",
+        "requirements": reqs,
+        "common_codes": [{"code": "1-1-1", "caption": "starter"}],
+        "equipment_system_variant": "cell_culture_suite",
+    }
+    row = normalize_generated_menu(
+        raw,
+        system_name="BL2-LS",
+        application="biopharmaceutical",
+        scenario_id="bl2_ls",
+        variant="",
+        industry="Biopharmaceutical & Biologics",
+    )
+    assert row["equipment_system_variant"] == "cell_culture_suite"
+    assert variant_for_generated_menu(raw, hinted_variant="") == "cell_culture_suite"
+    hinted_row = normalize_generated_menu(
+        {**raw, "equipment_system_variant": "cell_culture_suite"},
+        system_name="BL2-LS",
+        application="biopharmaceutical",
+        scenario_id="bl2_ls",
+        variant="downstream_bioprocess",
+        industry="Biopharmaceutical & Biologics",
+    )
+    assert hinted_row["equipment_system_variant"] == "downstream_bioprocess"
 
 
 def test_append_dir_menu_and_catalog_md(mixing_stub, tmp_path: Path):
@@ -979,10 +1044,13 @@ def test_equipment_evaluator_generates_dir_on_catalog_miss(mixing_stub, tmp_path
     assert pack.menus
     assert len(pack.menus) == len(pack.dir_menus)
 
+    captured: dict = {}
+
     fake_dir = {
         "label": "Resin slurry mix DIR",
         "summary": "Draft DIR for chromatography resin slurry mixing.",
         "system_examples": ["Chromatography Resin Slurry Tank"],
+        "equipment_system_variant": "resin_slurry_tank",
         "common_codes": [
             {
                 "code": "2-1-1-1-1",
@@ -1038,9 +1106,13 @@ def test_equipment_evaluator_generates_dir_on_catalog_miss(mixing_stub, tmp_path
         ],
     }
 
+    def _capture_llm(**kwargs):
+        captured["user"] = kwargs.get("user")
+        return fake_dir
+
     agent = EquipmentEvaluatorAgent()
     monkeypatch.setattr(agent, "serper_search", lambda *a, **k: [])
-    monkeypatch.setattr(agent, "call_openai_json", lambda **kwargs: fake_dir)
+    monkeypatch.setattr(agent, "call_openai_json", _capture_llm)
     monkeypatch.setattr(agent, "status", lambda *a, **k: None)
 
     # Unrelated system must not reuse media_preparation via default_scenario.
@@ -1066,6 +1138,9 @@ def test_equipment_evaluator_generates_dir_on_catalog_miss(mixing_stub, tmp_path
     assert menu.lifecycle == "draft_generated"
     assert menu.source == "generated"
     assert menu.scenario_id == "chromatography_resin_slurry_tank"
+    assert menu.equipment_system_variant == "resin_slurry_tank"
+    assert "Variant hint: general_mixing" not in str(captured.get("user") or "")
+    assert "unmatched host" in str(captured.get("user") or "")
     assert not str(menu.scenario_id).endswith("_dir")
     assert len(menu.requirements) >= 5
     assert any("Generated draft DIR" in n for n in notes)
