@@ -32,9 +32,9 @@ def _display_title(result: Mapping[str, Any], title: str | None) -> str:
     if title and str(title).strip():
         return str(title).strip()
     try:
-        from .names import evaluation_display_title
+        from .names import sizing_display_title
 
-        return evaluation_display_title(result)
+        return sizing_display_title(result)
     except ImportError:
         return str(result.get("system_name") or result.get("equipment_name") or "Sizing")
 

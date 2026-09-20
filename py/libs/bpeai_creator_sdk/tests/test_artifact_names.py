@@ -11,6 +11,8 @@ from bpeai_creator_sdk.artifacts.names import (
     infer_evaluated_item_from_pack_id,
     infer_sized_item_from_pack_id,
     sizing_artifact_stem,
+    sizing_display_title,
+    sizing_title_lines,
 )
 
 
@@ -137,6 +139,24 @@ def test_sizing_stem_uses_spaces_and_sized_item():
     attach_sizing_artifact_name(result, pack=pack)
     assert result["sized_item"] == "agitator"
     assert result["artifact_stem"] == "Buffer Preparation Agitator Sizing"
+
+
+def test_sizing_display_title_uses_sizing_not_evaluation():
+    result = {
+        "schema_version": "equipment_sizing_v1",
+        "template_family": "equipment_sizing",
+        "system_name": "Buffer Preparation Vessel",
+        "sized_item": "agitator",
+        "knowledge_pack": "vessel_agitator",
+        "creator_attribution": {"app_id": "vessel_agitator"},
+    }
+    attach_sizing_artifact_name(result)
+    assert sizing_display_title(result) == "Buffer Preparation Vessel Agitator Sizing"
+    assert sizing_title_lines(result) == [
+        "Buffer Preparation Vessel Agitator",
+        "Sizing",
+    ]
+    assert "Evaluation" not in sizing_display_title(result)
 
 
 def test_sized_item_inferred_from_vessel_agitator_pack_id():

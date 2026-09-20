@@ -447,3 +447,52 @@ def attach_sizing_artifact_name(
         result["sized_item"] = item
     result["artifact_stem"] = sizing_artifact_stem(result, pack=pack, item=item)
     return result
+
+
+def is_sizing_result(result: Mapping[str, Any] | None = None) -> bool:
+    src = result or {}
+    schema = str(src.get("schema_version") or "").strip().lower()
+    family = str(src.get("template_family") or "").strip().lower()
+    return schema == "equipment_sizing_v1" or family == "equipment_sizing"
+
+
+def sizing_display_title(
+    result: Mapping[str, Any] | None = None,
+    *,
+    pack: Any = None,
+    item: str | None = None,
+) -> str:
+    """Visible report title, e.g. ``Buffer Preparation Vessel Agitator Sizing``."""
+    src = result or {}
+    existing = display_filename_part(src.get("artifact_stem") or "")
+    if existing and existing.lower().endswith("sizing"):
+        return existing
+    return sizing_artifact_stem(src, pack=pack, item=item)
+
+
+def sizing_title_lines(
+    result: Mapping[str, Any] | None = None,
+    *,
+    pack: Any = None,
+    item: str | None = None,
+) -> list[str]:
+    """Split the sizing title for PPTX title_lines (last line is ``Sizing``)."""
+    title = sizing_display_title(result, pack=pack, item=item)
+    words = title.split()
+    if len(words) >= 3 and words[-1].lower() == "sizing":
+        return [" ".join(words[:-1]), words[-1]]
+    if len(words) >= 4:
+        mid = max(1, len(words) // 2)
+        return [" ".join(words[:mid]), " ".join(words[mid:])]
+    return [title]
+
+
+def deliverable_title_lines(
+    result: Mapping[str, Any] | None = None,
+    *,
+    pack: Any = None,
+) -> list[str]:
+    """PPTX first-page title lines for evaluator or sizing deliverables."""
+    if is_sizing_result(result):
+        return sizing_title_lines(result, pack=pack)
+    return evaluation_title_lines(result, pack=pack)

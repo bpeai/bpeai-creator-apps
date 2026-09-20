@@ -9,7 +9,8 @@ Creator checklist after copying this folder to ``py/apps/equipment_sizing/<your_
      ``equipment_system`` is taxonomy (mixing, filtration, …), not the pack name.
      If the pack is missing locally, the first ``local_chat`` run LLM-bootstraps
      a draft under ``py/knowledge/<app_id>/`` using the creator’s ``.env`` keys
-     (not Cursor). Optional SME files go in ``references/content/``.
+     (not Cursor), including ``references/content/methods.md``, ``assumptions.md``,
+     and ``basis.csv``. SME edits in that folder are not overwritten.
   4. Update ``manifest.json`` (slug, label, equipment_system, knowledge_pack = app id).
   5. Local test: ``python py/tools/local_chat.py --app <your_id>``.
      First line: system name and application, e.g. ``CIP return pump, biopharmaceutical``.
@@ -81,8 +82,10 @@ from bpeai_creator_sdk.sme import (
     match_dir_menu,
     missing_report_headings,
     normalize_generated_menu,
+    optional_bootstrap_files,
     pack_bootstrap_authoring_rules,
     prepare_bootstrapped_component,
+    sizing_content_authoring_contract,
     python_dir_alignments,
     resolve_dir_menu,
     resolve_industry,
@@ -92,6 +95,8 @@ from bpeai_creator_sdk.sme import (
     scenario_id_from_system_name,
     stamp_draft_meta,
     structure_example_snippet,
+    extract_sizing_content_texts,
+    is_sizing_content_bootstrap_file,
     thin_report_sections,
     validate_dir_code,
     write_pack_file,
@@ -376,6 +381,9 @@ Rules:
   card values ≤ 8 words; process_steps titles ≤ 5 words; process_steps details ≤ 14 words;
   failure_modes ≤ 12 words each; option notes ≤ 12 words;
   recommended_why / cons ≤ 14 words each; decision_logic ≤ 35 words.
+- Title slide title_lines MUST be the sizing deliverable name: first line is
+  "{system} {sized_item}" (e.g. "Buffer Preparation Vessel Agitator"),
+  second line is exactly "Sizing". Never use "Evaluation" in the title.
 - Ground every claim in the sizing JSON (capacity, connections, dimensions,
   key_specs, excel_ready_table) and datasheet_markdown.
 - Numerical sizing values from that JSON are allowed and expected; do not
@@ -867,14 +875,21 @@ class EquipmentSizingAgent(CreatorAppBase):
                 f"Seeded style templates for '{pack_id}': {', '.join(seeded)}"
             )
 
-        missing = list_missing_pack_files(pack_id, py_root=py_root, include_optional=True)
+        missing = list_missing_pack_files(
+            pack_id,
+            py_root=py_root,
+            include_optional=True,
+            optional=optional_bootstrap_files(template_family=family),
+        )
         created: List[str] = []
         if missing:
             self.status(
                 f"Knowledge pack '{pack_id}' incomplete ({len(missing)} file(s) missing) — "
                 "bootstrapping initial draft components…"
             )
-            for filename in missing:
+            yaml_missing = [name for name in missing if not is_sizing_content_bootstrap_file(name)]
+            content_missing = [name for name in missing if is_sizing_content_bootstrap_file(name)]
+            for filename in yaml_missing:
                 try:
                     self._bootstrap_pack_component(
                         pack_id,
@@ -888,6 +903,21 @@ class EquipmentSizingAgent(CreatorAppBase):
                 except Exception as exc:
                     notes.append(f"Failed to bootstrap {filename}: {exc}")
                     self.status(f"Bootstrap failed for {filename}: {exc}")
+            if content_missing:
+                try:
+                    created.extend(
+                        self._bootstrap_sizing_content(
+                            pack_id,
+                            content_missing,
+                            equipment_system=eq,
+                            py_root=py_root,
+                            system_name=system_name,
+                            application=application,
+                        )
+                    )
+                except Exception as exc:
+                    notes.append(f"Failed to bootstrap sizing methods content: {exc}")
+                    self.status(f"Bootstrap failed for sizing methods content: {exc}")
 
             still_missing_core = list_missing_pack_files(
                 pack_id, py_root=py_root, include_optional=False
@@ -945,12 +975,27 @@ class EquipmentSizingAgent(CreatorAppBase):
         application: str = "",
     ) -> Path:
         """Generate one missing pack file via LLM (or a minimal README fallback)."""
+        if is_sizing_content_bootstrap_file(filename):
+            written = self._bootstrap_sizing_content(
+                pack_id,
+                [filename],
+                equipment_system=equipment_system,
+                py_root=py_root,
+                system_name=system_name,
+                application=application,
+                overwrite=overwrite,
+            )
+            if not written:
+                raise ValueError(f"Sizing content bootstrap produced no text for {filename}")
+            return pack_dir(pack_id, py_root=py_root) / filename
+
         if filename == "README.md":
             md = (
                 f"# {pack_id} knowledge pack (DRAFT)\n\n"
                 f"Initial auto-generated SME pack for **{equipment_system}**.\n\n"
-                "Status: `draft_pending_sme_approval` — review and edit YAML before "
-                "production use.\n\n"
+                "Status: `draft_pending_sme_approval` — review YAML and "
+                "`references/content/` (methods.md, assumptions.md, basis.csv) "
+                "before production use.\n\n"
                 "Design: `docs/EI_APP_TEMPLATE_DESIGN.md`.\n"
             )
             return write_pack_file(
@@ -986,6 +1031,119 @@ class EquipmentSizingAgent(CreatorAppBase):
             draft=True,
             overwrite=overwrite,
         )
+
+    def _bootstrap_sizing_content(
+        self,
+        pack_id: str,
+        filenames: List[str],
+        *,
+        equipment_system: str,
+        py_root: Path,
+        system_name: str = "",
+        application: str = "",
+        overwrite: bool = False,
+    ) -> List[str]:
+        """LLM-draft methods.md / assumptions.md / basis.csv (missing files only)."""
+        wanted = [
+            name.replace("\\", "/")
+            for name in filenames
+            if is_sizing_content_bootstrap_file(name)
+        ]
+        if not wanted:
+            return []
+        root = pack_dir(pack_id, py_root=py_root)
+        missing = [
+            name
+            for name in wanted
+            if overwrite or not (root / name).is_file()
+        ]
+        if not missing:
+            return []
+        self.status("Drafting sizing methods, assumptions, and calculation basis…")
+        raw = self._generate_sizing_content_llm(
+            pack_id,
+            equipment_system=equipment_system,
+            py_root=py_root,
+            system_name=system_name,
+            application=application,
+        )
+        texts = extract_sizing_content_texts(raw)
+        created: List[str] = []
+        for filename in missing:
+            body = (texts.get(filename) or "").strip()
+            if len(body) < 40:
+                self.status(f"Sizing content bootstrap skipped thin {filename}")
+                continue
+            write_pack_file(
+                pack_id,
+                filename,
+                body if body.endswith("\n") else body + "\n",
+                py_root=py_root,
+                draft=True,
+                overwrite=overwrite,
+            )
+            created.append(filename)
+        if created:
+            self.status(f"Wrote draft sizing content: {', '.join(created)}")
+        return created
+
+    def _generate_sizing_content_llm(
+        self,
+        pack_id: str,
+        *,
+        equipment_system: str,
+        py_root: Path,
+        system_name: str = "",
+        application: str = "",
+    ) -> Dict[str, Any]:
+        """One JSON LLM for draft methods.md, assumptions.md, and basis.csv."""
+        # AI_HANDSHAKE: pack_bootstrap — sizing methods/assumptions/basis content.
+        sized_item = ""
+        try:
+            partial = load_knowledge_pack(pack_id, py_root=py_root)
+            sized_item = str(getattr(partial, "sized_item", "") or "").strip()
+        except Exception:
+            pass
+        methods_ex = structure_example_snippet(
+            "references/content/methods.md",
+            py_root=py_root,
+            stub_name="mixing_sizing_stub",
+        )
+        assumptions_ex = structure_example_snippet(
+            "references/content/assumptions.md",
+            py_root=py_root,
+            stub_name="mixing_sizing_stub",
+        )
+        basis_ex = structure_example_snippet(
+            "references/content/basis.csv",
+            py_root=py_root,
+            stub_name="mixing_sizing_stub",
+        )
+        system = (
+            "You are a senior life-science equipment SME authoring an INITIAL DRAFT "
+            "methods pack for a BPEAI equipment_sizing knowledge pack. Return ONLY JSON. "
+            "Adapt methods to the sized item and host. Prefer textbook correlations with "
+            "named symbols. Do not invent SKUs or guaranteed process performance."
+        )
+        user = (
+            f"Pack `{pack_id}` (equipment_system=`{equipment_system}`), "
+            f"app `{getattr(self, 'app_id', pack_id)}`.\n"
+            f"Typed host: {system_name or '(unspecified)'}\n"
+            f"Application/sector: {application or '(unspecified)'}\n"
+            f"sized_item: {sized_item or '(infer from pack_id / host)'}\n\n"
+            f"{sizing_content_authoring_contract()}\n\n"
+            "Reference shape from mixing_sizing_stub (adapt domain; do not copy "
+            "mixing-only formulas into unrelated equipment):\n"
+            f"--- methods.md ---\n{methods_ex[:3500]}\n"
+            f"--- assumptions.md ---\n{assumptions_ex[:2500]}\n"
+            f"--- basis.csv ---\n{basis_ex[:2500]}\n"
+        )
+        raw = self.call_openai_json(system=system, user=user)
+        if not isinstance(raw, dict):
+            raise TypeError("LLM sizing content bootstrap was not a JSON object")
+        if set(raw.keys()) == {"content"} and isinstance(raw.get("content"), dict):
+            return raw["content"]
+        return raw
 
     def _generate_pack_component_llm(
         self,

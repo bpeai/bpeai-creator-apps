@@ -1,0 +1,7 @@
+Item,Method/formula,Result,Unit,Basis
+Working volume,DIR working volume,V,L,Validated DIR
+Impeller diameter,D=T/3,=T/3,m,Single hydrofoil heuristic
+Tip speed,vt=PI()*N*D,=PI()*N*D,m/s,Kinematic definition
+Power,P=Np*rho*N^3*D^5,=Np*rho*N^3*D^5,W,Power number when known
+Torque,Tq=P/(2*PI()*N),=P/(2*PI()*N),N*m,Shaft torque
+P/V,P/V,=P/V,W/m3,Duty check; vendor confirm

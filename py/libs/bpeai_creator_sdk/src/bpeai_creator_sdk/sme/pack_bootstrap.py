@@ -30,6 +30,34 @@ OPTIONAL_PACK_FILES = (
     "README.md",
 )
 
+# Sizing-family only. Optional; not required to load the pack. SME-editable.
+SIZING_CONTENT_BOOTSTRAP_FILES = (
+    "references/content/methods.md",
+    "references/content/assumptions.md",
+    "references/content/basis.csv",
+)
+
+SIZING_CONTENT_BOOTSTRAP_KEYS: Dict[str, Tuple[str, ...]] = {
+    "references/content/methods.md": (
+        "methods_md",
+        "methods.md",
+        "methods",
+        "references/content/methods.md",
+    ),
+    "references/content/assumptions.md": (
+        "assumptions_md",
+        "assumptions.md",
+        "assumptions",
+        "references/content/assumptions.md",
+    ),
+    "references/content/basis.csv": (
+        "basis_csv",
+        "basis.csv",
+        "basis",
+        "references/content/basis.csv",
+    ),
+}
+
 ALL_BOOTSTRAP_FILES = PACK_FILES + OPTIONAL_PACK_FILES
 
 _COMPONENT_NAME_KEYS = frozenset(ALL_BOOTSTRAP_FILES)
@@ -112,6 +140,79 @@ def list_missing_pack_files(
     return missing
 
 
+def optional_bootstrap_files(*, template_family: str = "") -> Tuple[str, ...]:
+    """Optional files bootstrap should author. Sizing also drafts method content."""
+    files = tuple(OPTIONAL_PACK_FILES)
+    if str(template_family or "").strip().lower() == "equipment_sizing":
+        return files + SIZING_CONTENT_BOOTSTRAP_FILES
+    return files
+
+
+def is_sizing_content_bootstrap_file(filename: str) -> bool:
+    return str(filename or "").replace("\\", "/") in SIZING_CONTENT_BOOTSTRAP_FILES
+
+
+def _as_bootstrap_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.replace("\r\n", "\n").strip()
+    if isinstance(value, list):
+        return "\n".join(str(item).rstrip() for item in value).strip()
+    if isinstance(value, Mapping):
+        if "content" in value:
+            return _as_bootstrap_text(value.get("content"))
+        if "text" in value:
+            return _as_bootstrap_text(value.get("text"))
+        if "csv" in value:
+            return _as_bootstrap_text(value.get("csv"))
+    return str(value).strip()
+
+
+def extract_sizing_content_texts(payload: Mapping[str, Any] | None) -> Dict[str, str]:
+    """Pull methods/assumptions/basis strings from a combined bootstrap JSON object."""
+    data: Any = payload if isinstance(payload, Mapping) else {}
+    if isinstance(data, Mapping) and set(data.keys()) == {"content"}:
+        inner = data.get("content")
+        if isinstance(inner, Mapping):
+            data = inner
+        elif isinstance(inner, str):
+            return {}
+    out: Dict[str, str] = {}
+    for filename, aliases in SIZING_CONTENT_BOOTSTRAP_KEYS.items():
+        text = ""
+        for key in aliases:
+            if isinstance(data, Mapping) and key in data:
+                text = _as_bootstrap_text(data.get(key))
+                if text:
+                    break
+        if text:
+            out[filename] = text if text.endswith("\n") else text + "\n"
+    return out
+
+
+def sizing_content_authoring_contract() -> str:
+    """LLM contract for draft methods.md / assumptions.md / basis.csv."""
+    return (
+        "Return ONLY a JSON object with three string fields:\n"
+        '{"methods_md":"markdown","assumptions_md":"markdown","basis_csv":"csv text"}\n'
+        "Author an INITIAL DRAFT methods pack for THIS sized item on THIS host "
+        "and official sector. Domain-adapt (pump ≠ agitator ≠ TFF holder ≠ column).\n"
+        "methods.md: governing equations with named symbols and SI/US customary units; "
+        "when to use each method; what must stay vendor-confirmed. 1–2 pages.\n"
+        "assumptions.md: default properties, service factors, allowed shortcuts, "
+        "and items that must remain TBD / missing_inputs if DIR is silent. "
+        "Label every default as an assumption.\n"
+        "basis.csv: CSV with header Item,Method/formula,Result,Unit,Basis. "
+        "Result may be Excel formula syntax starting with = and using placeholders "
+        "(not project-specific numbers). 8–15 rows covering the sized-item duty.\n"
+        "Use textbook / industry methods. Do not invent manufacturer SKUs or "
+        "guaranteed performance (blend time, NPSH, flux, etc.). Mark the whole "
+        "pack DRAFT pending SME approval. Do not copy mixing-only formulas into "
+        "unrelated equipment types."
+    )
+
+
 def pack_is_loadable(
     pack_id: str,
     *,
@@ -153,7 +254,9 @@ def write_pack_file(
             text = (
                 "> **DRAFT** — initial version pending SME / platform approval.\n\n" + text
             )
-        elif draft and not filename.endswith(".md") and not text.lstrip().startswith("#"):
+        elif draft and filename.endswith(".csv") and "draft" not in text[:400].lower():
+            text = "# DRAFT — initial version pending SME / platform approval.\n" + text
+        elif draft and not filename.endswith(".md") and not filename.endswith(".csv") and not text.lstrip().startswith("#"):
             text = DRAFT_BANNER + text
 
     target.write_text(text, encoding="utf-8")
@@ -288,6 +391,9 @@ def pack_bootstrap_authoring_rules(
             "not a technology option-evaluation rejection matrix.\n"
             "- sized_item in pack.yaml is the noun being sized (agitator, pump, "
             "membrane holder, column), not the host vessel/skid name.\n"
+            "- Do not nest methods.md / assumptions.md / basis.csv inside YAML. "
+            "Python authors those draft files under references/content/ in a "
+            "separate sizing-content bootstrap call.\n"
         )
     return shared + (
         "- fit_enum.allowed must include best, strong, conditional, limited, "
@@ -437,6 +543,18 @@ def component_schema_hints(*, template_family: str = "") -> Dict[str, str]:
             "{application}, {equipment_system}) AND sizing.templates / optional "
             "sizing.slots / sizing.static for vendor catalog and envelope queries. "
             "Domain-specific — do not copy mixing vendor names into unrelated systems."
+        )
+        hints["references/content/methods.md"] = (
+            "Markdown methods library for THIS sized item. Governing equations, "
+            "symbols, units, when to use each method, vendor-confirmation items. DRAFT."
+        )
+        hints["references/content/assumptions.md"] = (
+            "Markdown default assumptions and TBD rules for THIS sized item. "
+            "Label every default. DRAFT pending SME approval."
+        )
+        hints["references/content/basis.csv"] = (
+            "CSV with header Item,Method/formula,Result,Unit,Basis. Result may be "
+            "Excel = formulas with placeholders, not project numbers. DRAFT."
         )
     return hints
 

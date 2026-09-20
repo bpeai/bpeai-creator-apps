@@ -270,6 +270,103 @@ def test_mixing_sizing_stub_sizing_calls_and_headings(py_root: Path, examples_ro
     assert templates
 
 
+def test_optional_bootstrap_files_sizing_includes_methods():
+    from bpeai_creator_sdk.sme import (
+        OPTIONAL_PACK_FILES,
+        SIZING_CONTENT_BOOTSTRAP_FILES,
+        extract_sizing_content_texts,
+        is_sizing_content_bootstrap_file,
+        optional_bootstrap_files,
+        sizing_content_authoring_contract,
+    )
+
+    evaluator = optional_bootstrap_files()
+    sizing = optional_bootstrap_files(template_family="equipment_sizing")
+    assert evaluator == OPTIONAL_PACK_FILES
+    for name in SIZING_CONTENT_BOOTSTRAP_FILES:
+        assert name not in evaluator
+        assert name in sizing
+        assert is_sizing_content_bootstrap_file(name)
+    assert not is_sizing_content_bootstrap_file("prompt_fragments.yaml")
+    contract = sizing_content_authoring_contract()
+    assert "methods_md" in contract
+    assert "basis.csv" in contract
+
+    texts = extract_sizing_content_texts(
+        {
+            "content": {
+                "methods_md": "## Pump head\n\nH = dP / (rho g)\n",
+                "assumptions": ["Water at 20 C unless DIR says otherwise.", "NPSH vendor confirm."],
+                "basis.csv": "Item,Method/formula,Result,Unit,Basis\nFlow,DIR,Q,m3/h,DIR\n",
+            }
+        }
+    )
+    assert "Pump head" in texts["references/content/methods.md"]
+    assert "Water at 20 C" in texts["references/content/assumptions.md"]
+    assert texts["references/content/basis.csv"].startswith("Item,")
+
+
+def test_write_sizing_content_does_not_overwrite(tmp_path: Path):
+    from bpeai_creator_sdk.sme import SIZING_CONTENT_BOOTSTRAP_FILES, write_pack_file
+
+    first = write_pack_file(
+        "pump_sizer",
+        "references/content/methods.md",
+        "## SME edited methods\n\nKeep this.\n",
+        py_root=tmp_path,
+        draft=True,
+        overwrite=False,
+    )
+    assert first.is_file()
+    original = first.read_text(encoding="utf-8")
+    write_pack_file(
+        "pump_sizer",
+        "references/content/methods.md",
+        "## Should not replace\n",
+        py_root=tmp_path,
+        draft=True,
+        overwrite=False,
+    )
+    assert first.read_text(encoding="utf-8") == original
+    csv_path = write_pack_file(
+        "pump_sizer",
+        "references/content/basis.csv",
+        "Item,Method/formula,Result,Unit,Basis\nFlow,DIR,Q,m3/h,DIR\n",
+        py_root=tmp_path,
+        draft=True,
+    )
+    csv_text = csv_path.read_text(encoding="utf-8")
+    assert csv_text.splitlines()[0].startswith("# DRAFT")
+    assert "Item,Method/formula" in csv_text
+    missing = list_missing_pack_files(
+        "pump_sizer",
+        py_root=tmp_path,
+        include_optional=True,
+        optional=SIZING_CONTENT_BOOTSTRAP_FILES,
+    )
+    assert "references/content/methods.md" not in missing
+    assert "references/content/assumptions.md" in missing
+    assert pack_is_loadable("pump_sizer", py_root=tmp_path) is False
+
+
+def test_mixing_sizing_stub_has_example_methods(py_root: Path, examples_root: Path):
+    pack = examples_root / "mixing_sizing_stub"
+    methods = pack / "references" / "content" / "methods.md"
+    assumptions = pack / "references" / "content" / "assumptions.md"
+    basis = pack / "references" / "content" / "basis.csv"
+    assert methods.is_file()
+    assert "Impeller diameter" in methods.read_text(encoding="utf-8")
+    assert assumptions.is_file()
+    assert basis.is_file()
+    assert "Item,Method/formula" in basis.read_text(encoding="utf-8")
+    snippet = structure_example_snippet(
+        "references/content/methods.md",
+        py_root=py_root,
+        stub_name="mixing_sizing_stub",
+    )
+    assert "EXAMPLE" in snippet or "Impeller" in snippet
+
+
 def test_align_pack_meta_uses_system_examples_not_vent_aliases(tmp_path: Path):
     import yaml
 

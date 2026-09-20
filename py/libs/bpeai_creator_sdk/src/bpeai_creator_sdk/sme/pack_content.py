@@ -67,10 +67,12 @@ CONTENT_FOLDER_PROMPT = (
     "nested (for example `equipment_sizing/{pack_id}`), or "
     "`py/knowledge/{pack_id}/references/content/` for a leaf-only pack "
     "(optional; empty is valid; .pdf / .md / .txt / .csv — not .docx), then "
-    "re-run so they are indexed as supplemental LLM context. Style PPTX/PDF "
-    "shells belong in `references/style/`. At the local_chat prompt enter "
-    "system name and application/domain, for example: CIP return pump, "
-    "biopharmaceutical."
+    "re-run so they are indexed as supplemental LLM context. Sizing packs: "
+    "first `local_chat` also drafts `methods.md`, `assumptions.md`, and "
+    "`basis.csv` in that folder for SME review (existing files are not "
+    "overwritten). Style PPTX/PDF shells belong in `references/style/`. "
+    "At the local_chat prompt enter system name and application/domain, "
+    "for example: CIP return pump, biopharmaceutical."
 )
 
 

@@ -15,6 +15,8 @@ Pack dials:
 
 - `prompt_fragments.yaml` — `fragments` (evaluate system) + `calls` (per-handshake)
 - `search_queries.yaml` — Serper templates / static queries
+- `references/content/` — SME methods (bootstrap drafts `methods.md`,
+  `assumptions.md`, `basis.csv`; add PDFs/csv as needed)
 
 Look for **`HANDSHAKE:`** (UI wire) and **`AI_HANDSHAKE:`** (LLM/search) comments
 in [`agent.py`](./agent.py). Sizing calls: `sizing_plan`, `sizing_search`,

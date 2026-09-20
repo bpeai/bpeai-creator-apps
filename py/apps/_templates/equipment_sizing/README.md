@@ -5,6 +5,8 @@ Canonical starter for **equipment sizing** EI apps (DIR → capacity, connection
 Copy this folder to ``py/apps/equipment_sizing/<your_id>/``. Do **not** copy
 ``py/knowledge/_examples/mixing_sizing_stub/`` as a live pack — first
 ``local_chat`` LLM-bootstraps ``py/knowledge/equipment_sizing/<your_id>/``.
+That first run also drafts ``references/content/methods.md``, ``assumptions.md``,
+and ``basis.csv`` for the typed equipment (SME review; existing files are kept).
 
 ## Repo ownership
 

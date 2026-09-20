@@ -1,5 +1,12 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.9 — 2026-09-20
+
+### Sizing pack bootstrap: draft methods library
+
+- First `local_chat` for `equipment_sizing` drafts `references/content/methods.md`, `assumptions.md`, and `basis.csv` for the typed sized item (one JSON LLM). Files are optional and are not overwritten if the SME already added them.
+- Evaluator bootstrap is unchanged. Pack load still requires only the core YAML files.
+
 ## 0.2.8 — 2026-09-20
 
 ### Sizing template family (AI functions + SME packs)
@@ -9,6 +16,7 @@
 - SDK `build_sizing_docx` / `build_sizing_xlsx` write Word and Excel from `datasheet_markdown`, `key_specs`, and optional `excel_ready_table` (Excel formulas when the table supplies `=` syntax).
 - `equipment_sizing_v1` keeps the same schema version; `excel_ready_table` is additive.
 - PPTX extra grounds slides in sizing JSON; numerical results are allowed.
+- Sizing Word/PPTX first-page titles use `{system} {sized_item} Sizing` (not Evaluation).
 
 ## 0.2.7 — 2026-09-10
 

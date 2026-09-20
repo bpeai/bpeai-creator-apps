@@ -5,6 +5,10 @@ This is **not** a platform production knowledge pack.
 Use this stub for `equipment_sizing` SDK tests only. Do **not** copy it as a live
 starter pack. Evaluator tests must keep using `_examples/mixing_stub/`.
 
+Example SME method files live under `references/content/` (`methods.md`,
+`assumptions.md`, `basis.csv`). Live sizing packs get a **draft** of those files
+from pack bootstrap — adapt; do not copy mixing-only formulas.
+
 ```python
 from bpeai_creator_sdk.sme import load_knowledge_pack, knowledge_root
 

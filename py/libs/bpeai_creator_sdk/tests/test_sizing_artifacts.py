@@ -157,6 +157,39 @@ def test_build_sizing_docx_includes_numbers(tmp_path: Path):
     assert "capacity" in text
     assert "calculation" in text or "tip speed" in text
     assert "option evaluation" not in text
+    assert "process vessel agitator sizing" in text
+    assert "process vessel agitator evaluation" not in text
+
+
+def test_sizing_docx_title_is_system_item_sizing(tmp_path: Path):
+    from bpeai_creator_sdk.artifacts.names import attach_sizing_artifact_name
+
+    result = _sizing_fixture(item="agitator", table=_agitator_table(), capacity_value="2000", capacity_unit="L")
+    result["system_name"] = "Buffer Preparation Vessel"
+    result["schema_version"] = "equipment_sizing_v1"
+    result["template_family"] = "equipment_sizing"
+    attach_sizing_artifact_name(result)
+    path = build_sizing_docx(result, output_path=tmp_path / "buffer.docx")
+    text = sizing_docx_text(path)
+    assert text.splitlines()[0] == "Buffer Preparation Vessel Agitator Sizing"
+    assert "Agitator Evaluation" not in text
+
+
+def test_sizing_slide_pack_title_says_sizing_not_evaluation():
+    from bpeai_creator_sdk.artifacts import build_slide_pack_from_evaluation
+    from bpeai_creator_sdk.artifacts.names import attach_sizing_artifact_name
+
+    result = _sizing_fixture(item="agitator", table=_agitator_table(), capacity_value="2000", capacity_unit="L")
+    result["system_name"] = "Buffer Preparation Vessel"
+    result["schema_version"] = "equipment_sizing_v1"
+    result["template_family"] = "equipment_sizing"
+    attach_sizing_artifact_name(result)
+    pack = build_slide_pack_from_evaluation(result)
+    title_lines = pack["slides"][0]["title_lines"]
+    joined = " ".join(title_lines)
+    assert joined == "Buffer Preparation Vessel Agitator Sizing"
+    assert title_lines[-1] == "Sizing"
+    assert "Evaluation" not in joined
 
 
 def test_merge_sizing_report_keeps_required_headings():

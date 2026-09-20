@@ -213,7 +213,9 @@ In template / app Python, mark UI-visible boundaries:
 3. Local test: `python py/tools/local_chat.py --app <your_id>` — first run
    LLM-bootstraps `py/knowledge/<your_id>/` with your `.env` keys. At the prompt
    enter system name and application, e.g. `CIP return pump, biopharmaceutical`.
-   Optional SME files: `py/knowledge/<your_id>/references/content/`.
+   Optional SME files: `py/knowledge/<your_id>/references/content/`. Sizing packs
+   also auto-draft `methods.md`, `assumptions.md`, and `basis.csv` there (review;
+   existing files are kept).
 4. Review / edit the draft pack (prompts + catalogs + outlines).
 5. Optionally add `creator_tools.py` helpers inside existing phases.
 6. Upload → portal Test → Submit → admin Publish.

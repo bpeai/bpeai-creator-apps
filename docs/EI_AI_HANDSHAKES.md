@@ -24,7 +24,7 @@ so the hub stays compatible.
 
 | ID | When | Why | Channel | SME dial |
 |----|------|-----|---------|----------|
-| `pack_bootstrap` | Missing pack YAML on first local/portal draft | Author draft pack files | LLM | `calls.pack_bootstrap.system` (optional; authoring-time) |
+| `pack_bootstrap` | Missing pack YAML on first local/portal draft | Author draft pack files. Sizing also drafts `references/content/methods.md`, `assumptions.md`, `basis.csv` (one JSON call; optional; does not overwrite SME files) | LLM | `calls.pack_bootstrap.system` (optional; authoring-time) |
 | `dir_search` | DIR catalog miss / `generate_dir` | Research before questionnaire | Serper | `search_queries.yaml` → `dir_generate.templates` |
 | `creator_content` | DIR generate + evaluate | Supplemental SME PDFs/docs | Pack index | `references/content/` (does **not** replace Serper) |
 | `dir_route` | Python catalog miss (`match_dir_menu`) | Reuse vs create **host** scenario | LLM | optional `calls.dir_route.system` / `instructions` (hints only; template owns the host-identity contract) |
@@ -176,6 +176,7 @@ Sizing family (`equipment_sizing`):
 ```text
 run()
   ├─ (optional) pack_bootstrap LLM          ← sizing-family draft YAML
+  ├─ (optional) pack_bootstrap content LLM  ← methods.md / assumptions.md / basis.csv
   ├─ resolve DIR menu (same match-or-generate as evaluator)
   ├─ no dir_code → return dir_requirements (no LLM)
   ├─ sizing_plan (LLM)
@@ -203,8 +204,9 @@ run()
 4. Keep `report_outline.yaml` / options / DIR catalogs aligned with the report
    the evaluate **or** sizing_report call must produce.
 5. Optional: add SME PDFs/md/txt to `py/knowledge/<id>/references/content/` and re-run
-   `local_chat` so they are indexed. Creator files **supplement** web search; they do
-   not replace Serper.
+   `local_chat` so they are indexed. Sizing bootstrap already drafts methods.md /
+   assumptions.md / basis.csv — review those; they are not overwritten. Creator files
+   **supplement** web search; they do not replace Serper.
 6. Local test: `python py/tools/local_chat.py --app <id>`.
 
 ## Cursor wizard
