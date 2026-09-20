@@ -1,5 +1,15 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+## 0.2.8 — 2026-09-20
+
+### Sizing template family (AI functions + SME packs)
+
+- Pack bootstrap is family-aware: sizing drafts require sizing report headings and `sizing_*` calls, not option-evaluation outlines.
+- `equipment_sizing` adds generic `sizing_report` / `sizing_repair` LLMs (pack headings + calculation table). Domain math stays in the pack.
+- SDK `build_sizing_docx` / `build_sizing_xlsx` write Word and Excel from `datasheet_markdown`, `key_specs`, and optional `excel_ready_table` (Excel formulas when the table supplies `=` syntax).
+- `equipment_sizing_v1` keeps the same schema version; `excel_ready_table` is additive.
+- PPTX extra grounds slides in sizing JSON; numerical results are allowed.
+
 ## 0.2.7 — 2026-09-10
 
 ### Local app path: family/leaf vs template

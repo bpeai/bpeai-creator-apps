@@ -272,6 +272,7 @@ class EquipmentSizingOutput(BaseModel):
     assumptions: List[str] = Field(default_factory=list)
     source_basis: List[str] = Field(default_factory=list)
     datasheet_markdown: str = ""
+    excel_ready_table: str = ""
     creator_attribution: CreatorAttribution
     handshake_protocol: str = "ei_handshake_v1"
     artifacts: Dict[str, Any] = Field(default_factory=dict)

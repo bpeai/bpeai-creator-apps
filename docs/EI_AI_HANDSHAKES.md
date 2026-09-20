@@ -36,8 +36,10 @@ so the hub stays compatible.
 | `sizing_plan` | Valid DIR, before sizing LLMs | Decide capacity/connection inputs vs DIR | LLM | `calls.sizing_plan.*` |
 | `sizing_search` | After plan, when sizing proceeds | Vendor/catalog envelope references | Serper | `search_queries.yaml` → `sizing.*` (falls back to `evaluate.*`) |
 | `sizing_capacity` | After plan | Capacity JSON | LLM | `calls.sizing_capacity.*` |
-| `sizing_connections` | After capacity | Connection JSON | LLM | `calls.sizing_connections.*` |
+| `sizing_connections` | After capacity | Connection JSON for **this sized item** | LLM | `calls.sizing_connections.*` |
 | `sizing_dimensions` | After connections | Envelope JSON | LLM | `calls.sizing_dimensions.*` |
+| `sizing_report` | After capacity / connections / envelope | Datasheet markdown + `key_specs` + `excel_ready_table` | LLM | `calls.sizing_report.*` |
+| `sizing_repair` | Thin/missing sizing headings after report | Deepen `datasheet_markdown` | LLM | Same system as `sizing_report` + `calls.sizing_repair.instructions` |
 
 Post-search excerpt fetch (`enrich_search_hits_with_excerpts`) is **not** an SME
 prompt dial — it only expands Serper hits for the LLM user message.
@@ -71,12 +73,41 @@ calls:
   evaluate:
     user_instructions: >
       Extra SME text appended in the evaluate user message (before schema contract).
+      Evaluator family only — do not emit on sizing packs.
   evaluate_repair:
     instructions: >
       Preamble for the repair pass when sections are thin/missing.
+      Evaluator family only.
+  sizing_plan:
+    system: >
+      Decide which capacity/connection inputs are still needed.
+    instructions: >
+      Prefer DIR answers; only request extra material-balance inputs when needed.
+  sizing_capacity:
+    system: >
+      Size capacity from DIR. Return ONLY JSON.
+    instructions: >
+      Domain method (working volume, flow, membrane area, column volume, …).
+  sizing_connections:
+    system: >
+      Size interfaces that belong to pack.yaml sized_item.
+    instructions: >
+      Do not size unrelated host nozzles unless this pack says so.
+  sizing_dimensions:
+    system: >
+      Estimate overall envelope from vendor catalogs when possible.
+  sizing_report:
+    system: >
+      Draft the sizing datasheet from capacity/connections/envelope JSON.
+    instructions: >
+      Required headings plus Item|Method/formula|Result|Unit|Basis table.
+  sizing_repair:
+    instructions: >
+      Restore missing or thin sizing headings without changing supported numbers.
   pptx:
     system_extra: >
       System add-on after role (or replaces default slide wording).
+      Sizing decks must include numerical results from the sizing JSON.
     instructions: >
       Optional domain emphasis for slides.
   pack_bootstrap:
@@ -99,6 +130,14 @@ evaluate:
     vessel_format: ["vessel", "format", "tank"]
   static:
     - "domain or vendor discovery query (SME-owned)"
+
+sizing:
+  templates:
+    - "{system_name} {working_volume} sanitary dimensions catalog {application}"
+  slots:
+    working_volume: ["working volume"]
+  static:
+    - "domain or vendor envelope query (SME-owned)"
 ```
 
 **Placeholders** (string `.format` / safe substitute):
@@ -113,6 +152,8 @@ Missing file or empty section → **domain-neutral template fallbacks** in the S
 `evaluate.static`.
 
 ## Flow (runtime)
+
+Evaluator family (`equipment_evaluator`):
 
 ```text
 run()
@@ -130,14 +171,37 @@ run()
   └─ pptx (LLM) when requested
 ```
 
+Sizing family (`equipment_sizing`):
+
+```text
+run()
+  ├─ (optional) pack_bootstrap LLM          ← sizing-family draft YAML
+  ├─ resolve DIR menu (same match-or-generate as evaluator)
+  ├─ no dir_code → return dir_requirements (no LLM)
+  ├─ sizing_plan (LLM)
+  ├─ maybe sizing_inputs questionnaire
+  ├─ sizing_search (Serper) → excerpts  (+ creator_content)
+  ├─ sizing_capacity (LLM)
+  ├─ sizing_connections (LLM)   ← sized item interfaces, not host nozzles
+  ├─ sizing_dimensions (LLM)
+  ├─ sizing_report (LLM)        → datasheet_markdown, key_specs, excel_ready_table
+  ├─ maybe sizing_repair (LLM)
+  ├─ Python artifacts: .md / .docx / .xlsx
+  └─ pptx (LLM) when requested  ← numbers from sizing JSON allowed
+```
+
 ## SME checklist
 
-1. Edit `fragments` for evaluate/repair **system** voice.
-2. Edit `calls.*` for DIR generate, DIR route (optional host illustrations), evaluate extras, repair, PPTX, bootstrap.
+1. Edit `fragments` for evaluate/repair **or** sizing-report **system** voice.
+2. Edit `calls.*` for the family you copied: evaluator uses `evaluate` /
+   `evaluate_repair`; sizing uses `sizing_plan` / `sizing_capacity` /
+   `sizing_connections` / `sizing_dimensions` / `sizing_report` / `sizing_repair`.
+   Both families use DIR generate, optional DIR route, PPTX, and bootstrap.
 3. Edit `search_queries.yaml` so Serper matches **your** equipment system (do not
-   leave mixing vendor strings in a filtration pack).
+   leave mixing vendor strings in a filtration pack). Sizing packs need
+   `sizing.templates` (evaluate templates remain a fallback).
 4. Keep `report_outline.yaml` / options / DIR catalogs aligned with the report
-   the evaluate call must produce.
+   the evaluate **or** sizing_report call must produce.
 5. Optional: add SME PDFs/md/txt to `py/knowledge/<id>/references/content/` and re-run
    `local_chat` so they are indexed. Creator files **supplement** web search; they do
    not replace Serper.

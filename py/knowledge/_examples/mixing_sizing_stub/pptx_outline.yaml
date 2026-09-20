@@ -1,0 +1,33 @@
+slide_count: 7
+title_prefix: Preliminary agitator sizing
+slides:
+  - index: 1
+    id: title
+    title: Preliminary agitator sizing
+    purpose: Host, sized item, and DIR context.
+  - index: 2
+    id: design_basis
+    title: Design basis from DIR
+    purpose: Confirmed inputs and TBD items.
+  - index: 3
+    id: capacity
+    title: Capacity
+    purpose: Working volume and duty with units.
+  - index: 4
+    id: connections
+    title: Sized-item connections
+    purpose: Interfaces that belong to the sized item.
+  - index: 5
+    id: envelope
+    title: Envelope
+    purpose: Overall dimensions and clearance.
+  - index: 6
+    id: calculations
+    title: Calculation table
+    purpose: Numerical sizing results with formulas.
+  - index: 7
+    id: confirmation
+    title: Assumptions and vendor confirmation
+    purpose: Missing inputs and next actions.
+notes:
+  - EXAMPLE sizing-family stub. Include numbers from the sizing JSON.

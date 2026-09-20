@@ -395,8 +395,22 @@ class KnowledgePack:
         return str(value).strip() if value is not None else default
 
     def required_report_headings(self) -> List[str]:
-        headings = self.report_outline.get("required_headings") or []
-        return [str(h) for h in headings] if isinstance(headings, list) else []
+        headings = self.report_outline.get("required_headings") or self.report_outline.get(
+            "headings"
+        ) or []
+        if isinstance(headings, list) and headings:
+            return [str(h) for h in headings if str(h).strip()]
+        sections = self.report_outline.get("sections") or []
+        if isinstance(sections, list):
+            out: List[str] = []
+            for row in sections:
+                if isinstance(row, Mapping):
+                    heading = str(row.get("heading") or "").strip()
+                    if heading:
+                        out.append(heading)
+            if out:
+                return out
+        return []
 
     def build_system_prompt(self) -> str:
         parts = [

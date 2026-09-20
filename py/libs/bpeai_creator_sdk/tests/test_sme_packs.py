@@ -213,6 +213,61 @@ def test_equipment_evaluator_stub_is_loadable(py_root: Path, examples_root: Path
     assert "Technology: reason" in rules
     assert "Unknown / TBD" in rules
     assert "CURRENT typed host" in rules
+    assert "Option evaluation" in rules
+    assert "sizing_report" not in rules
+
+
+def test_pack_bootstrap_authoring_rules_sizing_family_not_evaluator():
+    from bpeai_creator_sdk.sme import component_schema_hints
+
+    rules = pack_bootstrap_authoring_rules(template_family="equipment_sizing")
+    assert "HOST EQUIPMENT SYSTEM" in rules
+    assert "sizing_report" in rules
+    assert "sizing_capacity" in rules
+    assert "Do NOT emit evaluate" in rules
+    assert "Option evaluation" not in rules
+    assert "Calculation table" in rules
+    evaluator = pack_bootstrap_authoring_rules()
+    assert "Option evaluation" in evaluator
+    assert "calls.evaluate" in evaluator or "evaluate_repair" in evaluator or "fit_enum" in evaluator
+
+    eval_hints = component_schema_hints()
+    sizing_hints = component_schema_hints(template_family="equipment_sizing")
+    assert "Option evaluation" in eval_hints["report_outline.yaml"]
+    assert "evaluate_repair" in eval_hints["prompt_fragments.yaml"]
+    assert "Calculation table" in sizing_hints["report_outline.yaml"]
+    assert "Do not use option-evaluation headings" in sizing_hints["report_outline.yaml"]
+    assert "sizing_report" in sizing_hints["prompt_fragments.yaml"]
+    assert "Do not emit evaluate" in sizing_hints["prompt_fragments.yaml"]
+    assert "sizing.templates" in sizing_hints["search_queries.yaml"]
+
+
+def test_mixing_sizing_stub_sizing_calls_and_headings(py_root: Path, examples_root: Path):
+    pack = load_knowledge_pack("mixing_sizing_stub", py_root=py_root, pack_root=examples_root)
+    calls = pack.prompt_fragments.get("calls") or {}
+    for key in (
+        "dir_generate",
+        "sizing_plan",
+        "sizing_capacity",
+        "sizing_connections",
+        "sizing_dimensions",
+        "sizing_report",
+        "pptx",
+        "pack_bootstrap",
+    ):
+        assert key in calls, f"missing calls.{key}"
+    assert "evaluate" not in calls
+    assert "evaluate_repair" not in calls
+    headings = pack.required_report_headings()
+    joined = " | ".join(headings).lower()
+    assert "capacity" in joined
+    assert "connection" in joined
+    assert "calculation" in joined
+    assert "option evaluation" not in joined
+    assert pack.call_fragment("sizing_report", "system")
+    sizing_queries = pack.search_queries.get("sizing") or {}
+    templates = sizing_queries.get("templates") or []
+    assert templates
 
 
 def test_align_pack_meta_uses_system_examples_not_vent_aliases(tmp_path: Path):

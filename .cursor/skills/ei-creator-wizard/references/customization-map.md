@@ -11,9 +11,15 @@
 
 ## AI handshake pack files
 
-See `docs/EI_AI_HANDSHAKES.md` for the full when/why inventory (`dir_search`,
-`dir_generate`, `evaluate_search`, `evaluate`, `evaluate_repair`, `pptx`,
-`pack_bootstrap`).
+See `docs/EI_AI_HANDSHAKES.md` for the full when/why inventory.
+
+**Evaluator family:** `dir_search`, `dir_generate`, `evaluate_search`,
+`evaluate`, `evaluate_repair`, `pptx`, `pack_bootstrap`.
+
+**Sizing family:** `dir_search`, `dir_generate`, `sizing_plan`, `sizing_search`,
+`sizing_capacity`, `sizing_connections`, `sizing_dimensions`, `sizing_report`,
+`sizing_repair`, `pptx`, `pack_bootstrap`. Do not emit `evaluate` /
+`evaluate_repair`.
 
 ## Prompt fragment keys (`fragments`)
 
@@ -23,14 +29,19 @@ Optional pack meta: `prompt_hooks.emphasize` (list).
 
 ## Call keys (`calls`)
 
-`dir_generate.system` / `.instructions` · `evaluate.user_instructions` ·
-`evaluate_repair.instructions` · `pptx.system_extra` / `.instructions` ·
-`pack_bootstrap.system`
+Shared: `dir_generate.system` / `.instructions` · `pptx.system_extra` /
+`.instructions` · `pack_bootstrap.system`
+
+Evaluator: `evaluate.user_instructions` · `evaluate_repair.instructions`
+
+Sizing: `sizing_plan` · `sizing_capacity` · `sizing_connections` ·
+`sizing_dimensions` · `sizing_report` · `sizing_repair.instructions`
 
 ## Output contract
 
-- Schema: `equipment_selector_v1`
-- Canonical options field: `evaluation_options` (alias `mixing_options`)
-- Hub stores `datasheet_markdown` as S3 `.md`
+- Evaluator schema: `equipment_selector_v1`
+- Sizing schema: `equipment_sizing_v1` (optional `excel_ready_table`)
+- Canonical options field (evaluator): `evaluation_options` (alias `mixing_options`)
+- Hub stores `datasheet_markdown` as S3 `.md`; local sizing also writes Word/Excel
 
 See `docs/EI_CREATOR_EXTENSIONS.md`.

@@ -18,5 +18,6 @@ Pack dials:
 
 Look for **`HANDSHAKE:`** (UI wire) and **`AI_HANDSHAKE:`** (LLM/search) comments
 in [`agent.py`](./agent.py). Sizing calls: `sizing_plan`, `sizing_search`,
-`sizing_capacity`, `sizing_connections`, `sizing_dimensions`. Do not invent new
+`sizing_capacity`, `sizing_connections`, `sizing_dimensions`, `sizing_report`,
+`sizing_repair`. Do not emit `evaluate` / `evaluate_repair`. Do not invent new
 SSE events or UI buttons; you do not have access to hub/portal React code.

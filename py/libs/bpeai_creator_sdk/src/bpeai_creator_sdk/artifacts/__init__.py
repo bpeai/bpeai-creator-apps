@@ -14,6 +14,8 @@ from .docx_eval import (
     evaluation_docx_text,
     write_evaluation_report_docx,
 )
+from .docx_sizing import build_sizing_docx, sizing_docx_text, write_sizing_report_docx
+from .xlsx_sizing import build_sizing_xlsx, parse_markdown_table
 from .pptx_eval import build_evaluation_pptx, build_slide_pack_from_evaluation
 from .reference_decks import (
     list_reference_decks,
@@ -32,6 +34,11 @@ __all__ = [
     "build_evaluation_docx",
     "evaluation_docx_text",
     "write_evaluation_report_docx",
+    "build_sizing_docx",
+    "sizing_docx_text",
+    "write_sizing_report_docx",
+    "build_sizing_xlsx",
+    "parse_markdown_table",
     "build_evaluation_pptx",
     "build_slide_pack_from_evaluation",
     "list_reference_decks",

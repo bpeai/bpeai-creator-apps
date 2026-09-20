@@ -25,7 +25,7 @@ understands (phases, ``status()`` → SSE, DIR / evaluation payloads). Do not in
 new SSE events or UI chrome — creators do not edit hub/portal React.
 See ``docs/EI_CREATOR_EXTENSIONS.md`` and ``docs/EI_HANDSHAKE.md``.
 
-Local artifacts (gitignored ``./artifacts/``): markdown + PDF; optional PPTX.
+Local artifacts (gitignored ``./artifacts/``): markdown + Word + Excel; optional PPTX.
 Portal hub stores ``datasheet_markdown`` as S3 ``.md`` only (no PDF/PPTX upload).
 """
 
@@ -54,8 +54,9 @@ from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
     attach_sizing_artifact_name,
     attach_title_hero_image,
-    build_evaluation_docx,
     build_evaluation_pptx,
+    build_sizing_docx,
+    build_sizing_xlsx,
     build_slide_pack_from_evaluation,
     sizing_artifact_stem,
 )
@@ -100,6 +101,8 @@ from bpeai_creator_sdk.sme import (
 )
 from bpeai_creator_sdk.sme.dir_catalog import catalog_row_to_dir_menu
 from bpeai_creator_sdk.tools import enrich_search_hits_with_excerpts, format_search_context
+
+from . import creator_tools
 
 _DIR_TOPIC_MATCHERS = (
     ("capacity", re.compile(r"\b(volume|capacity|scale|batch size|working volume|liter|litre)\b", re.I)),
@@ -297,7 +300,7 @@ Rules:
 - alignments must mention any fuzzy mapping you applied.
 """
 
-PPTX_SLIDE_SCHEMA_CONTRACT = """Convert this evaluation JSON into a presentation slide pack.
+PPTX_SLIDE_SCHEMA_CONTRACT = """Convert this sizing JSON into a presentation slide pack.
 
 Return ONLY JSON with this shape:
 {
@@ -373,13 +376,15 @@ Rules:
   card values ≤ 8 words; process_steps titles ≤ 5 words; process_steps details ≤ 14 words;
   failure_modes ≤ 12 words each; option notes ≤ 12 words;
   recommended_why / cons ≤ 14 words each; decision_logic ≤ 35 words.
-- Align strictly with the evaluation content (DIR, options, recommendation).
+- Ground every claim in the sizing JSON (capacity, connections, dimensions,
+  key_specs, excel_ready_table) and datasheet_markdown.
+- Numerical sizing values from that JSON are allowed and expected; do not
+  replace validated numbers with TBD placeholders.
 - Use project-team summary tone similar to a professional engineering deck.
-- Prefer product-line manufacturer hints when present in the evaluation.
-- Preserve failure modes, decision logic, vendor/product lines from the evaluation
-  and from datasheet_markdown; do NOT invent unsupported claims.
-- Prefer denser notes on slides 3 (objectives/failure modes), 5 (matrix/decision),
-  and 6 (recommendation) when the report supports it — but stay within length limits.
+- Prefer product-line manufacturer hints when present in the sizing JSON.
+- Do NOT invent unsupported claims.
+- Prefer denser notes on capacity, connections, envelope, and calculation
+  slides when the datasheet supports it — but stay within length limits.
 """
 
 EVALUATION_SCHEMA_CONTRACT = """Run a full technology evaluation for the validated DIR code
@@ -510,10 +515,46 @@ def _write_markdown_artifact(result: Dict[str, Any], *, py_root: Path) -> Path |
 
 def _write_docx_artifact(result: Dict[str, Any]) -> Path | None:
     md = (result.get("datasheet_markdown") or "").strip()
-    if not md and not result.get("selected_model"):
+    if not md and not result.get("selected_model") and not result.get("key_specs"):
         return None
     target = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(result)}.docx"
-    return build_evaluation_docx(result, output_path=target)
+    return build_sizing_docx(result, output_path=target)
+
+
+def _write_xlsx_artifact(result: Dict[str, Any]) -> Path | None:
+    if not (
+        result.get("excel_ready_table")
+        or result.get("key_specs")
+        or result.get("datasheet_markdown")
+        or result.get("capacity")
+    ):
+        return None
+    target = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(result)}.xlsx"
+    return build_sizing_xlsx(result, output_path=target)
+
+
+def _attach_sizing_file_artifacts(agent: Any, result: Dict[str, Any], *, py_root: Path) -> Dict[str, Any]:
+    md_path = _write_markdown_artifact(result, py_root=py_root)
+    artifacts = dict(result.get("artifacts") or {})
+    if md_path:
+        artifacts["markdown_path"] = str(md_path)
+    try:
+        agent.status("Writing sizing Word report…")
+        docx_path = _write_docx_artifact(result)
+        if docx_path:
+            artifacts["docx_path"] = str(docx_path.resolve())
+    except Exception as exc:
+        agent.status(f"DOCX export skipped ({exc})")
+    try:
+        agent.status("Writing sizing Excel workbook…")
+        xlsx_path = _write_xlsx_artifact(result)
+        if xlsx_path:
+            artifacts["xlsx_path"] = str(xlsx_path.resolve())
+    except Exception as exc:
+        agent.status(f"Excel export skipped ({exc})")
+    result["artifacts"] = artifacts
+    result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
+    return result
 
 
 class EquipmentSizingAgent(CreatorAppBase):
@@ -522,7 +563,7 @@ class EquipmentSizingAgent(CreatorAppBase):
     After copy: rename class, ``app_id``, ``knowledge_pack_id`` (same as ``app_id``),
     ``creator_display_name``.
     Missing packs / YAML components are LLM-bootstrapped as draft-for-approval.
-    Optional helpers: ``creator_tools.py`` (not imported by default).
+    Optional helpers: ``creator_tools.py`` (sizing_report merge / fallback markdown).
     """
 
     # HANDSHAKE: manifest.id / python_entrypoint / hub routing must match these ids.
@@ -685,19 +726,7 @@ class EquipmentSizingAgent(CreatorAppBase):
                 reuse_inherited_dir=True,
             )
             if result.get("phase") == "evaluation":
-                md_path = _write_markdown_artifact(result, py_root=py_root)
-                artifacts = dict(result.get("artifacts") or {})
-                if md_path:
-                    artifacts["markdown_path"] = str(md_path)
-                try:
-                    self.status("Writing sizing Word report…")
-                    docx_path = _write_docx_artifact(result)
-                    if docx_path:
-                        artifacts["docx_path"] = str(docx_path.resolve())
-                except Exception as exc:
-                    self.status(f"DOCX export skipped ({exc})")
-                result["artifacts"] = artifacts
-                result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
+                result = _attach_sizing_file_artifacts(self, result, py_root=py_root)
             result.setdefault("template_family", getattr(self, "template_family", "equipment_sizing"))
             return result
 
@@ -790,20 +819,7 @@ class EquipmentSizingAgent(CreatorAppBase):
             equipment_tag=str(inputs.get("equipment_tag") or "").strip(),
         )
         if result.get("phase") == "evaluation":
-            md_path = _write_markdown_artifact(result, py_root=py_root)
-            artifacts = dict(result.get("artifacts") or {})
-            if md_path:
-                artifacts["markdown_path"] = str(md_path)
-            try:
-                # HANDSHAKE: self.status(...) → SSE event "status" (progress line).
-                self.status("Writing sizing Word report…")
-                docx_path = _write_docx_artifact(result)
-                if docx_path:
-                    artifacts["docx_path"] = str(docx_path.resolve())
-            except Exception as exc:
-                self.status(f"DOCX export skipped ({exc})")
-            result["artifacts"] = artifacts
-            result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
+            result = _attach_sizing_file_artifacts(self, result, py_root=py_root)
         return result
 
     def _ensure_knowledge_pack(
@@ -983,7 +999,7 @@ class EquipmentSizingAgent(CreatorAppBase):
     ) -> Dict[str, Any]:
         """LLM function: return JSON/YAML-mappable content for one pack file."""
         # AI_HANDSHAKE: pack_bootstrap — authoring-time draft of missing pack YAML.
-        hints = component_schema_hints()
+        hints = component_schema_hints(template_family="equipment_sizing")
         schema_hint = hints.get(filename, "Valid YAML mapping for this pack component.")
         reference = structure_example_snippet(
             filename, py_root=py_root, stub_name="mixing_sizing_stub"
@@ -1024,7 +1040,7 @@ class EquipmentSizingAgent(CreatorAppBase):
             f"(adapt domain content; do not copy mixing-specific options; "
             f"do not copy website/platform pack content):\n"
             f"{reference}\n\n"
-            f"{pack_bootstrap_authoring_rules(system_name=system_name, application=application)}"
+            f"{pack_bootstrap_authoring_rules(system_name=system_name, application=application, template_family='equipment_sizing')}"
         )
         raw = self.call_openai_json(system=system, user=user)
         if not isinstance(raw, dict):
@@ -1636,6 +1652,9 @@ class EquipmentSizingAgent(CreatorAppBase):
             "Return JSON: {\"capacity\":{\"value\":\"\",\"unit\":\"\",\"basis\":\"\"}, "
             "\"inputs_used\":[], \"assumptions\":[], \"notes\":\"\"}"
         )
+        sme_cap = pack.call_fragment("sizing_capacity", "instructions")
+        if sme_cap:
+            cap_user += f"\n{sme_cap}\n"
         try:
             cap_raw = self.call_openai_json(system=cap_system, user=cap_user)
         except Exception:
@@ -1644,15 +1663,20 @@ class EquipmentSizingAgent(CreatorAppBase):
             cap_raw = {}
 
         # AI_HANDSHAKE: sizing_connections
-        self.status("Sizing inlet/outlet connections…")
+        sized_item = str(getattr(pack, "sized_item", "") or pack.meta.get("sized_item") or "sized item").strip()
+        self.status(f"Sizing {sized_item} connections…")
         conn_system = pack.call_fragment("sizing_connections", "system") or plan_system
         conn_user = (
-            f"Size process and utility connections for {system_name}.\n"
+            f"Size connections that belong to this sized item ({sized_item}) for {system_name}. "
+            f"Do not size unrelated host-system process nozzles unless the pack instructions say so.\n"
             f"DIR:\n{decoded_text}\nCapacity: {json.dumps(cap_raw.get('capacity'))}\n"
             f"Sizing inputs:\n{sizing_text or '(none)'}\n"
             "Return JSON: {\"connections\":[{\"name\":\"\",\"size\":\"\",\"unit\":\"\","
             "\"service\":\"\",\"basis\":\"\"}], \"utilities\":\"\", \"assumptions\":[]}"
         )
+        sme_conn = pack.call_fragment("sizing_connections", "instructions")
+        if sme_conn:
+            conn_user += f"\n{sme_conn}\n"
         try:
             conn_raw = self.call_openai_json(system=conn_system, user=conn_user)
         except Exception:
@@ -1673,6 +1697,9 @@ class EquipmentSizingAgent(CreatorAppBase):
         )
         if creator_block:
             dim_user += f"\n{creator_block[:8000]}\n"
+        sme_dim = pack.call_fragment("sizing_dimensions", "instructions")
+        if sme_dim:
+            dim_user += f"\n{sme_dim}\n"
         try:
             dim_raw = self.call_openai_json(system=dim_system, user=dim_user)
         except Exception:
@@ -1683,32 +1710,39 @@ class EquipmentSizingAgent(CreatorAppBase):
         if not isinstance(dim_raw, dict):
             dim_raw = {}
 
-        capacity = cap_raw.get("capacity") if isinstance(cap_raw.get("capacity"), dict) else cap_raw.get("capacity")
-        cap_value = ""
-        cap_unit = ""
-        if isinstance(capacity, dict):
-            cap_value = str(capacity.get("value") or "").strip()
-            cap_unit = str(capacity.get("unit") or "").strip()
-        elif capacity:
-            cap_value = str(capacity).strip()
-        heading = f"{system_name} sizing"
-        md = (
-            f"# {heading}\n\n"
-            f"## Capacity\n\n{cap_value} {cap_unit}\n\n"
-            f"## Connections\n\n{json.dumps(conn_raw.get('connections') or [], indent=2)}\n\n"
-            f"## Dimensions\n\n{json.dumps(dim_raw.get('dimensions') or {}, indent=2)}\n\n"
-            f"## Utilities\n\n{conn_raw.get('utilities') or ''}\n\n"
-            f"## Assumptions\n\n"
-            + "\n".join(
-                f"- {item}"
-                for item in (
-                    *(cap_raw.get("assumptions") or []),
-                    *(conn_raw.get("assumptions") or []),
-                    *(dim_raw.get("assumptions") or []),
-                )
-                if item
-            )
+        headings = pack.required_report_headings() or list(creator_tools.DEFAULT_SIZING_HEADINGS)
+        heading_block = "\n".join(f"- {h}" for h in headings)
+
+        # AI_HANDSHAKE: sizing_report
+        self.status("Drafting sizing datasheet…")
+        report_system = (
+            pack.call_fragment("sizing_report", "system") or pack.build_system_prompt()
         )
+        report_user = creator_tools.sizing_report_user_message(
+            system_name=system_name,
+            application=application,
+            dir_code=dir_code,
+            decoded_text=decoded_text,
+            sizing_text=sizing_text,
+            plan=plan if isinstance(plan, dict) else {},
+            cap_raw=cap_raw,
+            conn_raw=conn_raw,
+            dim_raw=dim_raw,
+            search_context=str(search_context or ""),
+            creator_block=str(creator_block or ""),
+            required_headings=headings,
+            sized_item=sized_item,
+            sme_instructions=pack.call_fragment("sizing_report", "instructions"),
+        )
+        try:
+            report_raw = self.call_openai_json(system=report_system, user=report_user)
+        except Exception:
+            report_raw = {}
+        if not isinstance(report_raw, dict):
+            report_raw = {}
+        if set(report_raw.keys()) == {"content"} and isinstance(report_raw.get("content"), dict):
+            report_raw = report_raw["content"]
+
         raw: Dict[str, Any] = {
             "schema_version": "equipment_sizing_v1",
             "equipment_tag": tag,
@@ -1728,18 +1762,76 @@ class EquipmentSizingAgent(CreatorAppBase):
                 + list(conn_raw.get("assumptions") or [])
             ),
             "source_basis": coerce_string_list_items(dim_raw.get("source_basis") or ["dir", "knowledge_pack"]),
-            "datasheet_markdown": md,
+            "datasheet_markdown": "",
+            "excel_ready_table": "",
             "creator_attribution": {
                 "display_name": self.creator_display_name,
                 "app_id": self.app_id,
             },
         }
+        raw = creator_tools.merge_sizing_report(raw, report_raw, headings=headings)
+        if not str(raw.get("datasheet_markdown") or "").strip():
+            raw["datasheet_markdown"] = creator_tools.fallback_sizing_markdown(
+                system_name=system_name,
+                headings=headings,
+                cap_raw=cap_raw,
+                conn_raw=conn_raw,
+                dim_raw=dim_raw,
+                excel_ready_table=str(raw.get("excel_ready_table") or ""),
+            )
         apply_user_identity(raw, getattr(self, "_identity_inputs", None))
         if search_context and "serper_search" not in raw["source_basis"]:
             raw["source_basis"].append("serper_search")
         if creator_block and "creator_references" not in raw["source_basis"]:
             raw["source_basis"].append("creator_references")
 
+        md_text = str(raw.get("datasheet_markdown") or "")
+        missing_heads = missing_report_headings(md_text, headings)
+        thin = thin_report_sections(md_text, headings, min_chars=120)
+        if missing_heads or thin:
+            # AI_HANDSHAKE: sizing_repair — deepen thin/missing sizing headings.
+            self.status("Repairing sizing report depth/sections…")
+            default_repair = (
+                "The previous sizing JSON needs a deeper datasheet_markdown.\n"
+                "Keep supported numbers from capacity, connections, and dimensions JSON.\n"
+                "Return JSON with datasheet_markdown (ALL required headings), "
+                "selected_model, key_specs, and excel_ready_table "
+                "(Item|Method/formula|Result|Unit|Basis)."
+            )
+            repair_preamble = (
+                pack.call_fragment("sizing_repair", "instructions", default=default_repair)
+                or default_repair
+            )
+            repair_user = (
+                f"{repair_preamble}\n"
+                f"Missing headings: {missing_heads or 'none'}.\n"
+                f"Thin sections (expand to substantive multi-sentence engineering content): "
+                f"{thin or 'none'}.\n"
+                f"Required headings:\n{heading_block}\n\n"
+                f"Capacity JSON: {json.dumps(cap_raw)[:12000]}\n"
+                f"Connections JSON: {json.dumps(conn_raw)[:12000]}\n"
+                f"Dimensions JSON: {json.dumps(dim_raw)[:12000]}\n"
+                f"Industrial search references:\n{str(search_context)[:20000]}\n\n"
+            )
+            if creator_block:
+                repair_user += f"{creator_block[:8000]}\n\n"
+            repair_user += f"Previous sizing JSON:\n{json.dumps(raw)[:120000]}"
+            try:
+                repaired = self.call_openai_json(system=report_system, user=repair_user)
+                if isinstance(repaired, dict):
+                    if set(repaired.keys()) == {"content"} and isinstance(
+                        repaired.get("content"), dict
+                    ):
+                        repaired = repaired["content"]
+                    raw = creator_tools.merge_sizing_report(raw, repaired, headings=headings)
+            except Exception:
+                pass
+
+        merge_warnings = [
+            str(item).strip()
+            for item in (raw.get("sme_warnings") or [])
+            if str(item).strip()
+        ]
         validated = validate_output(raw)
         result = validated.model_dump()
         result["phase"] = "evaluation"
@@ -1753,8 +1845,12 @@ class EquipmentSizingAgent(CreatorAppBase):
         result["decoded_dir"] = decoded
         result["template_family"] = getattr(self, "template_family", "equipment_sizing")
         result["reused_evaluation_dir"] = reuse_inherited_dir
+        warnings = list(result.get("sme_warnings") or [])
+        warnings.extend(merge_warnings)
         if app_warning:
-            result["sme_warnings"] = [app_warning]
+            warnings.append(app_warning)
+        if warnings:
+            result["sme_warnings"] = warnings
         return result
 
     def _build_pptx_slide_pack(self, pack: KnowledgePack, evaluation: Dict[str, Any]) -> Dict[str, Any]:
@@ -1767,33 +1863,26 @@ class EquipmentSizingAgent(CreatorAppBase):
                 "application": evaluation.get("application"),
                 "dir_code": evaluation.get("dir_code"),
                 "decoded_dir": evaluation.get("decoded_dir"),
-                "dir_summary": evaluation.get("dir_summary"),
-                "design_basis": evaluation.get("design_basis"),
-                "objectives": evaluation.get("objectives"),
-                "failure_modes": evaluation.get("failure_modes"),
-                "recommended_basis": evaluation.get("recommended_basis"),
-                "alternate_basis": evaluation.get("alternate_basis"),
-                "rationale": evaluation.get("rationale"),
                 "selected_model": evaluation.get("selected_model"),
-                "evaluation_options": evaluation.get("evaluation_options")
-                or evaluation.get("mixing_options"),
-                "mixing_options": evaluation.get("evaluation_options")
-                or evaluation.get("mixing_options"),
-                "evaluation_matrix": evaluation.get("evaluation_matrix"),
-                "preliminary_specs": evaluation.get("preliminary_specs"),
-                "manufacturers": evaluation.get("manufacturers"),
-                "do_not_specify": evaluation.get("do_not_specify"),
+                "capacity": evaluation.get("capacity"),
+                "connections": evaluation.get("connections"),
+                "dimensions": evaluation.get("dimensions"),
+                "utilities": evaluation.get("utilities"),
+                "assumptions": evaluation.get("assumptions"),
+                "missing_inputs": evaluation.get("missing_inputs"),
                 "source_basis": evaluation.get("source_basis"),
                 "key_specs": evaluation.get("key_specs"),
-                # Full report — preserve failure modes, decision logic, vendor lines
+                "excel_ready_table": evaluation.get("excel_ready_table") or "",
                 "datasheet_markdown": evaluation.get("datasheet_markdown") or "",
             }
-            # AI_HANDSHAKE: pptx — slide JSON from evaluation (schema contract in template).
+            # AI_HANDSHAKE: pptx — slide JSON from sizing result (schema contract in template).
             default_pptx_extra = (
                 "You prepare presentation-ready engineering slide content. "
                 "Keep visual density high and wording concise. "
-                "Ground every claim in the evaluation JSON and datasheet_markdown; "
-                "do not invent unsupported claims."
+                "Ground every claim in the sizing JSON (capacity, connections, "
+                "dimensions, excel_ready_table) and datasheet_markdown. "
+                "Numerical sizing values from that JSON are allowed and expected; "
+                "do not replace validated numbers with TBD placeholders."
             )
             pptx_extra = (
                 pack.call_fragment("pptx", "system_extra", default=default_pptx_extra)
@@ -1804,7 +1893,7 @@ class EquipmentSizingAgent(CreatorAppBase):
             if pptx_instructions:
                 pptx_user = f"{pptx_instructions}\n\n{pptx_user}"
             pptx_user += (
-                "\n\nEvaluation JSON (includes full datasheet_markdown):\n"
+                "\n\nSizing JSON (includes full datasheet_markdown):\n"
                 + json.dumps(compact, ensure_ascii=False)[:180000]
             )
             raw = self.call_openai_json(

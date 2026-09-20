@@ -1,6 +1,38 @@
-headings:
+required_headings:
+  - Design basis from DIR
+  - Sized-item concept and criteria
   - Capacity
-  - Connections
-  - Dimensions
-  - Utilities
-  - Assumptions
+  - Connections for the sized item
+  - Envelope / dimensions
+  - Calculation table
+  - Assumptions, exclusions, vendor confirmation
+headings:
+  - Design basis from DIR
+  - Sized-item concept and criteria
+  - Capacity
+  - Connections for the sized item
+  - Envelope / dimensions
+  - Calculation table
+  - Assumptions, exclusions, vendor confirmation
+sections:
+  - id: design_basis
+    heading: Design basis from DIR
+    description: Validated DIR inputs and bounded assumptions used for sizing.
+  - id: sized_item_concept
+    heading: Sized-item concept and criteria
+    description: What is being sized and the governing performance criteria.
+  - id: capacity
+    heading: Capacity
+    description: Working volume / duty capacity with units and basis.
+  - id: connections
+    heading: Connections for the sized item
+    description: Interfaces that belong to the sized item, not unrelated host nozzles.
+  - id: envelope
+    heading: Envelope / dimensions
+    description: Overall dimensions, weight if known, and maintenance clearance.
+  - id: calculation_table
+    heading: Calculation table
+    description: Item, method/formula, result, unit, and basis for audit.
+  - id: assumptions
+    heading: Assumptions, exclusions, vendor confirmation
+    description: Missing inputs and items the vendor must confirm.

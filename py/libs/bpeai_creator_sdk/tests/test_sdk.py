@@ -166,11 +166,17 @@ def test_validate_equipment_sizing_output():
         "connections": [{"name": "inlet", "size": "2", "unit": "in", "service": "process"}],
         "dimensions": {"value": "2.4 m H x 1.8 m D", "unit": "m", "method": "vendor catalog"},
         "utilities": "CIP, PW",
+        "excel_ready_table": (
+            "| Item | Method/formula | Result | Unit | Basis |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| Working volume | DIR | 2000 | L | working volume |\n"
+        ),
         "creator_attribution": {"display_name": "BPEAI", "app_id": "mixing_sizer"},
     }
     out = validate_output(data)
     assert isinstance(out, EquipmentSizingOutput)
     assert out.equipment_tag == "T-101"
+    assert "2000" in out.excel_ready_table
     assert out.capacity.value == "2000"
     assert out.capacity.unit == "L"
     assert out.connections[0].name == "inlet"

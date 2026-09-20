@@ -6,17 +6,20 @@ fragments:
   application_default: >
     Default application is biopharmaceutical unless specified.
   evaluation_goals: >
-    Size capacity, connections, and envelope from DIR.
+    Size capacity, connections, envelope, and a calculation table from DIR.
   workflow: >
-    Validate DIR, request sizing gaps only if needed, then return equipment_sizing_v1 JSON.
+    Validate DIR, request sizing gaps only if needed, then size capacity,
+    connections, and envelope and draft a datasheet.
   output_style: >
-    Concise engineering prose.
+    Concise engineering prose with units on every number.
   depth_requirements: >
     Minimum depth bar: each section needs at least two sentences for tests.
   response_outline: >
-    Include capacity, connections, dimensions, and assumptions.
+    Include design basis, sized-item concept, capacity, connections for the
+    sized item, envelope, calculation table, and assumptions.
   exclusions_rule: >
-    List missing_inputs when DIR is not enough.
+    List missing_inputs and vendor-confirmation items when DIR is not enough.
+    Do not write an option-evaluation rejection matrix.
 
 calls:
   dir_generate:
@@ -32,15 +35,31 @@ calls:
   sizing_capacity:
     system: >
       Size working volume / capacity from DIR. Return ONLY JSON.
+    instructions: >
+      Use DIR working volume when present. State units.
   sizing_connections:
     system: >
-      Size inlet/outlet and utility connections. Return ONLY JSON.
+      Size interfaces that belong to the sized item (agitator package), not unrelated vessel nozzles.
+    instructions: >
+      Return mounting / utility connections for the sized item only unless DIR requires otherwise.
   sizing_dimensions:
     system: >
       Estimate overall envelope from vendor catalogs when possible. Return ONLY JSON.
+    instructions: >
+      Give height / diameter / method. Label estimates vs catalog values.
+  sizing_report:
+    system: >
+      Draft a short sizing datasheet from capacity, connections, and envelope JSON. Return ONLY JSON.
+    instructions: >
+      Include required headings and an Item|Method/formula|Result|Unit|Basis calculation table.
+  sizing_repair:
+    instructions: >
+      Restore missing or thin sizing headings without changing supported numbers.
   pptx:
     system_extra: >
-      Prepare short slide-ready content for stub tests.
+      Prepare short slide-ready content for stub tests. Include numerical sizing values.
+    instructions: >
+      Seven slides: DIR basis, concept, capacity, connections, envelope, calculations, next actions.
   pack_bootstrap:
     system: >
       Draft minimal YAML pack components for local sizing tests. Return ONLY JSON.

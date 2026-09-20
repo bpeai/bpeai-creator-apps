@@ -194,12 +194,12 @@ def _canonical_industry_labels() -> List[str]:
     return [label for _sid, label in _taxonomy_sector_pairs()]
 
 
-def pack_bootstrap_authoring_rules(
+def _shared_bootstrap_host_rules(
     *,
     system_name: str = "",
     application: str = "",
 ) -> str:
-    """Shared LLM rules so bootstrap does not copy mixing/vent ontology."""
+    """Host-identity / DIR catalog rules shared by evaluator and sizing bootstrap."""
     industries = "; ".join(_canonical_industry_labels())
     query = ""
     host = str(system_name or "").strip()
@@ -245,6 +245,51 @@ def pack_bootstrap_authoring_rules(
         "such as chromatography_skid, tff_skid, or fermentation_skid just to cover "
         "other sectors.\n"
         "- Include at least 5 equipment options when writing equipment_options.yaml.\n"
+        "- Include search_queries.yaml with domain-appropriate Serper templates "
+        "(no unrelated vendor brand names).\n"
+        "- Mark draft intent via label/description wording where appropriate.\n"
+    )
+
+
+def pack_bootstrap_authoring_rules(
+    *,
+    system_name: str = "",
+    application: str = "",
+    template_family: str = "",
+) -> str:
+    """Shared LLM rules so bootstrap does not copy mixing/vent ontology.
+
+    ``template_family`` selects evaluator vs sizing report/call contracts.
+    """
+    shared = _shared_bootstrap_host_rules(
+        system_name=system_name, application=application
+    )
+    family = str(template_family or "").strip().lower()
+    if family == "equipment_sizing":
+        return shared + (
+            "- prompt_fragments.yaml calls MUST include dir_generate, "
+            "sizing_plan, sizing_capacity, sizing_connections, sizing_dimensions, "
+            "sizing_report, pptx, and pack_bootstrap. Optional: dir_route, "
+            "sizing_repair. Do NOT emit evaluate or evaluate_repair — this is "
+            "not an option-evaluation pack.\n"
+            "- report_outline required_headings must follow this order "
+            "(domain-adapt names): Design basis from DIR; Sized-item concept "
+            "and criteria; Capacity; Connections for the sized item; "
+            "Envelope / dimensions; Calculation table; Assumptions, exclusions, "
+            "vendor confirmation. Keep sections[] in the same order. Put "
+            "Validated DIR in header chips, not as a prose body section.\n"
+            "- pptx_outline should define 7 slides with a domain-appropriate "
+            "title_prefix. Slides MUST include numerical sizing from the "
+            "capacity / connections / envelope JSON (do not suppress numbers "
+            "as TBD placeholders).\n"
+            "- search_queries.yaml MUST include sizing.templates (and optional "
+            "sizing.slots / sizing.static). dir_generate.templates remain required.\n"
+            "- exclusions_rule lists missing_inputs and vendor-confirmation items, "
+            "not a technology option-evaluation rejection matrix.\n"
+            "- sized_item in pack.yaml is the noun being sized (agitator, pump, "
+            "membrane holder, column), not the host vessel/skid name.\n"
+        )
+    return shared + (
         "- fit_enum.allowed must include best, strong, conditional, limited, "
         "add-on, special-case.\n"
         "- report_outline required_headings must follow this order (domain-adapt names): "
@@ -262,16 +307,15 @@ def pack_bootstrap_authoring_rules(
         "'Technology: reason' strings. They are not procurement caveats "
         "(do not specify manufacturer/model/NPSH).\n"
         "- pptx_outline should define 7 slides with a domain-appropriate title_prefix.\n"
-        "- Include search_queries.yaml with domain-appropriate Serper templates "
-        "(no unrelated vendor brand names).\n"
-        "- Mark draft intent via label/description wording where appropriate.\n"
     )
 
 
-def component_schema_hints() -> Dict[str, str]:
+def component_schema_hints(*, template_family: str = "") -> Dict[str, str]:
     """Short structural hints for LLM pack-component generation."""
     industries = "; ".join(_canonical_industry_labels())
-    return {
+    family = str(template_family or "").strip().lower()
+    sizing = family == "equipment_sizing"
+    hints = {
         "pack.yaml": (
             "FLAT mapping only for this file (never nest other filenames as keys). "
             "Fields: pack_id, equipment_system, evaluated_item (SME noun for "
@@ -359,6 +403,42 @@ def component_schema_hints() -> Dict[str, str]:
             "edit YAML / add SME PDFs under references/content/ / replace style PPTX in references/style/."
         ),
     }
+    if sizing:
+        hints["prompt_fragments.yaml"] = (
+            "Mapping with fragments as a flat string map: {role, scope, "
+            "evaluation_goals, application_default, workflow, output_style, "
+            "depth_requirements, response_outline, exclusions_rule}. Each value is "
+            "a string. response_outline and exclusions_rule describe the SIZING "
+            "datasheet (capacity, connections, envelope, calculation table, "
+            "vendor confirmation) — not an option-evaluation matrix. "
+            "Required calls: dir_generate.{system,instructions}, "
+            "sizing_plan.{system,instructions}, sizing_capacity.{system,instructions}, "
+            "sizing_connections.{system,instructions}, sizing_dimensions.{system,instructions}, "
+            "sizing_report.{system,instructions}, pptx.{system_extra,instructions}, "
+            "pack_bootstrap.system. Optional: dir_route, sizing_repair.instructions. "
+            "Do not emit evaluate or evaluate_repair."
+        )
+        hints["report_outline.yaml"] = (
+            "Mapping with required_headings (list of section titles in report order) "
+            "and sections ([{id, heading, description}]) kept in the same order. "
+            "Sizing headings: Design basis from DIR; Sized-item concept and criteria; "
+            "Capacity; Connections for the sized item; Envelope / dimensions; "
+            "Calculation table; Assumptions, exclusions, vendor confirmation. "
+            "Do not use option-evaluation headings (Option evaluation, fit matrix)."
+        )
+        hints["pptx_outline.yaml"] = (
+            "Mapping with slide_count (7), title_prefix, slides ([{index, id, title, ...}]), "
+            "style (fonts/colors), reference_decks (list of references/style/*.pptx paths), notes. "
+            "Include numerical sizing results (capacity, connections, envelope, key specs). "
+            "Do not fill slides with TBD placeholders that suppress numbers."
+        )
+        hints["search_queries.yaml"] = (
+            "Mapping with dir_generate.templates (placeholders {system_name}, "
+            "{application}, {equipment_system}) AND sizing.templates / optional "
+            "sizing.slots / sizing.static for vendor catalog and envelope queries. "
+            "Domain-specific — do not copy mixing vendor names into unrelated systems."
+        )
+    return hints
 
 
 def structure_example_snippet(

@@ -48,8 +48,12 @@ Assembled by `KnowledgePack.build_system_prompt()`. Optional pack meta
 
 ### Per-call instructions — `prompt_fragments.yaml` → `calls`
 
-SME-owned system/instruction text for `dir_generate`, `dir_route`, `evaluate`,
-`evaluate_repair`, `pptx`, `pack_bootstrap`. See AI handshakes doc for keys.
+SME-owned system/instruction text. **Evaluator family:** `dir_generate`,
+`dir_route`, `evaluate`, `evaluate_repair`, `pptx`, `pack_bootstrap`.
+**Sizing family:** `dir_generate`, `dir_route`, `sizing_plan`,
+`sizing_capacity`, `sizing_connections`, `sizing_dimensions`,
+`sizing_report`, `sizing_repair`, `pptx`, `pack_bootstrap`. Do **not** emit
+`evaluate` / `evaluate_repair` on a sizing pack. See AI handshakes doc for keys.
 
 **DIR host identity:** packs own example host names (CIP Skid vs CIP Return Pump,
 chromatography skid vs chromatography feed pump). The **template** owns the
@@ -62,7 +66,8 @@ contract.
 ### Web search — `search_queries.yaml`
 
 Serper query templates + static domain/vendor queries for `dir_generate` and
-`evaluate` phases. Non-mixing packs **must** replace mixing-oriented static
+`evaluate` phases. Sizing packs also own `sizing.templates` (evaluate templates
+remain a fallback). Non-mixing packs **must** replace mixing-oriented static
 queries.
 
 **Safe path:** edit `fragments`, `calls`, and `search_queries.yaml`.  
@@ -77,8 +82,10 @@ Model / provider: portal App Settings and/or local env
 
 ## 2. Output dial (shape content inside the schema)
 
-Hub / portal expect **`equipment_selector_v1`**. You shape *content*, not a new
-schema version.
+Hub / portal expect **`equipment_selector_v1`** (evaluator) or
+**`equipment_sizing_v1`** (sizing). You shape *content*, not a new schema
+version. Sizing may include optional `excel_ready_table` (markdown calculation
+table) — additive, not a schema bump.
 
 | Pack file | Effect |
 |-----------|--------|

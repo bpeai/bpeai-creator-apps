@@ -37,10 +37,13 @@ Keep `template_family: equipment_sizing` and
 |-------|---------|--------|
 | DIR | no `dir_code`, or `phase=dir` | Match catalog or generate draft questionnaire |
 | Sizing gaps | valid `dir_code` without enough inputs | Second DIR-shaped questionnaire (`sizing_inputs`) |
-| Size | `dir_code` + optional `sizing_inputs` | `equipment_sizing_v1` + markdown report |
+| Size | `dir_code` + optional `sizing_inputs` | `equipment_sizing_v1` + markdown / Word / Excel |
+| PPTX | `deliverable=pptx` | 7-slide deck from sizing JSON (numbers allowed) |
 
-Filenames: `{system} {sized_item} Sizing.{md,pdf,pptx}` — set `sized_item` in `pack.yaml` (SME), e.g. `Buffer Preparation Agitator Sizing.pdf`.
-| PPTX | `deliverable=pptx` | 7-slide deck from sizing JSON |
+Filenames: `{system} {sized_item} Sizing.{md,docx,xlsx,pptx}` — set `sized_item` in `pack.yaml` (SME), e.g. `Buffer Preparation Agitator Sizing.docx`.
+
+`sizing_report` writes `datasheet_markdown`, `key_specs`, and optional
+`excel_ready_table`. Domain math stays in the pack / LLM table, not in template Python.
 
 ## Reference
 
