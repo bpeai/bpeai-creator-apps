@@ -166,6 +166,8 @@ def sizing_report_user_message(
         '"excel_ready_table":"markdown table with Item|Method/formula|Result|Unit|Basis"}\n'
         f"Required datasheet_markdown headings in order: {headings}.\n"
         "Excel-ready table must show methods/formulas with assumed inputs identified. "
+        "Result column MUST contain evaluated numbers (not TBD / Not calculable) whenever "
+        "a DIR range or pack screening method exists; label those rows Assumed / preliminary. "
         f"Size connections that belong to this {item}; do not invent unrelated host "
         "process nozzles unless the DIR or pack instructions require them. "
         "Use units on every number. Label estimates vs catalog values."

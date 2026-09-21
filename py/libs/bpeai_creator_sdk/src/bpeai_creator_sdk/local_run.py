@@ -213,8 +213,13 @@ def run_agent(
     py_root: Path | None = None,
     python_module: str | None = None,
     agent_class: str | None = None,
+    usage: Dict[str, int] | None = None,
 ) -> Dict[str, Any]:
-    """Instantiate agent, call run(inputs); validate selector results only."""
+    """Instantiate agent, call run(inputs); validate selector results only.
+
+    If ``usage`` is provided, it is filled with this call's token/Serper totals
+    (local chat prints them; the website reads ``agent.usage_stats()`` instead).
+    """
     cls = load_agent_class(
         app_id,
         py_root=py_root,
@@ -240,6 +245,9 @@ def run_agent(
     finally:
         if restore is not None:
             restore()
+    if usage is not None:
+        usage.clear()
+        usage.update(agent.usage_stats())
     if not isinstance(result, dict):
         raise TypeError("Agent.run() must return a dict")
     if is_selector_result(result):

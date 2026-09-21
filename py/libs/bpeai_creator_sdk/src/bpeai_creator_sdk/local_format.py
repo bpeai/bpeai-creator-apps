@@ -428,3 +428,16 @@ def format_sizing_text(result: Mapping[str, Any]) -> str:
 
 def format_selector_json(result: Dict[str, Any]) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+
+
+def format_run_usage(usage: Mapping[str, Any] | None) -> str:
+    """One-line local-run totals (stderr). Not a live usage stream."""
+    src = usage if isinstance(usage, Mapping) else {}
+    tokens_in = int(src.get("tokens_in") or 0)
+    tokens_out = int(src.get("tokens_out") or 0)
+    serper = int(src.get("serper_calls") or 0)
+    total = tokens_in + tokens_out
+    return (
+        f"Run totals: {tokens_in:,} tokens in · {tokens_out:,} tokens out · "
+        f"{total:,} tokens · {serper} Serper"
+    )

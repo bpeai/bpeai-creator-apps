@@ -34,10 +34,47 @@ def _bootstrap_sdk() -> None:
 _bootstrap_sdk()
 
 from bpeai_creator_sdk.local_env import load_dotenv, llm_credentials_present, openai_key_present  # noqa: E402
-from bpeai_creator_sdk.local_format import format_result_text, format_selector_json  # noqa: E402
+from bpeai_creator_sdk.local_format import format_result_text, format_run_usage, format_selector_json  # noqa: E402
 from bpeai_creator_sdk.local_parse import parse_free_text  # noqa: E402
 from bpeai_creator_sdk.local_run import resolve_app_id, run_agent  # noqa: E402
 from bpeai_creator_sdk.base import default_creator_model, default_creator_provider  # noqa: E402
+
+
+def _zero_usage() -> Dict[str, int]:
+    return {"tokens_in": 0, "tokens_out": 0, "serper_calls": 0}
+
+
+def _add_usage(session: Dict[str, Any], usage: Dict[str, Any] | None) -> None:
+    acc = session.setdefault("usage_acc", _zero_usage())
+    src = usage or {}
+    for key in ("tokens_in", "tokens_out", "serper_calls"):
+        acc[key] = int(acc.get(key) or 0) + int(src.get(key) or 0)
+
+
+def _take_usage(session: Dict[str, Any]) -> Dict[str, int]:
+    acc = session.pop("usage_acc", None)
+    return dict(acc) if isinstance(acc, dict) else _zero_usage()
+
+
+def _has_usage(usage: Dict[str, Any] | None) -> bool:
+    src = usage or {}
+    return any(int(src.get(key) or 0) for key in ("tokens_in", "tokens_out", "serper_calls"))
+
+
+def _print_run_totals(usage: Dict[str, Any] | None) -> None:
+    print(format_run_usage(usage), file=sys.stderr)
+
+
+def _is_complete_deliverable(result: Dict[str, Any] | None) -> bool:
+    """True after a finished eval/size/pptx — not a DIR questionnaire step."""
+    if not isinstance(result, dict):
+        return False
+    phase = str(result.get("phase") or "").strip().lower()
+    if phase in {"pptx", "evaluation", "evaluate", "sizing"}:
+        return True
+    if str(result.get("deliverable") or "").strip().lower() == "pptx":
+        return True
+    return _is_storable_evaluation(result)
 
 
 def _status(message: str) -> None:
@@ -99,6 +136,7 @@ def _run_once(
     *,
     as_json: bool,
     session: Dict[str, Any] | None = None,
+    print_usage: bool = False,
 ) -> int:
     session = session if session is not None else {}
 
@@ -118,7 +156,8 @@ def _run_once(
             "evaluation_result": prior,
             "phase": "pptx",
         }
-        result = run_agent(app_id, inputs, status_callback=_status)
+        usage: Dict[str, int] = {}
+        result = run_agent(app_id, inputs, status_callback=_status, usage=usage)
         if as_json:
             sys.stdout.write(format_selector_json(result))
         else:
@@ -126,6 +165,8 @@ def _run_once(
         pptx_path = (result.get("artifacts") or {}).get("pptx_path") if isinstance(result.get("artifacts"), dict) else None
         if pptx_path:
             print(f"Wrote PPTX: {pptx_path}", file=sys.stderr)
+        _add_usage(session, usage)
+        _print_run_totals(_take_usage(session))
         return 0
 
     if session.get("awaiting_sizing_inputs") and session.get("dir_code"):
@@ -161,7 +202,8 @@ def _run_once(
     if inputs.get("application"):
         session["application"] = inputs["application"]
 
-    result = run_agent(app_id, inputs, status_callback=_status)
+    usage: Dict[str, int] = {}
+    result = run_agent(app_id, inputs, status_callback=_status, usage=usage)
     # Preserve session fields the schema may not carry through validation alone.
     if not result.get("system_name") and session.get("system_name"):
         result["system_name"] = session["system_name"]
@@ -184,6 +226,9 @@ def _run_once(
         sys.stdout.write(format_selector_json(result))
     else:
         sys.stdout.write(format_result_text(result))
+    _add_usage(session, usage)
+    if print_usage or _is_complete_deliverable(result):
+        _print_run_totals(_take_usage(session))
     return 0
 
 
@@ -215,8 +260,14 @@ def _interactive(app_id: str, *, as_json: bool) -> int:
             line = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
             print(file=sys.stderr)
+            leftover = session.get("usage_acc")
+            if _has_usage(leftover if isinstance(leftover, dict) else None):
+                _print_run_totals(_take_usage(session))
             return 0
         if not line or line.lower() in {"quit", "exit", "q"}:
+            leftover = session.get("usage_acc")
+            if _has_usage(leftover if isinstance(leftover, dict) else None):
+                _print_run_totals(_take_usage(session))
             return 0
         try:
             code = _run_once(app_id, line, as_json=as_json, session=session)
@@ -267,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.once is not None:
         _print_run_instructions(app_id)
         try:
-            return _run_once(app_id, args.once, as_json=args.json, session={})
+            return _run_once(app_id, args.once, as_json=args.json, session={}, print_usage=True)
         except Exception as exc:  # noqa: BLE001
             print(f"Error: {exc}", file=sys.stderr)
             return 1

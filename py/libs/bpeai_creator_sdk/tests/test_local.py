@@ -74,6 +74,14 @@ def test_format_selector_json_is_pretty():
     assert raw.endswith("\n")
 
 
+def test_format_run_usage_one_line_totals():
+    from bpeai_creator_sdk.local_format import format_run_usage
+
+    text = format_run_usage({"tokens_in": 12345, "tokens_out": 678, "serper_calls": 3})
+    assert text == "Run totals: 12,345 tokens in · 678 tokens out · 13,023 tokens · 3 Serper"
+    assert format_run_usage(None) == "Run totals: 0 tokens in · 0 tokens out · 0 tokens · 0 Serper"
+
+
 def test_parse_inputs_heuristic_media_prep_biopharma():
     inputs = parse_inputs_heuristic("Media Prep Vessel, biopharma")
     assert inputs["system_name"] == "Media Prep Vessel"

@@ -1716,6 +1716,8 @@ class EquipmentSizingAgent(CreatorAppBase):
         sme_plan = pack.call_fragment("sizing_plan", "instructions")
         if sme_plan:
             plan_user += f"\n{sme_plan}\n"
+        if creator_block:
+            plan_user += f"\n{creator_block[:8000]}\n"
         plan_user += (
             "Return JSON: {\"capacity_parameters\":[string], \"connection_parameters\":[string], "
             "\"minimum_user_inputs\":[string], \"missing_inputs\":[string], "
@@ -1808,11 +1810,15 @@ class EquipmentSizingAgent(CreatorAppBase):
             f"DIR:\n{decoded_text}\nSizing inputs:\n{sizing_text or '(none)'}\n"
             f"Plan: {json.dumps(plan)[:8000]}\n"
             "Return JSON: {\"capacity\":{\"value\":\"\",\"unit\":\"\",\"basis\":\"\"}, "
-            "\"inputs_used\":[], \"assumptions\":[], \"notes\":\"\"}"
+            "\"inputs_used\":[], \"assumptions\":[], \"notes\":\"\"}\n"
+            "capacity.value MUST be a number (with unit separately). Do not return TBD, "
+            "Not calculable, or an empty value when a DIR range or pack screening method exists."
         )
         sme_cap = pack.call_fragment("sizing_capacity", "instructions")
         if sme_cap:
             cap_user += f"\n{sme_cap}\n"
+        if creator_block:
+            cap_user += f"\n{creator_block[:8000]}\n"
         try:
             cap_raw = self.call_openai_json(system=cap_system, user=cap_user)
         except Exception:
