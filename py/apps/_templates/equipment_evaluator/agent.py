@@ -199,7 +199,7 @@ Return ONLY JSON with this shape:
       "summary_badge": "Project-team summary",
       "hero_tags": ["tag1", "tag2", "tag3"],
       "hero_headline": ["line1", "line2", "line3"],
-      "hero_image_prompt": "optional cutaway catalog rendering of THIS equipment, no text in the image"
+      "hero_callouts": [{"label": "component name", "detail": "size or duty, optional"}]
     },
     {
       "id": "design_basis",
@@ -272,6 +272,9 @@ Rules:
   and from datasheet_markdown; do NOT invent unsupported claims.
 - Prefer denser notes on slides 3 (objectives/failure modes), 5 (matrix/decision),
   and 6 (recommendation) when the report supports it — but stay within length limits.
+- hero_callouts: at most 4 real components of THIS equipment (label plus an
+  optional size or duty). Omit the list when the equipment has no internals
+  worth naming. Do not request a rendered picture.
 """
 
 EVALUATION_SCHEMA_CONTRACT = """Run a full technology evaluation for the validated DIR code

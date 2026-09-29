@@ -273,6 +273,7 @@ class EquipmentSizingOutput(BaseModel):
     source_basis: List[str] = Field(default_factory=list)
     datasheet_markdown: str = ""
     excel_ready_table: str = ""
+    calculation_workbook: Dict[str, Any] = Field(default_factory=dict)
     creator_attribution: CreatorAttribution
     handshake_protocol: str = "ei_handshake_v1"
     artifacts: Dict[str, Any] = Field(default_factory=dict)
@@ -329,6 +330,9 @@ class EquipmentSizingOutput(BaseModel):
         for field in ("inputs_used", "missing_inputs", "assumptions", "source_basis"):
             if field in payload:
                 payload[field] = coerce_string_list_items(payload[field])
+        workbook = payload.get("calculation_workbook")
+        if not isinstance(workbook, Mapping):
+            payload["calculation_workbook"] = {}
         if not str(payload.get("selected_model") or "").strip():
             payload["selected_model"] = str(
                 payload.get("equipment_name") or payload.get("equipment_type") or "Sized equipment"

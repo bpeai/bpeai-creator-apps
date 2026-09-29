@@ -110,6 +110,32 @@ def _as_spec_list(raw: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _mapping_rows(raw: Any) -> list:
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, Mapping)]
+
+
+def workbook_markdown(workbook: Mapping[str, Any]) -> str:
+    """Human-readable echo of a calculation workbook. Formulas stay in the method column."""
+    rows = _mapping_rows(workbook.get("calculations"))
+    if not rows:
+        return ""
+    lines = [
+        "| Item | Method/formula | Result | Unit | Basis |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        name = str(row.get("name") or row.get("id") or "").replace("|", "/")
+        method = str(row.get("method") or "").replace("|", "/")
+        formula = str(row.get("formula") or "").strip().replace("|", "/")
+        shown = f"{method}; {formula}".strip("; ") if formula else method
+        unit = str(row.get("unit") or "").replace("|", "/")
+        basis = str(row.get("acceptance") or row.get("basis") or "").replace("|", "/")
+        lines.append(f"| {name} | {shown} | {formula} | {unit} | {basis} |")
+    return "\n".join(lines)
+
+
 def _calculation_heading(headings: Sequence[str]) -> str:
     for heading in headings:
         text = str(heading or "").strip()
@@ -163,11 +189,31 @@ def sizing_report_user_message(
         '{"datasheet_markdown":"markdown with the required headings",'
         '"selected_model":"sized-item concept string",'
         '"key_specs":[{"key":"","value":"","unit":""}],'
-        '"excel_ready_table":"markdown table with Item|Method/formula|Result|Unit|Basis"}\n'
+        '"calculation_workbook":{'
+        '"duty_line":"one-line duty",'
+        '"inputs":[{"id":"conc","name":"","value":0,"unit":"","basis":"","status":"Provided"}],'
+        '"calculations":[{"id":"mass","name":"","method":"C x V / 1000","formula":"={conc}*{volume}/1000",'
+        '"unit":"","acceptance":"","status":""}],'
+        '"summary":{"configuration":[{"item":"","ref":"mass","unit":""}],'
+        '"screening":[{"metric":"","ref":"mass","unit":"","interpretation":""}],'
+        '"conclusion":"","vendor_confirmation":[{"item":"","why":"","confirmation":""}]},'
+        '"audit":[{"name":"","method":"","formula":"={conc}*{volume}/1000-{mass}","expected":"0"}]'
+        "}}\n"
         f"Required datasheet_markdown headings in order: {headings}.\n"
-        "Excel-ready table must show methods/formulas with assumed inputs identified. "
-        "Result column MUST contain evaluated numbers (not TBD / Not calculable) whenever "
-        "a DIR range or pack screening method exists; label those rows Assumed / preliminary. "
+        "calculation_workbook is the calculation record. Do not put evaluated numbers in result cells.\n"
+        "inputs: every editable parameter (DIR value or assumption), with id, name, value, unit, basis, "
+        "and status Provided, Assumption, or Vendor confirm. "
+        "calculations: a chained set for this sized item (typically 8–20 rows). "
+        "formula uses {input_id} and {calc_id} placeholders, never hardcoded project numbers and never "
+        "a bare numeric result. Later rows must reference earlier calc ids. "
+        "method is the equation in words. acceptance states the screen. "
+        "status is empty, a short flag such as VENDOR CONFIRM, or an Excel IF using the same placeholders "
+        '(example =IF({tip}<={tip_max},"MEETS SCREEN","REVIEW")). '
+        "summary.configuration and summary.screening ref fields name an input or calculation id "
+        "(quantities are links, not typed numbers). Text concept rows use text instead of ref. "
+        "conclusion is the engineering limitation paragraph. vendor_confirmation lists what the vendor must confirm. "
+        "audit formulas are identities or pass/fail checks that reference the same ids; expected is the pass text. "
+        "Constants an engineer might change belong in inputs. "
         f"Size connections that belong to this {item}; do not invent unrelated host "
         "process nozzles unless the DIR or pack instructions require them. "
         "Use units on every number. Label estimates vs catalog values."
@@ -184,6 +230,13 @@ def merge_sizing_report(
     """Fold sizing_report JSON into equipment_sizing_v1 fields before validate_output."""
     out = dict(raw)
     md = str(report.get("datasheet_markdown") or "").strip()
+    workbook = report.get("calculation_workbook")
+    if isinstance(workbook, Mapping) and _mapping_rows(workbook.get("calculations")):
+        out["calculation_workbook"] = dict(workbook)
+        echo = workbook_markdown(workbook)
+        if echo:
+            report = dict(report)
+            report["excel_ready_table"] = echo
     table = str(report.get("excel_ready_table") or "").strip()
     if table:
         out["excel_ready_table"] = table

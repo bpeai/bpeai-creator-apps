@@ -320,7 +320,7 @@ Return ONLY JSON with this shape:
       "summary_badge": "Project-team summary",
       "hero_tags": ["tag1", "tag2", "tag3"],
       "hero_headline": ["line1", "line2", "line3"],
-      "hero_image_prompt": "optional cutaway catalog rendering of THIS equipment, no text in the image"
+      "hero_callouts": [{"label": "component name", "detail": "size or duty, optional"}]
     },
     {
       "id": "design_basis",
@@ -393,6 +393,9 @@ Rules:
 - Do NOT invent unsupported claims.
 - Prefer denser notes on capacity, connections, envelope, and calculation
   slides when the datasheet supports it — but stay within length limits.
+- hero_callouts: at most 4 real components of THIS equipment (label plus an
+  optional size or duty). Omit the list when the equipment has no internals
+  worth naming. Do not request a rendered picture.
 """
 
 EVALUATION_SCHEMA_CONTRACT = """Run a full technology evaluation for the validated DIR code
@@ -531,7 +534,8 @@ def _write_docx_artifact(result: Dict[str, Any]) -> Path | None:
 
 def _write_xlsx_artifact(result: Dict[str, Any]) -> Path | None:
     if not (
-        result.get("excel_ready_table")
+        result.get("calculation_workbook")
+        or result.get("excel_ready_table")
         or result.get("key_specs")
         or result.get("datasheet_markdown")
         or result.get("capacity")
@@ -1959,8 +1963,9 @@ class EquipmentSizingAgent(CreatorAppBase):
                 "The previous sizing JSON needs a deeper datasheet_markdown.\n"
                 "Keep supported numbers from capacity, connections, and dimensions JSON.\n"
                 "Return JSON with datasheet_markdown (ALL required headings), "
-                "selected_model, key_specs, and excel_ready_table "
-                "(Item|Method/formula|Result|Unit|Basis)."
+                "selected_model, key_specs, and calculation_workbook "
+                "(inputs, chained {id} formulas, summary links, audit checks). "
+                "Do not put evaluated numbers in calculation result cells."
             )
             repair_preamble = (
                 pack.call_fragment("sizing_repair", "instructions", default=default_repair)

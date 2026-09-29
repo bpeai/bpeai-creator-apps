@@ -120,33 +120,208 @@ def test_parse_markdown_table_headers():
     assert "0.45" in rows[0]
 
 
-def test_build_sizing_xlsx_agitator_formulas(tmp_path: Path):
-    result = _sizing_fixture(item="agitator", table=_agitator_table(), capacity_value="2000", capacity_unit="L")
-    path = build_sizing_xlsx(result, output_path=tmp_path / "agitator.xlsx")
+def _column_workbook() -> dict:
+    return {
+        "duty_line": "20 kg batch | 2,000 L | 10 g/L",
+        "inputs": [
+            {
+                "id": "conc",
+                "name": "Product concentration",
+                "value": 10,
+                "unit": "g/L",
+                "basis": "DIR",
+                "status": "Provided",
+            },
+            {
+                "id": "volume",
+                "name": "Feed volume",
+                "value": 2000,
+                "unit": "L",
+                "basis": "DIR",
+                "status": "Provided",
+            },
+            {
+                "id": "cycles",
+                "name": "Cycles",
+                "value": 4,
+                "unit": "count",
+                "basis": "Equal-cycle assumption",
+                "status": "Assumption",
+            },
+        ],
+        "calculations": [
+            {
+                "id": "mass",
+                "name": "Batch target-product mass",
+                "method": "C x V / 1000",
+                "formula": "={conc}*{volume}/1000",
+                "unit": "kg/batch",
+                "acceptance": "Calculated from provided feed basis",
+            },
+            {
+                "id": "per_cycle",
+                "name": "Product mass per cycle",
+                "method": "mass / cycles",
+                "formula": "={mass}/{cycles}",
+                "unit": "kg/cycle",
+                "acceptance": "Four equal cycles",
+                "status": '=IF({per_cycle}>0,"MEETS SCREEN","REVIEW")',
+            },
+        ],
+        "summary": {
+            "configuration": [
+                {"item": "Batch mass", "ref": "mass", "unit": "kg/batch"},
+                {"item": "Column concept", "text": "Packed bed", "unit": "-"},
+            ],
+            "screening": [
+                {
+                    "metric": "Mass per cycle",
+                    "ref": "per_cycle",
+                    "unit": "kg/cycle",
+                    "interpretation": "Equal-cycle screen",
+                }
+            ],
+            "conclusion": "Preliminary column mass balance. Not a vendor guarantee.",
+            "vendor_confirmation": [
+                {"item": "Resin loading", "why": "Sets bed volume", "confirmation": "Resin supplier data"}
+            ],
+        },
+        "audit": [
+            {
+                "name": "Mass identity",
+                "method": "conc*vol/1000 - mass",
+                "formula": "={conc}*{volume}/1000-{mass}",
+                "expected": "0 kg",
+            }
+        ],
+    }
+
+
+def test_build_sizing_xlsx_column_formulas(tmp_path: Path):
+    result = _sizing_fixture(
+        item="column",
+        table=_pump_table(),
+        capacity_value="2000",
+        capacity_unit="L",
+    )
+    result["system_name"] = "Capture chromatography column"
+    result["sized_item"] = "column"
+    result["calculation_workbook"] = _column_workbook()
+    path = build_sizing_xlsx(result, output_path=tmp_path / "column.xlsx")
     from openpyxl import load_workbook
 
     wb = load_workbook(path)
-    assert set(wb.sheetnames) >= {"Inputs", "Calculations", "Summary", "Audit"}
-    calc = wb["Calculations"]
-    values = [str(cell.value or "") for row in calc.iter_rows() for cell in row]
-    joined = " ".join(values)
-    assert "3.11" in joined or "Tip speed" in joined
-    assert any(str(cell.value or "").startswith("=") for row in calc.iter_rows() for cell in row)
-    assert "2000" in " ".join(str(cell.value or "") for row in wb["Inputs"].iter_rows() for cell in row)
+    assert wb.sheetnames == [
+        "Design Summary",
+        "Sizing Calculations",
+        "Inputs & Assumptions",
+        "Audit",
+    ]
+    inputs = wb["Inputs & Assumptions"]
+    assert inputs["B7"].value == 10
+    assert inputs["B8"].value == 2000
+    assert "FFF2CC" in str(inputs["B7"].fill.fgColor.rgb)
+    calc = wb["Sizing Calculations"]
+    assert calc["C7"].value == "='Inputs & Assumptions'!B7*'Inputs & Assumptions'!B8/1000"
+    assert calc["C8"].value == "=C7/'Inputs & Assumptions'!B9"
+    assert "EAF3F8" in str(calc["C7"].fill.fgColor.rgb)
+    assert calc["F8"].value == '=IF(C8>0,"MEETS SCREEN","REVIEW")'
+    assert all(
+        str(calc.cell(row, 3).value or "").startswith("=") for row in range(7, 9)
+    )
+    summary_formulas = [
+        str(cell.value)
+        for row in wb["Design Summary"].iter_rows()
+        for cell in row
+        if str(cell.value or "").startswith("=")
+    ]
+    assert any(item.startswith("='Sizing Calculations'!") for item in summary_formulas)
+    audit = wb["Audit"]
+    assert str(audit["C7"].value).startswith("=")
+    assert "Sizing Calculations" in str(audit["C7"].value)
+    assert "Inputs & Assumptions" in str(audit["C7"].value)
 
 
-def test_build_sizing_xlsx_pump_formulas(tmp_path: Path):
-    result = _sizing_fixture(item="pump", table=_pump_table(), capacity_value="12.5", capacity_unit="m3/h")
-    path = build_sizing_xlsx(result, output_path=tmp_path / "pump.xlsx")
-    from openpyxl import load_workbook
+def test_build_sizing_xlsx_rejects_unlinked_result(tmp_path: Path):
+    result = {"system_name": "Column", "calculation_workbook": _column_workbook()}
+    result["calculation_workbook"]["calculations"][0]["formula"] = "20"
+    try:
+        build_sizing_xlsx(result, output_path=tmp_path / "bad.xlsx")
+    except ValueError as exc:
+        assert "reference" in str(exc).lower() or "formula" in str(exc).lower()
+    else:
+        raise AssertionError("bare numeric result was written")
 
-    wb = load_workbook(path)
-    calc = wb["Calculations"]
-    joined = " ".join(str(cell.value or "") for row in calc.iter_rows() for cell in row)
-    assert "12.5" in joined or "Differential head" in joined
-    assert any(str(cell.value or "").startswith("=") for row in calc.iter_rows() for cell in row)
-    summary = " ".join(str(cell.value or "") for row in wb["Summary"].iter_rows() for cell in row)
-    assert "12.5" in summary or "pump" in summary.lower()
+
+def test_build_sizing_xlsx_rejects_unresolved_placeholder(tmp_path: Path):
+    result = {"system_name": "Column", "calculation_workbook": _column_workbook()}
+    result["calculation_workbook"]["calculations"][0]["formula"] = "={missing}*{volume}/1000"
+    try:
+        build_sizing_xlsx(result, output_path=tmp_path / "bad.xlsx")
+    except ValueError as exc:
+        assert "unresolved" in str(exc).lower()
+    else:
+        raise AssertionError("unresolved placeholder was written")
+
+
+def test_sizing_prompt_requires_formula_workbook():
+    tools = _creator_tools()
+    message = tools.sizing_report_user_message(
+        system_name="Capture column",
+        application="biopharmaceutical",
+        dir_code="3-3-3",
+        decoded_text="DIR",
+        sizing_text="",
+        plan={},
+        cap_raw={},
+        conn_raw={},
+        dim_raw={},
+        search_context="",
+        creator_block="",
+        required_headings=tools.DEFAULT_SIZING_HEADINGS,
+        sized_item="column",
+    )
+    assert "calculation_workbook" in message
+    assert "{conc}*{volume}/1000" in message
+    assert "Result column MUST contain evaluated numbers" not in message
+
+
+def test_title_hero_sketch_accepts_callouts(tmp_path: Path):
+    from bpeai_creator_sdk.artifacts.hero_image import (
+        infer_sketch_family,
+        render_title_hero,
+        resolve_hero_callouts,
+    )
+
+    column = {"system_name": "Capture chromatography column", "equipment_type": "column"}
+    assert infer_sketch_family(column) == "column"
+    assert infer_sketch_family({"system_name": "CIP skid heat exchanger"}) == "heat_exchanger"
+    assert infer_sketch_family({"equipment_name": "Media prep vessel agitator"}) == "vessel"
+    labels = resolve_hero_callouts(column, [{"label": "Bed", "detail": "20 cm"}])
+    assert labels[0] == {"label": "Bed", "detail": "20 cm"}
+    path = render_title_hero(
+        column,
+        output_path=tmp_path / "hero.png",
+        callouts=[{"label": "Bed", "detail": "20 cm"}],
+    )
+    assert path.is_file()
+    assert path.stat().st_size > 1000
+    for name, title in (
+        ("vessel", "Media prep vessel agitator"),
+        ("exchanger", "CIP skid heat exchanger"),
+    ):
+        drawn = render_title_hero(
+            {"system_name": title},
+            output_path=tmp_path / f"{name}.png",
+            callouts=[{"label": "Nozzle", "detail": "2 in"}],
+        )
+        assert drawn.is_file() and drawn.stat().st_size > 1000
+    generic = render_title_hero(
+        {"system_name": "process skid"},
+        output_path=tmp_path / "generic.png",
+    )
+    assert generic.is_file()
+    assert resolve_hero_callouts({"system_name": "process skid"}) == []
 
 
 def test_build_sizing_docx_includes_numbers(tmp_path: Path):
@@ -219,6 +394,17 @@ def test_merge_sizing_report_keeps_required_headings():
     assert "2000" in md
     assert merged["excel_ready_table"] == table.strip()
     assert merged["selected_model"] == "Hydrofoil agitator"
+    echoed = tools.merge_sizing_report(
+        {"datasheet_markdown": "## Calculation table\n"},
+        {
+            "calculation_workbook": _column_workbook(),
+            "excel_ready_table": "| Item | Method/formula | Result | Unit | Basis |\n| --- | --- | --- | --- | --- |\n| Mass | C x V | 20 | kg | number |\n",
+        },
+        headings=["Calculation table"],
+    )
+    assert "={conc}*{volume}/1000" in echoed["excel_ready_table"]
+    assert "| 20 |" not in echoed["excel_ready_table"]
+    assert echoed["calculation_workbook"]["calculations"][0]["id"] == "mass"
     fallback = tools.fallback_sizing_markdown(
         system_name="Process vessel",
         headings=headings,

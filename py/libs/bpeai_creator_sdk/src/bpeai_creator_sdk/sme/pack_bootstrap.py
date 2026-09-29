@@ -204,8 +204,10 @@ def sizing_content_authoring_contract() -> str:
         "and items that must remain TBD / missing_inputs if DIR is silent. "
         "Label every default as an assumption.\n"
         "basis.csv: CSV with header Item,Method/formula,Result,Unit,Basis. "
-        "Result may be Excel formula syntax starting with = and using placeholders "
-        "(not project-specific numbers). 8–15 rows covering the sized-item duty.\n"
+        "Result is an Excel formula starting with = and using {input_id} or {calc_id} "
+        "placeholders (not project-specific numbers and not a bare evaluated result). "
+        "8–15 chained rows covering the sized-item duty. Editable constants belong in "
+        "the inputs those placeholders name.\n"
         "Use textbook / industry methods. Do not invent manufacturer SKUs or "
         "guaranteed performance (blend time, NPSH, flux, etc.). Mark the whole "
         "pack DRAFT pending SME approval. Do not copy mixing-only formulas into "
@@ -553,8 +555,8 @@ def component_schema_hints(*, template_family: str = "") -> Dict[str, str]:
             "Label every default. DRAFT pending SME approval."
         )
         hints["references/content/basis.csv"] = (
-            "CSV with header Item,Method/formula,Result,Unit,Basis. Result may be "
-            "Excel = formulas with placeholders, not project numbers. DRAFT."
+            "CSV with header Item,Method/formula,Result,Unit,Basis. Result is an "
+            "Excel = formula with {input_id} or {calc_id} placeholders, not project numbers. DRAFT."
         )
     return hints
 

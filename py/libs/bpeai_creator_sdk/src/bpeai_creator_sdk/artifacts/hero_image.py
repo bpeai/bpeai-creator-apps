@@ -1,66 +1,99 @@
-"""Title-slide hero image: OpenAI rendering with a technical-sketch fallback.
+"""Title-slide hero: a labeled engineering line sketch.
 
-Shared by equipment_evaluator and equipment_sizing. The PPTX layout owns
-placement; this module writes a portrait PNG (no embedded text).
+Shared by equipment_evaluator and equipment_sizing. The picture is drawn in
+code (real fonts, leader lines). It does not call an image model.
 """
 
 from __future__ import annotations
 
-import base64
 import os
-import urllib.request
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Sequence
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
+
+_BG = (247, 250, 252)
+_INK = (23, 50, 77)
+_STEEL = (87, 98, 109)
+_LEADER = (170, 179, 176)
+_TEAL = (15, 198, 90)
+_CANVAS = (1024, 1365)
 
 
-def build_hero_image_prompt(result: Mapping[str, Any], *, llm_prompt: str = "") -> str:
-    extra = " ".join(str(llm_prompt or "").strip().split())
-    if extra:
-        return extra
-    system = str(result.get("system_name") or result.get("equipment_name") or "process equipment").strip()
-    concept = str(
-        result.get("selected_model") or result.get("recommended_basis") or ""
-    ).strip()
-    family = str(result.get("equipment_system") or result.get("equipment_type") or "").lower()
-    blob = " ".join([system, concept, family]).lower()
-    mixing = any(
-        token in blob
-        for token in ("agitator", "mixing", "vessel", "tank", "bioreactor", "reactor")
-    )
-    if mixing:
-        duty = concept or "top-entry sanitary axial-flow hydrofoil agitator"
-        return (
-            "Professional life-science equipment catalog rendering, portrait 3:4. "
-            f"Cutaway of a hygienic 316L stainless-steel {system} with a centered "
-            f"top-entry agitator. Show the gearmotor and seal housing on the top head, "
-            f"a polished shaft, and {duty} inside the vessel. Include light wall baffles. "
-            "Pale cool-gray studio background matching hex F7FAFC. Soft even lighting, "
-            "photoreal, high detail, no text, no labels, no logos, no people, no watermark."
+def infer_sketch_family(result: Mapping[str, Any]) -> str:
+    """Pick a line-sketch geometry from the equipment identity already on the result."""
+    blob = " ".join(
+        str(result.get(key) or "")
+        for key in (
+            "system_name",
+            "equipment_name",
+            "equipment_type",
+            "equipment_system",
+            "sized_item",
+            "selected_model",
+            "recommended_basis",
         )
-    duty = concept or "sanitary process equipment package"
-    return (
-        "Professional life-science equipment catalog rendering, portrait 3:4. "
-        f"Photoreal studio view of a hygienic {system} ({duty}). "
-        "Pale cool-gray studio background matching hex F7FAFC. Soft even lighting, "
-        "high detail, no text, no labels, no logos, no people, no watermark."
-    )
+    ).lower()
+    if any(token in blob for token in ("heat exchanger", "exchanger", "phex", "condenser")):
+        return "heat_exchanger"
+    if any(token in blob for token in ("chromatograph", "column", "packed bed")):
+        return "column"
+    if any(
+        token in blob
+        for token in ("agitator", "mixing", "vessel", "tank", "bioreactor", "ferment", "impeller")
+    ):
+        return "vessel"
+    return "generic"
+
+
+def resolve_hero_callouts(
+    result: Mapping[str, Any],
+    callouts: Sequence[Any] | None = None,
+) -> list[dict[str, str]]:
+    """Up to four label/detail pairs. Empty when the slide and specs name no components."""
+    items: list[dict[str, str]] = []
+    for item in callouts or []:
+        if isinstance(item, Mapping):
+            label = str(item.get("label") or "").strip()
+            detail = str(item.get("detail") or item.get("value") or "").strip()
+        else:
+            label = str(item or "").strip()
+            detail = ""
+        if label:
+            items.append({"label": label[:32], "detail": detail[:36]})
+    if items:
+        return items[:4]
+    for spec in result.get("key_specs") or []:
+        if not isinstance(spec, Mapping):
+            continue
+        label = str(spec.get("key") or "").strip()
+        if not label:
+            continue
+        value = str(spec.get("value") or "").strip()
+        unit = str(spec.get("unit") or "").strip()
+        detail = " ".join(part for part in (value, unit) if part)
+        items.append({"label": label[:32], "detail": detail[:36]})
+        if len(items) == 4:
+            break
+    return items
 
 
 def render_title_hero(
     result: Mapping[str, Any],
     *,
     output_path: Path | str,
-    llm_prompt: str = "",
+    callouts: Sequence[Any] | None = None,
 ) -> Path:
     dest = Path(output_path)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    prompt = build_hero_image_prompt(result, llm_prompt=llm_prompt)
-    generated = _openai_hero_png(prompt, dest)
-    if generated is not None:
-        return generated
-    return draw_equipment_schematic(result, dest)
+    family = infer_sketch_family(result)
+    labels = resolve_hero_callouts(result, callouts)
+    img = Image.new("RGB", _CANVAS, _BG)
+    draw = ImageDraw.Draw(img)
+    anchors = _draw_family(draw, family)
+    _draw_callouts(draw, anchors, labels)
+    img.save(dest, format="PNG")
+    return dest
 
 
 def attach_title_hero_image(
@@ -69,125 +102,142 @@ def attach_title_hero_image(
     *,
     output_path: Path | str,
 ) -> Path | None:
-    """Generate a hero PNG and stamp ``hero_image_path`` onto the slide pack."""
+    """Draw a hero PNG and stamp ``hero_image_path`` onto the slide pack."""
     title0: Mapping[str, Any] = {}
     slides = slide_pack.get("slides")
     if isinstance(slides, list) and slides and isinstance(slides[0], Mapping):
         title0 = slides[0]
-    llm_prompt = str(title0.get("hero_image_prompt") or "").strip()
-    path = render_title_hero(result, output_path=output_path, llm_prompt=llm_prompt)
+    raw_callouts = title0.get("hero_callouts")
+    callouts = raw_callouts if isinstance(raw_callouts, list) else None
+    path = render_title_hero(result, output_path=output_path, callouts=callouts)
     slide_pack["hero_image_path"] = str(path)
     return path
 
 
-def _openai_hero_png(prompt: str, dest: Path) -> Path | None:
-    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not api_key:
-        return None
+def _font(size: int) -> ImageFont.ImageFont:
+    candidates = [
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "consola.ttf"),
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except OSError:
+                continue
     try:
-        from openai import OpenAI
-    except Exception:
-        return None
-    client = OpenAI(api_key=api_key)
-    preferred = (os.getenv("OPENAI_IMAGE_MODEL") or "").strip()
-    attempts = []
-    if preferred:
-        attempts.append((preferred, os.getenv("OPENAI_IMAGE_SIZE") or "1024x1536"))
-    attempts.extend(
-        [
-            ("gpt-image-1", "1024x1536"),
-            ("dall-e-3", "1024x1792"),
-            ("dall-e-3", "1024x1024"),
-        ]
-    )
-    seen: set[tuple[str, str]] = set()
-    for model, size in attempts:
-        key = (model, size)
-        if key in seen:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _draw_family(draw: ImageDraw.ImageDraw, family: str) -> list[tuple[int, int]]:
+    if family == "heat_exchanger":
+        return _draw_heat_exchanger(draw)
+    if family == "column":
+        return _draw_column(draw)
+    if family == "vessel":
+        return _draw_vessel(draw)
+    return _draw_generic(draw)
+
+
+def _draw_vessel(draw: ImageDraw.ImageDraw) -> list[tuple[int, int]]:
+    left, right = 340, 700
+    top, bot = 300, 1100
+    draw.arc([left, top - 50, right, top + 70], 180, 360, fill=_INK, width=4)
+    draw.line([left, top, left, bot - 40], fill=_INK, width=4)
+    draw.line([right, top, right, bot - 40], fill=_INK, width=4)
+    draw.arc([left, bot - 110, right, bot + 20], 0, 180, fill=_INK, width=4)
+    draw.line([left - 16, top, right + 16, top], fill=_INK, width=5)
+    # Shaft and impeller.
+    draw.line([512, 150, 512, 980], fill=_INK, width=5)
+    draw.line([390, 940, 634, 940], fill=_INK, width=6)
+    draw.line([420, 980, 604, 980], fill=_INK, width=5)
+    draw.rectangle([452, 70, 572, 150], outline=_INK, width=4)
+    # Fill level.
+    for x in range(left + 12, right - 8, 16):
+        draw.line([x, 640, x + 8, 640], fill=_STEEL, width=2)
+    draw.ellipse([500, 928, 524, 952], fill=_TEAL)
+    return [(512, 110), (left, 640), (420, 960), (524, 940)]
+
+
+def _draw_column(draw: ImageDraw.ImageDraw) -> list[tuple[int, int]]:
+    left, right = 390, 634
+    top, bot = 280, 1080
+    draw.ellipse([left, top - 36, right, top + 48], outline=_INK, width=4)
+    draw.ellipse([left, bot - 48, right, bot + 36], outline=_INK, width=4)
+    draw.line([left, top, left, bot], fill=_INK, width=4)
+    draw.line([right, top, right, bot], fill=_INK, width=4)
+    bed_top, bed_bot = 620, 920
+    draw.line([left + 8, bed_top, right - 8, bed_top], fill=_INK, width=3)
+    draw.line([left + 8, bed_bot, right - 8, bed_bot], fill=_INK, width=3)
+    for y in range(bed_top + 28, bed_bot, 28):
+        draw.line([left + 16, y, right - 16, y], fill=_STEEL, width=2)
+    # Top and bottom nozzles.
+    draw.line([512, 140, 512, top - 20], fill=_INK, width=4)
+    draw.rectangle([488, 110, 536, 150], outline=_INK, width=3)
+    draw.line([512, bot + 20, 512, 1220], fill=_INK, width=4)
+    draw.rectangle([488, 1200, 536, 1240], outline=_INK, width=3)
+    # Side port.
+    draw.line([right, 480, 760, 480], fill=_INK, width=4)
+    draw.rectangle([760, 460, 800, 500], outline=_INK, width=3)
+    return [(512, 130), (512, 760), (512, 1220), (780, 480)]
+
+
+def _draw_heat_exchanger(draw: ImageDraw.ImageDraw) -> list[tuple[int, int]]:
+    # End frames.
+    draw.rectangle([300, 360, 360, 1040], outline=_INK, width=4)
+    draw.rectangle([664, 360, 724, 1040], outline=_INK, width=4)
+    # Plate pack.
+    x = 370
+    while x < 660:
+        draw.line([x, 400, x, 1000], fill=_STEEL, width=3)
+        x += 16
+    draw.rectangle([370, 400, 654, 1000], outline=_INK, width=3)
+    # Tie rods.
+    for y in (430, 970):
+        draw.line([280, y, 744, y], fill=_INK, width=3)
+    # Nozzles.
+    draw.line([250, 480, 300, 480], fill=_INK, width=4)
+    draw.arc([190, 440, 270, 560], 90, 270, fill=_INK, width=4)
+    draw.line([724, 560, 800, 560], fill=_INK, width=4)
+    draw.arc([760, 520, 840, 640], 270, 90, fill=_INK, width=4)
+    draw.line([250, 900, 300, 900], fill=_INK, width=4)
+    draw.line([724, 820, 800, 820], fill=_INK, width=4)
+    return [(512, 700), (220, 500), (820, 560), (512, 400)]
+
+
+def _draw_generic(draw: ImageDraw.ImageDraw) -> list[tuple[int, int]]:
+    draw.rounded_rectangle([280, 420, 744, 1040], radius=18, outline=_INK, width=4)
+    draw.rectangle([360, 520, 664, 860], outline=_STEEL, width=3)
+    draw.line([200, 620, 280, 620], fill=_INK, width=4)
+    draw.line([744, 820, 840, 820], fill=_INK, width=4)
+    return [(512, 690), (200, 620), (840, 820)]
+
+
+def _draw_callouts(
+    draw: ImageDraw.ImageDraw,
+    anchors: Sequence[tuple[int, int]],
+    labels: Sequence[Mapping[str, str]],
+) -> None:
+    if not labels or not anchors:
+        return
+    font = _font(22)
+    detail_font = _font(18)
+    pairs = list(zip(anchors, labels))
+    for index, (anchor, item) in enumerate(pairs[:4]):
+        label = str(item.get("label") or "").strip()
+        detail = str(item.get("detail") or "").strip()
+        if not label:
             continue
-        seen.add(key)
-        try:
-            kwargs: dict[str, Any] = {
-                "model": model,
-                "prompt": prompt,
-                "n": 1,
-                "size": size,
-            }
-            if model.startswith("dall-e"):
-                kwargs["quality"] = "hd"
-                kwargs["style"] = "natural"
-                kwargs["response_format"] = "b64_json"
-            resp = client.images.generate(**kwargs)
-            item = resp.data[0]
-            payload = getattr(item, "b64_json", None)
-            if payload:
-                dest.write_bytes(base64.b64decode(payload))
-                return dest
-            url = getattr(item, "url", None)
-            if url:
-                urllib.request.urlretrieve(url, dest)
-                return dest
-        except Exception:
-            continue
-    return None
-
-
-def draw_equipment_schematic(result: Mapping[str, Any], dest: Path) -> Path:
-    """Deterministic cutaway sketch used when the image API is unavailable."""
-    w, h = 1024, 1365
-    bg = (247, 250, 252)
-    navy = (23, 50, 77)
-    teal = (0, 163, 152)
-    steel = (196, 208, 218)
-    steel_dk = (120, 140, 158)
-    img = Image.new("RGB", (w, h), bg)
-    draw = ImageDraw.Draw(img)
-
-    cx = w // 2
-    tank_w = 420
-    tank_top = 310
-    tank_bot = 1120
-    left = cx - tank_w // 2
-    right = cx + tank_w // 2
-
-    draw.ellipse([left, tank_top - 70, right, tank_top + 90], outline=navy, width=6, fill=steel)
-    draw.ellipse([left, tank_bot - 90, right, tank_bot + 70], outline=navy, width=6, fill=steel)
-    draw.rectangle([left, tank_top + 10, right, tank_bot - 10], fill=(232, 239, 244), outline=navy, width=6)
-    draw.rectangle([left + 18, tank_top + 28, right - 18, tank_bot - 28], fill=(238, 246, 248))
-
-    for x in (left + 36, right - 44):
-        draw.rectangle([x, tank_top + 80, x + 10, tank_bot - 80], fill=steel_dk)
-
-    liquid_top = tank_top + 160
-    draw.rectangle([left + 18, liquid_top, right - 18, tank_bot - 28], fill=(214, 236, 234))
-    draw.line([left + 18, liquid_top, right - 18, liquid_top], fill=teal, width=4)
-
-    draw.rectangle([cx - 10, 210, cx + 10, tank_bot - 140], fill=navy)
-    impeller_ys = (liquid_top + 160, tank_bot - 220, tank_bot - 360)
-    n_imp = 2
-    concept = str(result.get("selected_model") or result.get("recommended_basis") or "").lower()
-    if "three" in concept or "3 " in concept:
-        n_imp = 3
-    for y in impeller_ys[:n_imp]:
-        _hydrofoil(draw, cx, y, span=300, color=teal)
-
-    draw.rounded_rectangle([cx - 70, 70, cx + 70, 170], radius=16, fill=navy)
-    draw.rounded_rectangle([cx - 48, 170, cx + 48, 230], radius=10, fill=steel_dk)
-    draw.ellipse([cx - 22, 188, cx + 22, 232], fill=teal)
-    draw.rectangle([cx - 90, 228, cx + 90, 258], fill=steel, outline=navy, width=3)
-
-    for x in (left + 40, right - 56):
-        draw.rectangle([x, tank_bot + 20, x + 16, tank_bot + 90], fill=navy)
-        draw.rectangle([x - 18, tank_bot + 90, x + 34, tank_bot + 102], fill=navy)
-
-    img = img.filter(ImageFilter.SMOOTH)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    img.save(dest, format="PNG")
-    return dest
-
-
-def _hydrofoil(draw: ImageDraw.ImageDraw, cx: int, y: int, *, span: int, color: tuple[int, int, int]) -> None:
-    half = span // 2
-    draw.polygon([(cx - half, y), (cx - 40, y - 22), (cx - 18, y), (cx - 40, y + 22)], fill=color)
-    draw.polygon([(cx + half, y), (cx + 40, y - 22), (cx + 18, y), (cx + 40, y + 22)], fill=color)
-    draw.ellipse([cx - 16, y - 16, cx + 16, y + 16], fill=(23, 50, 77))
+        on_left = index % 2 == 1
+        text_x = 36 if on_left else 760
+        text_y = max(48, min(anchor[1] - 12, 1240))
+        end = (text_x + (240 if on_left else 0), text_y + 10)
+        draw.line([anchor, end], fill=_LEADER, width=2)
+        draw.ellipse([anchor[0] - 4, anchor[1] - 4, anchor[0] + 4, anchor[1] + 4], fill=_INK)
+        draw.text((text_x, text_y), label, fill=_INK, font=font)
+        if detail:
+            draw.text((text_x, text_y + 28), detail, fill=_TEAL, font=detail_font)
