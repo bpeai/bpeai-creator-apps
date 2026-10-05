@@ -202,6 +202,12 @@ return bare payloads.
 
 ---
 
+## Presentation visuals
+
+PPTX title panels use reviewed private-pack visual assets or a supported engineering
+summary. Assets round-trip through local folders, portal upload, runtime payloads,
+and pack downloads. See [EI_PRESENTATION_VISUALS.md](EI_PRESENTATION_VISUALS.md).
+
 ## How creators get updates
 
 1. `git pull` on `bpeai-creator-apps` (SDK, templates, platform seeds).

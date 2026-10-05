@@ -1,5 +1,17 @@
 # Changelog — bpeai-creator-apps / Creator SDK
 
+
+## 0.2.10 — 2026-10-05
+
+### Evidence-based presentation visuals
+
+- Replace inferred title-slide equipment sketches with reviewed vendor/project assets or an editable engineering summary.
+- Require provenance, applicability, SME review and image checksum; legacy/LLM image paths cannot bypass the catalog.
+- Keep image proportions and visible scope/source captions; preserve evidence in notes and artifact metadata.
+- Carry optional private-pack visual assets through local load, website payload, versioned snapshots, and JSON/ZIP downloads.
+- Update both templates and existing generated app copies without changing run phases or output schemas.
+- See [EI_PRESENTATION_VISUALS.md](docs/EI_PRESENTATION_VISUALS.md) for catalog format and rollout.
+
 ## 0.2.9 — 2026-09-20
 
 ### Sizing pack bootstrap: draft methods library

@@ -286,42 +286,14 @@ def test_sizing_prompt_requires_formula_workbook():
     assert "Result column MUST contain evaluated numbers" not in message
 
 
-def test_title_hero_sketch_accepts_callouts(tmp_path: Path):
-    from bpeai_creator_sdk.artifacts.hero_image import (
-        infer_sketch_family,
-        render_title_hero,
-        resolve_hero_callouts,
-    )
-
-    column = {"system_name": "Capture chromatography column", "equipment_type": "column"}
-    assert infer_sketch_family(column) == "column"
-    assert infer_sketch_family({"system_name": "CIP skid heat exchanger"}) == "heat_exchanger"
-    assert infer_sketch_family({"equipment_name": "Media prep vessel agitator"}) == "vessel"
-    labels = resolve_hero_callouts(column, [{"label": "Bed", "detail": "20 cm"}])
-    assert labels[0] == {"label": "Bed", "detail": "20 cm"}
-    path = render_title_hero(
-        column,
+def test_legacy_title_sketch_is_disabled(tmp_path: Path):
+    from bpeai_creator_sdk.artifacts.hero_image import render_title_hero
+    assert render_title_hero(
+        {"system_name": "Chromatography resin slurry mixing vessel"},
         output_path=tmp_path / "hero.png",
-        callouts=[{"label": "Bed", "detail": "20 cm"}],
-    )
-    assert path.is_file()
-    assert path.stat().st_size > 1000
-    for name, title in (
-        ("vessel", "Media prep vessel agitator"),
-        ("exchanger", "CIP skid heat exchanger"),
-    ):
-        drawn = render_title_hero(
-            {"system_name": title},
-            output_path=tmp_path / f"{name}.png",
-            callouts=[{"label": "Nozzle", "detail": "2 in"}],
-        )
-        assert drawn.is_file() and drawn.stat().st_size > 1000
-    generic = render_title_hero(
-        {"system_name": "process skid"},
-        output_path=tmp_path / "generic.png",
-    )
-    assert generic.is_file()
-    assert resolve_hero_callouts({"system_name": "process skid"}) == []
+        callouts=[{"label": "Nozzle", "detail": "2 in"}],
+    ) is None
+    assert not (tmp_path / "hero.png").exists()
 
 
 def test_build_sizing_docx_includes_numbers(tmp_path: Path):

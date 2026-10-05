@@ -6,6 +6,7 @@ Visual system derived from:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Mapping
 
@@ -197,38 +198,63 @@ def _add_rect(slide, left, top, width, height, fill_hex: str, *, line: bool = Fa
     return shape
 
 
-def _resolve_hero_image(
-    pack: Mapping[str, Any],
-    title_slide: Mapping[str, Any],
-    result: Mapping[str, Any],
-) -> Path | None:
-    artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), Mapping) else {}
-    candidates = [
-        pack.get("hero_image_path"),
-        title_slide.get("hero_image_path"),
-        result.get("hero_image_path"),
-        artifacts.get("hero_image_path") if isinstance(artifacts, Mapping) else None,
-    ]
-    for cand in candidates:
-        if not cand:
-            continue
-        path = Path(str(cand))
-        if path.is_file():
-            return path
-    return None
-
-
 def _add_hero_picture(slide, image_path: Path) -> None:
+    from PIL import Image
     from pptx.util import Emu
 
-    # Inset inside the right rounded panel; leave room for the caption overlay.
-    slide.shapes.add_picture(
-        str(image_path),
-        Emu(7720296),
-        Emu(274320),
-        width=Emu(4337880),
-        height=Emu(5120640),
-    )
+    # Contain the complete drawing; never stretch, crop evidence, or overlay labels.
+    left, top, width, height = 7850000, 420000, 4100000, 4250000
+    with Image.open(image_path) as image:
+        scale = min(width / image.width, height / image.height)
+        w, h = round(image.width * scale), round(image.height * scale)
+    slide.shapes.add_picture(str(image_path), Emu(left + (width - w) // 2),
+                             Emu(top + (height - h) // 2), width=Emu(w), height=Emu(h))
+
+
+def _add_visual_panel(slide, result, image_path, evidence) -> None:
+    from .hero_image import engineering_summary
+
+    def text(top, height, value, *, size=15, color=BODY, bold=False):
+        box = _add_textbox(slide, 7950000, top, 3850000, height)
+        _fill_textbox(box, value, width_emu=3850000, height_emu=height,
+                      preferred_pt=size, min_pt=11, bold=bold, color=color,
+                      font_name=FONT_BODY)
+        return box
+
+    if image_path is not None:
+        _add_hero_picture(slide, image_path)
+        scope = evidence.get("scope")
+        label = {"product_family": "Product-family example",
+                 "exact_model": "Reviewed model reference",
+                 "project_configuration": "Reviewed project drawing"}.get(scope, "Reviewed reference")
+        model = " ".join(str(evidence.get(k) or "") for k in ("manufacturer", "model")).strip()
+        text(4830000, 420000, _truncate(label + (" — " + model if model else ""), 110), size=14, bold=True)
+        applicability = str(evidence.get("applicability") or "")
+        if scope == "product_family":
+            applicability = "Configuration is not confirmed. " + applicability
+        text(5280000, 520000, _truncate(applicability, 170), size=12)
+        source = evidence.get("source_document") or evidence.get("source_url") or ""
+        details = " | ".join(str(evidence.get(k) or "") for k in ("page", "revision") if evidence.get(k))
+        caption = str(evidence.get("attribution") or "") + " | " + str(source)
+        if details:
+            caption += " | " + details
+        box = text(5900000, 720000, _truncate(caption, 180), size=11, color=GRAY)
+        url = str(evidence.get("source_url") or "")
+        if url.startswith(("https://", "http://")):
+            for paragraph in box.text_frame.paragraphs:
+                for run in paragraph.runs:
+                    run.hyperlink.address = url
+        slide.notes_slide.notes_text_frame.text = "Visual evidence (SME reviewed):\n" + json.dumps(evidence, indent=2, ensure_ascii=False)
+        return
+
+    rows = engineering_summary(result)
+    text(650000, 420000, "Engineering summary", size=20, color=NAVY, bold=True)
+    step = min(1250000, 5100000 // max(1, len(rows)))
+    for index, (label, value) in enumerate(rows):
+        top = 1320000 + index * step
+        text(top, 290000, label, size=12, color=TEAL, bold=True)
+        text(top + 315000, step - 390000, _truncate(value, 140 if len(rows) == 5 else 180), size=15)
+    slide.notes_slide.notes_text_frame.text = "Engineering summary from result fields:\n" + "\n\n".join(f"{k}: {v}" for k, v in rows)
 
 
 def _add_line(slide, left, top, width):
@@ -316,7 +342,7 @@ def default_reference_path(pack_path: Path | None = None) -> Path | None:
 
 def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any]:
     """Deterministic fallback slide pack when LLM is unavailable."""
-    system = str(result.get("system_name") or result.get("equipment_name") or "Mixing system")
+    system = str(result.get("system_name") or result.get("equipment_name") or "Equipment system")
     dir_code = str(result.get("dir_code") or "")
     recommended = str(result.get("recommended_basis") or result.get("selected_model") or "")
     alternate = str(result.get("alternate_basis") or "")
@@ -375,13 +401,6 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
                 "detail": _truncate(right or obj, 80),
             }
         )
-    if not process_steps:
-        process_steps = [
-            {"n": 1, "title": "Charge", "detail": "Controlled liquid charge"},
-            {"n": 2, "title": "Mix / dissolve", "detail": "Achieve homogeneity"},
-            {"n": 3, "title": "Sample", "detail": "Confirm quality attributes"},
-            {"n": 4, "title": "Transfer", "detail": "Release homogeneous batch"},
-        ]
 
     return {
         "slides": [
@@ -391,13 +410,13 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
                 "subtitle": _truncate(
                     result.get("dir_summary")
                     or result.get("design_basis")
-                    or f"Mixing technology evaluation for {system}.",
+                    or f"Engineering assessment for {system}.",
                     160,
                 ),
                 "dir_badge": f"Validated DIR: {dir_code}" if dir_code else "Validated DIR",
                 "summary_badge": "Project-team summary",
                 "hero_tags": _as_list(result.get("objectives"))[:3]
-                or ["technical fit", "GMP ready", "vendor available"],
+                or [],
                 "hero_headline": [
                     _truncate(recommended, 34) or "Recommended basis",
                     "as recommended basis",
@@ -406,7 +425,7 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
             },
             {
                 "id": "design_basis",
-                "eyebrow": f"Agitator Selection / {system}",
+                "eyebrow": f"Equipment assessment / {system}",
                 "heading": "Design basis from DIR code",
                 "cards": cards[:6],
                 "selection_implication": _truncate(
@@ -416,7 +435,7 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
             },
             {
                 "id": "objectives",
-                "eyebrow": f"Agitator Selection / {system}",
+                "eyebrow": f"Equipment assessment / {system}",
                 "heading": "Mixing objectives, constraints and failure modes",
                 "process_steps": process_steps,
                 "failure_modes": _as_list(result.get("failure_modes"))[:4]
@@ -429,7 +448,7 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
             },
             {
                 "id": "options",
-                "eyebrow": f"Agitator Selection / {system}",
+                "eyebrow": f"Equipment assessment / {system}",
                 "heading": "Realistic mixing-system options",
                 "rows": [
                     {
@@ -451,14 +470,14 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
             },
             {
                 "id": "matrix",
-                "eyebrow": f"Agitator Selection / {system}",
+                "eyebrow": f"Equipment assessment / {system}",
                 "heading": "Option evaluation matrix",
                 "rows": matrix[:6],
                 "decision_logic": _truncate(result.get("rationale") or "", 200),
             },
             {
                 "id": "recommendation",
-                "eyebrow": f"Agitator Selection / {system}",
+                "eyebrow": f"Equipment assessment / {system}",
                 "heading": "Recommended basis and alternate option",
                 "recommended": recommended,
                 "recommended_why": _as_list(result.get("objectives"))[:3]
@@ -474,7 +493,7 @@ def build_slide_pack_from_evaluation(result: Mapping[str, Any]) -> Dict[str, Any
             },
             {
                 "id": "specs",
-                "eyebrow": f"Agitator Selection / {system}",
+                "eyebrow": f"Equipment assessment / {system}",
                 "heading": "Preliminary specification points / vendors / references",
                 "specs": _as_list(result.get("preliminary_specs"))[:7],
                 "manufacturers": _as_list(result.get("manufacturers"))[:8],
@@ -495,6 +514,7 @@ def build_evaluation_pptx(
     slide_pack: Mapping[str, Any] | None = None,
     template_path: Path | str | None = None,
     pack_path: Path | str | None = None,
+    knowledge_pack: Any = None,
 ) -> Path:
     """Build a styled 7-slide evaluation deck.
 
@@ -527,7 +547,7 @@ def build_evaluation_pptx(
         pack["system_name"] = pack.get("system_name") or fallback.get("system_name")
 
     dir_code = str(pack.get("dir_code") or result.get("dir_code") or "")
-    system = str(pack.get("system_name") or result.get("system_name") or "Mixing system")
+    system = str(pack.get("system_name") or result.get("system_name") or "Equipment system")
 
     prs = Presentation()
     prs.slide_width = Inches(13.333)
@@ -538,24 +558,19 @@ def build_evaluation_pptx(
     t1 = slides[0] if isinstance(slides[0], Mapping) else {}
     # right panel
     _add_rect(s1, 7589520, 0, 4599432, 6858000, PANEL_RIGHT, line=False)
-    hero_image = _resolve_hero_image(pack, t1, result)
-    if hero_image is not None:
-        _add_hero_picture(s1, hero_image)
-    else:
-        tags_box = _add_textbox(s1, 8796528, 2212848, 2000000, 1200000)
-        tags = _as_list(t1.get("hero_tags"))[:3] or ["fit", "GMP", "scale-up"]
-        _fill_textbox(
-            tags_box,
-            [_truncate(tag, 18) for tag in tags],
-            width_emu=2000000,
-            height_emu=1200000,
-            preferred_pt=13,
-            min_pt=10,
-            bold=True,
-            color=TEAL,
-            font_name=FONT_BODY,
-            center=True,
-        )
+    from .hero_image import attach_title_hero_image
+    # Only the explicit loaded knowledge pack can supply visual approval.
+    # Legacy result/slide-pack image paths and LLM metadata cannot bypass review.
+    hero_image = attach_title_hero_image(
+        result, pack, output_path=out.with_name(out.stem + " hero.png"),
+        knowledge_pack=knowledge_pack,
+    )
+    _add_visual_panel(s1, result, hero_image, pack["visual_evidence"])
+    if isinstance(slide_pack, dict):
+        slide_pack.pop("hero_image_path", None)
+        slide_pack["visual_evidence"] = pack["visual_evidence"]
+        if hero_image is not None:
+            slide_pack["hero_image_path"] = str(hero_image)
     title_box = _add_textbox(s1, 658368, 1207008, 6217920, 1400000)
     lines = deliverable_title_lines(result)
     if not lines:
@@ -612,30 +627,12 @@ def build_evaluation_pptx(
         font_name=FONT_BODY,
         center=True,
     )
-    # Caption overlay at the bottom of the right panel (kept even when an image is present).
-    if hero_image is not None:
-        _add_rect(s1, 7680960, 5486400, 4297680, 820000, "FFFFFF", line=False)
-    hero = _add_textbox(s1, 7680960, 5577840, 4297680, 700000)
-    headline = _as_list(t1.get("hero_headline"))[:3] or [_truncate(str(result.get("recommended_basis") or ""), 36)]
-    _fill_textbox(
-        hero,
-        [_truncate(line, 32) for line in headline],
-        width_emu=4297680,
-        height_emu=700000,
-        preferred_pt=14,
-        min_pt=10,
-        bold=True,
-        color=NAVY,
-        font_name=FONT_BODY,
-        center=True,
-    )
-
     # --- Slide 2: Design basis cards ---
     s2 = prs.slides.add_slide(prs.slide_layouts[6])
     t2 = slides[1] if isinstance(slides[1], Mapping) else {}
     _eyebrow_and_title(
         s2,
-        str(t2.get("eyebrow") or f"Agitator Selection / {system}"),
+        str(t2.get("eyebrow") or f"Equipment assessment / {system}"),
         str(t2.get("heading") or "Design basis from DIR code"),
     )
     cards = [c for c in (t2.get("cards") or []) if isinstance(c, Mapping)][:6]
@@ -692,7 +689,7 @@ def build_evaluation_pptx(
     t3 = slides[2] if isinstance(slides[2], Mapping) else {}
     _eyebrow_and_title(
         s3,
-        str(t3.get("eyebrow") or f"Agitator Selection / {system}"),
+        str(t3.get("eyebrow") or f"Equipment assessment / {system}"),
         str(t3.get("heading") or "Mixing objectives, constraints and failure modes"),
     )
     steps = [x for x in (t3.get("process_steps") or []) if isinstance(x, Mapping)][:4]
@@ -789,7 +786,7 @@ def build_evaluation_pptx(
     t4 = slides[3] if isinstance(slides[3], Mapping) else {}
     _eyebrow_and_title(
         s4,
-        str(t4.get("eyebrow") or f"Agitator Selection / {system}"),
+        str(t4.get("eyebrow") or f"Equipment assessment / {system}"),
         str(t4.get("heading") or "Realistic mixing-system options"),
     )
     headers = [("Mixing type", 685800), ("Notes", 4434840), ("Fit", 8915400)]
@@ -859,7 +856,7 @@ def build_evaluation_pptx(
     t5 = slides[4] if isinstance(slides[4], Mapping) else {}
     _eyebrow_and_title(
         s5,
-        str(t5.get("eyebrow") or f"Agitator Selection / {system}"),
+        str(t5.get("eyebrow") or f"Equipment assessment / {system}"),
         str(t5.get("heading") or "Option evaluation matrix"),
     )
     cols = [
@@ -920,7 +917,7 @@ def build_evaluation_pptx(
     t6 = slides[5] if isinstance(slides[5], Mapping) else {}
     _eyebrow_and_title(
         s6,
-        str(t6.get("eyebrow") or f"Agitator Selection / {system}"),
+        str(t6.get("eyebrow") or f"Equipment assessment / {system}"),
         str(t6.get("heading") or "Recommended basis and alternate option"),
     )
     _add_rect(s6, 658368, 1400000, 5600000, 4200000, CARD_FILL)
@@ -1004,7 +1001,7 @@ def build_evaluation_pptx(
     t7 = slides[6] if isinstance(slides[6], Mapping) else {}
     _eyebrow_and_title(
         s7,
-        str(t7.get("eyebrow") or f"Agitator Selection / {system}"),
+        str(t7.get("eyebrow") or f"Equipment assessment / {system}"),
         str(t7.get("heading") or "Preliminary specification points / vendors / references"),
     )
     _add_rect(s7, 658368, 1400000, 5600000, 4500000, CARD_FILL)

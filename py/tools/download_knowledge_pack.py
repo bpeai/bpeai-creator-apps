@@ -12,6 +12,7 @@ Requires a logged-in creator session cookie.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -71,6 +72,9 @@ def main() -> int:
         out_root = Path(args.out)
         out_root.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            for member in zf.infolist():
+                target = (out_root / member.filename).resolve()
+                target.relative_to(out_root.resolve())
             zf.extractall(out_root)
             for n in zf.namelist():
                 print(f"Wrote {out_root / n}")
@@ -91,11 +95,20 @@ def main() -> int:
 
     pack_id = str(data.get("pack_id") or args.pack)
     out_dir = Path(args.out) / pack_id
+    out_dir.resolve().relative_to(Path(args.out).resolve())
     out_dir.mkdir(parents=True, exist_ok=True)
     files = data.get("files") or {}
     for name, text in files.items():
         path = out_dir / name
+        path.resolve().relative_to(out_dir.resolve())
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(str(text), encoding="utf-8")
+        print(f"Wrote {path}")
+    for name, encoded in (data.get("binary_files") or {}).items():
+        path = out_dir / name
+        path.resolve().relative_to(out_dir.resolve())
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(base64.b64decode(encoded, validate=True))
         print(f"Wrote {path}")
     print(
         f"Done. release={data.get('release_version')} content_version={data.get('content_version')}"

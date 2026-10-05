@@ -194,6 +194,7 @@ class KnowledgePack:
     pptx_outline: Dict[str, Any] = field(default_factory=dict)
     search_queries: Dict[str, Any] = field(default_factory=dict)
     content_index: Dict[str, Any] = field(default_factory=dict)
+    visual_assets: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def equipment_system(self) -> str:
@@ -887,6 +888,7 @@ def knowledge_pack_from_dict(
         content_index = payload.get("content_index") or {}
 
     dir_req = _normalize_dir_catalog_shape(dir_req)
+    visual_assets = (content.get("visual_assets") if isinstance(content, dict) else None) or payload.get("visual_assets") or {}
 
     return KnowledgePack(
         pack_id=str(meta.get("pack_id") or pack_id),
@@ -900,6 +902,7 @@ def knowledge_pack_from_dict(
         pptx_outline=pptx_outline if isinstance(pptx_outline, dict) else {},
         search_queries=search_queries if isinstance(search_queries, dict) else {},
         content_index=content_index if isinstance(content_index, dict) else {},
+        visual_assets=visual_assets if isinstance(visual_assets, dict) else {},
     )
 
 
@@ -978,6 +981,8 @@ def load_knowledge_pack(
         if isinstance(raw_index, dict):
             content_index = raw_index
 
+    from ..artifacts.hero_image import load_visual_catalog
+
     return KnowledgePack(
         pack_id=pid,
         path=path,
@@ -990,4 +995,5 @@ def load_knowledge_pack(
         pptx_outline=pptx_outline,
         search_queries=search_queries,
         content_index=content_index,
+        visual_assets=load_visual_catalog(path),
     )

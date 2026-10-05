@@ -51,6 +51,9 @@ ALLOW_SUFFIX = {
     ".txt",
     ".toml",
     ".csv",
+    ".png",
+    ".jpg",
+    ".jpeg",
 }
 
 
@@ -62,6 +65,8 @@ def _should_skip(path: Path) -> bool:
     if name.startswith(".env") or name in {"credentials.json", "secrets.json"}:
         return True
     if path.is_file() and path.suffix.lower() not in ALLOW_SUFFIX:
+        return True
+    if path.suffix.lower() in {".png", ".jpg", ".jpeg"} and "/references/visuals/" not in path.as_posix():
         return True
     return False
 

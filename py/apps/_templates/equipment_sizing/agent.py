@@ -54,7 +54,6 @@ from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate
 from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
     attach_sizing_artifact_name,
-    attach_title_hero_image,
     build_evaluation_pptx,
     build_sizing_docx,
     build_sizing_xlsx,
@@ -317,21 +316,18 @@ Return ONLY JSON with this shape:
       "title_lines": ["Line1", "Line2"],
       "subtitle": "one sentence evaluation scope",
       "dir_badge": "Validated DIR: x-x-x-x-x-x",
-      "summary_badge": "Project-team summary",
-      "hero_tags": ["tag1", "tag2", "tag3"],
-      "hero_headline": ["line1", "line2", "line3"],
-      "hero_callouts": [{"label": "component name", "detail": "size or duty, optional"}]
+      "summary_badge": "Project-team summary"
     },
     {
       "id": "design_basis",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Equipment assessment / <system>",
       "heading": "Design basis from DIR code",
       "cards": [{"label": "WORKING VOLUME", "value": "...", "accent": false}],
       "selection_implication": "2 sentences max"
     },
     {
       "id": "objectives",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Equipment assessment / <system>",
       "heading": "Mixing objectives, constraints and failure modes",
       "process_steps": [{"n": 1, "title": "...", "detail": "..."}],
       "failure_modes": ["...", "..."],
@@ -339,21 +335,21 @@ Return ONLY JSON with this shape:
     },
     {
       "id": "options",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Equipment assessment / <system>",
       "heading": "Realistic mixing-system options",
       "rows": [{"name": "...", "fit": "best|strong|conditional|limited|add-on|special-case", "notes": "..."}],
       "recommendation_line": "Recommendation: ..."
     },
     {
       "id": "matrix",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Equipment assessment / <system>",
       "heading": "Option evaluation matrix",
       "rows": [{"option":"...","technical_fit":"...","gmp":"...","scale_up_risk":"...","cost_schedule":"...","reliability":"...","rank":1}],
       "decision_logic": "one short paragraph"
     },
     {
       "id": "recommendation",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Equipment assessment / <system>",
       "heading": "Recommended basis and alternate option",
       "recommended": "...",
       "recommended_why": ["...", "..."],
@@ -364,7 +360,7 @@ Return ONLY JSON with this shape:
     },
     {
       "id": "specs",
-      "eyebrow": "Agitator Selection / <system>",
+      "eyebrow": "Equipment assessment / <system>",
       "heading": "Preliminary specification points / vendors / references",
       "specs": ["..."],
       "manufacturers": ["..."],
@@ -393,9 +389,8 @@ Rules:
 - Do NOT invent unsupported claims.
 - Prefer denser notes on capacity, connections, envelope, and calculation
   slides when the datasheet supports it — but stay within length limits.
-- hero_callouts: at most 4 real components of THIS equipment (label plus an
-  optional size or duty). Omit the list when the equipment has no internals
-  worth naming. Do not request a rendered picture.
+- Do not generate equipment images, geometry, callouts, image paths, or visual approvals.
+  The SDK selects reviewed pack assets or a supported engineering summary.
 """
 
 EVALUATION_SCHEMA_CONTRACT = """Run a full technology evaluation for the validated DIR code
@@ -2096,15 +2091,6 @@ class EquipmentSizingAgent(CreatorAppBase):
         self.status("Building presentation-ready PPTX (reference visual style)…")
         attach_sizing_artifact_name(evaluation, pack=pack)
         slide_pack = self._build_pptx_slide_pack(pack, evaluation)
-        try:
-            self.status("Rendering title-slide equipment image…")
-            attach_title_hero_image(
-                evaluation,
-                slide_pack,
-                output_path=Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(evaluation)} hero.png",
-            )
-        except Exception as exc:
-            self.status(f"Title-slide image skipped ({exc})")
         out_path = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(evaluation)}.pptx"
         path = build_evaluation_pptx(
             evaluation,
@@ -2112,10 +2098,13 @@ class EquipmentSizingAgent(CreatorAppBase):
             output_path=out_path,
             slide_pack=slide_pack,
             pack_path=pack.path,
+            knowledge_pack=pack,
         )
         result = dict(evaluation)
         artifacts = dict(result.get("artifacts") or {})
         artifacts["pptx_path"] = str(path.resolve())
+        artifacts.pop("hero_image_path", None)
+        artifacts["visual_evidence"] = slide_pack.get("visual_evidence", {"mode": "summary"})
         if slide_pack.get("hero_image_path"):
             artifacts["hero_image_path"] = str(slide_pack["hero_image_path"])
         result["artifacts"] = artifacts
