@@ -113,8 +113,9 @@ def test_committed_style_templates_preferred(py_root: Path, monkeypatch: pytest.
         assert list((dest_root / "references" / "style").glob("*.pptx"))
         assert list((dest_root / "references" / "style").glob("*.docx"))
         assert (dest_root / "references" / "style" / "brand.yaml").is_file()
-        # Must not seed sizing shells into an evaluator pack.
-        assert not list((dest_root / "references" / "style").glob("*Sizing*"))
+        # Must seed evaluator example name (not a sizing-only workbook).
+        assert list((dest_root / "references" / "style").glob("default evaluator style example.*"))
+        assert not list((dest_root / "references" / "style").glob("default sizing style example.*"))
         # Second seed must not overwrite / re-copy.
         assert (
             seed_template_references(
@@ -141,14 +142,16 @@ def test_seed_sizing_style_family(py_root: Path, monkeypatch: pytest.MonkeyPatch
     copied = seed_template_references(
         "_sizing_seed_tmp",
         py_root=tmp_path,
+        template_root=shared,
         template_family="sizing",
     )
     dest = tmp_path / "knowledge" / "_sizing_seed_tmp" / "references" / "style"
     assert copied
-    assert list(dest.glob("*.pptx"))
-    assert list(dest.glob("*.xlsx"))
-    assert list(dest.glob("*.docx"))
-    assert not list(dest.glob("*Evaluation*"))
+    assert list(dest.glob("default sizing style example.pptx"))
+    assert list(dest.glob("default sizing style example.xlsx"))
+    assert list(dest.glob("default sizing style example.docx"))
+    # Sizing family should not receive evaluator example shells.
+    assert not list(dest.glob("default evaluator style example.*"))
 
 
 def test_load_mixing_stub(mixing_stub):

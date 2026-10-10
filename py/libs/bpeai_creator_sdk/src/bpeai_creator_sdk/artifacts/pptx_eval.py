@@ -363,9 +363,13 @@ def default_reference_path(
             candidates.extend(sorted(style_root.glob("*.pptx")))
         if ref_root.is_dir():
             candidates.extend(sorted(ref_root.glob("*.pptx")))
-        # Historical names (optional continuity)
+        # Preferred example name + historical names (optional continuity)
+        candidates.append(style_root / "default evaluator style example.pptx")
+        candidates.append(style_root / "default sizing style example.pptx")
         candidates.append(style_root / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
         candidates.append(style_root / "media_preparation_vessel_mixing_evaluation.pptx")
+        candidates.append(ref_root / "default evaluator style example.pptx")
+        candidates.append(ref_root / "default sizing style example.pptx")
         candidates.append(ref_root / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
         candidates.append(ref_root / "media_preparation_vessel_mixing_evaluation.pptx")
 

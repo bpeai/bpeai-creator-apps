@@ -11,7 +11,8 @@ references/style/
 
 On pack bootstrap, the SDK copies that family’s files into the pack’s
 `references/style/` (never overwrites files already there). Supported seeds:
-`.pptx`, `.pdf`, `.docx`, `.xlsx`, `brand.yaml`, and optional `logo.*`.
+`default evaluator style example.*` / `default sizing style example.*`,
+`brand.yaml`, and optional `logo.*`.
 
 ## Creator branding
 
@@ -20,8 +21,9 @@ Runtime colors/fonts/logo come from the **pack** copy of:
 - `references/style/brand.yaml`
 - `references/style/logo.png` (optional)
 
-Office shells are visual examples; edit `brand.yaml` (+ logo) to distinguish
-deliverables. Reseed does not overwrite those files once present.
+`default … style example.*` files are visual examples only; edit `brand.yaml`
+(+ logo) to distinguish deliverables. Reseed does not overwrite those files
+once present.
 
 ## Legacy flat files
 
