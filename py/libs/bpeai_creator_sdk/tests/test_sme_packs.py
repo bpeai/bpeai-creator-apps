@@ -79,33 +79,76 @@ def test_committed_style_templates_preferred(py_root: Path, monkeypatch: pytest.
     monkeypatch.delenv("BPEAI_TEMPLATE_REFERENCES_ROOT", raising=False)
     monkeypatch.delenv("BPEAI_REFERENCES_ROOT", raising=False)
 
-    shared = template_references_root(py_root)
-    assert shared is not None
-    assert shared == (py_root / "knowledge" / "_templates" / "references").resolve()
-    assert any(shared.glob("*.pptx"))
-    assert any(shared.glob("*.pdf"))
+    style_root = py_root / "knowledge" / "_templates" / "references" / "style"
+    evaluator = template_references_root(py_root, template_family="equipment_evaluator")
+    sizing = template_references_root(py_root, template_family="equipment_sizing")
+    assert evaluator is not None
+    assert sizing is not None
+    assert evaluator == (style_root / "equipment_evaluator").resolve()
+    assert sizing == (style_root / "equipment_sizing").resolve()
+    assert any(evaluator.glob("*.pptx"))
+    assert any(evaluator.glob("*.docx"))
+    assert any(sizing.glob("*.pptx"))
+    assert any(sizing.glob("*.xlsx"))
+    # Families must not resolve to the same folder.
+    assert evaluator != sizing
 
-    # Any filename in the shared folder seeds; names need not be standardized.
+    # Any filename in the family folder seeds; names need not be standardized.
     dest_root = py_root / "knowledge" / "_test_seed_pack_tmp"
     if dest_root.exists():
         import shutil
 
         shutil.rmtree(dest_root)
     try:
-        copied = seed_template_references("_test_seed_pack_tmp", py_root=py_root)
+        copied = seed_template_references(
+            "_test_seed_pack_tmp",
+            py_root=py_root,
+            template_family="equipment_evaluator",
+        )
         assert any(p.endswith(".pptx") for p in copied)
-        assert any(p.endswith(".pdf") for p in copied)
+        assert any(p.endswith(".docx") for p in copied)
+        assert any(p.endswith("brand.yaml") for p in copied)
         assert all("/style/" in p.replace("\\", "/") for p in copied)
         assert (dest_root / "references" / "style").is_dir()
         assert list((dest_root / "references" / "style").glob("*.pptx"))
-        assert list((dest_root / "references" / "style").glob("*.pdf"))
+        assert list((dest_root / "references" / "style").glob("*.docx"))
+        assert (dest_root / "references" / "style" / "brand.yaml").is_file()
+        # Must not seed sizing shells into an evaluator pack.
+        assert not list((dest_root / "references" / "style").glob("*Sizing*"))
         # Second seed must not overwrite / re-copy.
-        assert seed_template_references("_test_seed_pack_tmp", py_root=py_root) == []
+        assert (
+            seed_template_references(
+                "_test_seed_pack_tmp",
+                py_root=py_root,
+                template_family="equipment_evaluator",
+            )
+            == []
+        )
     finally:
         import shutil
 
         if dest_root.exists():
             shutil.rmtree(dest_root)
+
+
+def test_seed_sizing_style_family(py_root: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    from bpeai_creator_sdk.sme import seed_template_references, template_references_root
+
+    monkeypatch.delenv("BPEAI_TEMPLATE_REFERENCES_ROOT", raising=False)
+    monkeypatch.delenv("BPEAI_REFERENCES_ROOT", raising=False)
+    shared = template_references_root(py_root, template_family="equipment_sizing")
+    assert shared is not None
+    copied = seed_template_references(
+        "_sizing_seed_tmp",
+        py_root=tmp_path,
+        template_family="sizing",
+    )
+    dest = tmp_path / "knowledge" / "_sizing_seed_tmp" / "references" / "style"
+    assert copied
+    assert list(dest.glob("*.pptx"))
+    assert list(dest.glob("*.xlsx"))
+    assert list(dest.glob("*.docx"))
+    assert not list(dest.glob("*Evaluation*"))
 
 
 def test_load_mixing_stub(mixing_stub):
@@ -1699,11 +1742,24 @@ def test_seed_does_not_clobber_nested_style(tmp_path: Path, py_root: Path, monke
 
     monkeypatch.delenv("BPEAI_TEMPLATE_REFERENCES_ROOT", raising=False)
     monkeypatch.delenv("BPEAI_REFERENCES_ROOT", raising=False)
-    shared = template_references_root(py_root)
+    shared = template_references_root(py_root, template_family="equipment_evaluator")
     assert shared is not None
-    copied = seed_template_references("_nested_seed_tmp", py_root=tmp_path, template_root=shared)
+    copied = seed_template_references(
+        "_nested_seed_tmp",
+        py_root=tmp_path,
+        template_root=shared,
+        template_family="equipment_evaluator",
+    )
     dest = tmp_path / "knowledge" / "_nested_seed_tmp" / "references" / "style"
     assert copied
     assert dest.is_dir()
     assert list(dest.glob("*.pptx"))
-    assert seed_template_references("_nested_seed_tmp", py_root=tmp_path, template_root=shared) == []
+    assert (
+        seed_template_references(
+            "_nested_seed_tmp",
+            py_root=tmp_path,
+            template_root=shared,
+            template_family="equipment_evaluator",
+        )
+        == []
+    )

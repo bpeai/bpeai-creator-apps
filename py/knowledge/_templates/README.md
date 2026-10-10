@@ -1,37 +1,34 @@
 # Shared knowledge-pack style templates
 
 Committed visual shells used when a creator EI app bootstraps a **new** local
-knowledge pack under `py/knowledge/<pack_id>/`.
+knowledge pack. Style is organized **by template family**:
 
-| Path | Purpose |
-|------|---------|
-| `references/*.pptx` | Style guide for local evaluation decks |
-| `references/*.pdf` | Style guide for local evaluation reports |
+```
+references/style/
+  equipment_evaluator/   # evaluation DOCX / PPTX + brand.yaml
+  equipment_sizing/      # sizing DOCX / PPTX / XLSX + brand.yaml
+```
 
-## Naming policy
+On pack bootstrap, the SDK copies that family’s files into the pack’s
+`references/style/` (never overwrites files already there). Supported seeds:
+`.pptx`, `.pdf`, `.docx`, `.xlsx`, `brand.yaml`, and optional `logo.*`.
 
-**Any** `*.pptx` / `*.pdf` in `references/` is a seed template. Filenames do **not**
-need to match historical mixing examples.
+## Creator branding
 
-On pack bootstrap, SDK copies every matching file into
-`py/knowledge/<pack_id>/references/` (never overwrites files already there).
+Runtime colors/fonts/logo come from the **pack** copy of:
 
-After seed:
+- `references/style/brand.yaml`
+- `references/style/logo.png` (optional)
 
-- Prefer `pptx_outline.yaml` → `reference_decks` when choosing a PPTX style source
-- Else use any `*.pptx` present under the pack’s `references/`
-- Creators may replace or add decks with any name via
-  `python py/tools/manage_pptx_reference.py --pack <id> replace --src …`
+Office shells are visual examples; edit `brand.yaml` (+ logo) to distinguish
+deliverables. Reseed does not overwrite those files once present.
 
-Historical seed names (kept for continuity with website staging):
+## Legacy flat files
 
-- `chromatography_resin_slurry_tank_agitator_evaluation.pptx`
-- `media_preparation_vessel_mixing_evaluation.pdf`
-
-These are **style-only** (layout / fonts / colors). They are not domain content
-for filtration, chromatography, etc.
+Older flat `references/*.pptx` / `*.pdf` may still exist for continuity. Prefer
+the per-family `references/style/<template_family>/` layout above.
 
 ## Override
 
-Set `BPEAI_TEMPLATE_REFERENCES_ROOT` to point at another folder of `*.pptx`/`*.pdf`
-(e.g. a private SME library). Env wins over this committed folder.
+Set `BPEAI_TEMPLATE_REFERENCES_ROOT` to point at another style root (family
+subfolders or a single flat folder). Env wins over this committed tree.

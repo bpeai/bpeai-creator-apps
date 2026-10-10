@@ -8,6 +8,7 @@ from .app_paths import (
     split_family_leaf,
 )
 from .artifacts import (
+    ReportTheme,
     attach_evaluation_artifact_name,
     attach_sizing_artifact_name,
     attach_title_hero_image,
@@ -19,8 +20,10 @@ from .artifacts import (
     build_sizing_docx,
     build_sizing_xlsx,
     list_reference_decks,
+    load_report_theme,
     replace_reference_deck,
     resolve_reference_deck,
+    resolve_style_logo,
     write_evaluation_report_docx,
 )
 from .base import CreatorAppBase, default_creator_model, default_creator_provider
@@ -132,10 +135,13 @@ __all__ = [
     "format_selector_json",
     "format_selector_text",
     "list_reference_decks",
+    "load_report_theme",
     "llm_credentials_present",
     "load_agent_class",
     "load_dotenv",
     "load_knowledge_pack",
+    "ReportTheme",
+    "resolve_style_logo",
     "missing_report_headings",
     "normalize_options_fields",
     "openai_key_present",

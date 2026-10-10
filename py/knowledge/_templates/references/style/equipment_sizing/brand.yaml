@@ -1,0 +1,19 @@
+fonts:
+  display: Aptos Display
+  body: Aptos
+  docx_font: Calibri
+  xlsx_font: Calibri
+colors:
+  navy: "17324D"
+  teal: "00A398"
+  blue: "2962A3"
+  gray: "6B7280"
+  body: "1F2937"
+  white: "FFFFFF"
+  card_fill: "F3F6F9"
+  header_bg: "17324D"
+  muted: "5B6770"
+notes:
+  - Edit colors/fonts to match your company brand.
+  - Optional: drop logo.png (or .jpg/.jpeg/.webp) in this folder.
+  - Reseed does not overwrite an existing brand.yaml or logo.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 Agents call LLM to fill missing files; this module handles filesystem inventory,
 shape normalization for draft LLM output, shared structure examples, and seeding
-of visual template references (PPTX/PDF) into pack ``references/style/``.
+of visual template references into pack ``references/style/`` by ``template_family``.
 """
 
 import os
@@ -21,6 +21,46 @@ from .pack_loader import (
     knowledge_root,
     unwrap_loaded_component,
 )
+
+# Style shells seeded into each pack's references/style/ (by template family).
+STYLE_TEMPLATE_SUFFIXES = (".pptx", ".pdf", ".docx", ".xlsx")
+STYLE_BRAND_FILES = ("brand.yaml",)
+STYLE_LOGO_GLOBS = ("logo.png", "logo.jpg", "logo.jpeg", "logo.webp")
+
+# Canonical folder names under knowledge/_templates/references/style/<family>/.
+# Short aliases map website staging folders ("evaluator style") and shorthand.
+_STYLE_FAMILY_DIRS: Dict[str, str] = {
+    "equipment_evaluator": "equipment_evaluator",
+    "evaluator": "equipment_evaluator",
+    "equipment_sizing": "equipment_sizing",
+    "sizing": "equipment_sizing",
+}
+
+# Website staging folder names (under website/references/) → template_family id.
+_WEBSITE_STYLE_STAGING: Dict[str, str] = {
+    "evaluator style": "equipment_evaluator",
+    "sizing style": "equipment_sizing",
+    "equipment_evaluator": "equipment_evaluator",
+    "equipment_sizing": "equipment_sizing",
+}
+
+
+def normalize_style_family(template_family: str | None) -> str | None:
+    """Map ``template_family`` (or short alias) to a canonical style folder name."""
+    key = str(template_family or "").strip().lower().replace("-", "_")
+    if not key:
+        return None
+    if key in _STYLE_FAMILY_DIRS:
+        return _STYLE_FAMILY_DIRS[key]
+    # Allow future families: use the id as the folder name when it looks like one.
+    if re.fullmatch(r"[a-z][a-z0-9_]*", key):
+        return key
+    return None
+
+
+def style_family_dir_name(template_family: str | None) -> str | None:
+    """Return the directory name under ``references/style/`` for a family."""
+    return normalize_style_family(template_family)
 
 # Core files required by load_knowledge_pack; outlines are strongly recommended.
 OPTIONAL_PACK_FILES = (
@@ -1026,45 +1066,119 @@ def repair_existing_pack_components(
 
 def _folder_has_style_templates(path: Path) -> bool:
     try:
-        return path.is_dir() and (
-            any(path.glob("*.pptx")) or any(path.glob("*.pdf"))
-        )
+        if not path.is_dir():
+            return False
+        for suffix in STYLE_TEMPLATE_SUFFIXES:
+            if any(path.glob(f"*{suffix}")):
+                return True
+        for name in STYLE_BRAND_FILES:
+            if (path / name).is_file():
+                return True
+        return False
     except OSError:
         return False
 
 
-def template_references_root(py_root: Path | None = None) -> Path | None:
-    """Locate shared PPTX/PDF style templates for seeding new creator packs.
+def _resolve_family_under_style_root(style_root: Path, family: str | None) -> Path | None:
+    """Pick ``style_root/<family>/`` when family is set; else a flat style folder."""
+    if family:
+        candidate = style_root / family
+        if _folder_has_style_templates(candidate):
+            return candidate.resolve()
+        return None
+    if _folder_has_style_templates(style_root):
+        return style_root.resolve()
+    return None
+
+
+def _website_style_staging_dirs(website_references: Path, family: str | None) -> List[Path]:
+    """Map website/references staging folders to a template family."""
+    out: List[Path] = []
+    if not website_references.is_dir():
+        return out
+    for folder_name, mapped in _WEBSITE_STYLE_STAGING.items():
+        if family and mapped != family:
+            continue
+        cand = website_references / folder_name
+        if _folder_has_style_templates(cand):
+            out.append(cand)
+    return out
+
+
+def template_references_root(
+    py_root: Path | None = None,
+    *,
+    template_family: str | None = None,
+) -> Path | None:
+    """Locate shared style templates for seeding new creator packs.
 
     Preference order:
       1. ``BPEAI_TEMPLATE_REFERENCES_ROOT`` / ``BPEAI_REFERENCES_ROOT``
-      2. Committed ``py/knowledge/_templates/references/`` (this repo)
-      3. Website staging ``website/references`` / platform mixing pack references
+         (family subfolder when ``template_family`` is set, else flat files)
+      2. ``py/knowledge/_templates/references/style/<template_family>/``
+      3. Legacy flat ``py/knowledge/_templates/references/`` (no family)
+      4. Website staging ``website/references/<family> style/``
+      5. Legacy platform mixing pack ``references/``
 
-    Creator pack *YAML* is never copied from platform packs. Only visual template
-    documents (any ``*.pptx`` / ``*.pdf`` in the chosen folder) are seeded.
-    Filenames need not be standardized.
+    Only visual template documents (``.pptx`` / ``.pdf`` / ``.docx`` / ``.xlsx``)
+    in the chosen folder are seeded. Filenames need not be standardized.
     """
+    family = normalize_style_family(template_family)
+
+    def _from_env_or_path(base: Path) -> Path | None:
+        # Env may point at style/, references/, or a family folder itself.
+        if family:
+            for candidate in (
+                base / family,
+                base / "style" / family,
+                base / "references" / "style" / family,
+            ):
+                if _folder_has_style_templates(candidate):
+                    return candidate.resolve()
+        if _folder_has_style_templates(base):
+            return base.resolve()
+        nested = _resolve_family_under_style_root(base / "style", family)
+        if nested is not None:
+            return nested
+        nested = _resolve_family_under_style_root(base / "references" / "style", family)
+        if nested is not None:
+            return nested
+        return None
+
     for key in ("BPEAI_TEMPLATE_REFERENCES_ROOT", "BPEAI_REFERENCES_ROOT"):
         env = (os.getenv(key) or "").strip()
         if env:
-            p = Path(env)
-            if _folder_has_style_templates(p):
-                return p.resolve()
+            resolved = _from_env_or_path(Path(env))
+            if resolved is not None:
+                return resolved
 
     candidates: List[Path] = []
     if py_root is not None:
         base = Path(py_root).resolve()
-        # Preferred: committed shared shells in creator-apps (no bpeai clone needed).
-        candidates.append(base / "knowledge" / "_templates" / "references")
-        candidates.extend(
-            [
-                base.parent.parent / "bpeai" / "website" / "references",
-                base.parent.parent.parent / "bpeai" / "website" / "references",
-                base.parent.parent / "website" / "references",
-                Path.home() / "bpeai" / "website" / "references",
-            ]
-        )
+        style_root = base / "knowledge" / "_templates" / "references" / "style"
+        family_hit = _resolve_family_under_style_root(style_root, family)
+        if family_hit is not None:
+            return family_hit
+        # Legacy flat shared shells (pre-family layout).
+        if not family:
+            legacy = base / "knowledge" / "_templates" / "references"
+            if _folder_has_style_templates(legacy):
+                return legacy.resolve()
+            if _folder_has_style_templates(style_root):
+                return style_root.resolve()
+
+        website_refs = [
+            base.parent.parent / "bpeai" / "website" / "references",
+            base.parent.parent.parent / "bpeai" / "website" / "references",
+            base.parent.parent / "website" / "references",
+            Path.home() / "bpeai" / "website" / "references",
+        ]
+        for wr in website_refs:
+            for staging in _website_style_staging_dirs(wr, family):
+                return staging.resolve()
+            if not family and _folder_has_style_templates(wr):
+                candidates.append(wr)
+
         for rel in (
             ("bpeai", "py", "knowledge", "mixing", "references"),
             ("website", "bpeai", "py", "knowledge", "mixing", "references"),
@@ -1083,8 +1197,16 @@ def template_references_root(py_root: Path | None = None) -> Path | None:
         )
 
     for cand in candidates:
-        if _folder_has_style_templates(cand):
-            return cand.resolve()
+        hit = _from_env_or_path(cand) if family else (
+            cand.resolve() if _folder_has_style_templates(cand) else None
+        )
+        if hit is not None:
+            return hit
+        if family:
+            # Mixing legacy often has flat style files under references/ or style/.
+            for nested in (cand / "style", cand):
+                if _folder_has_style_templates(nested):
+                    return nested.resolve()
     return None
 
 
@@ -1093,11 +1215,12 @@ def seed_template_references(
     *,
     py_root: Path | None = None,
     template_root: Path | None = None,
+    template_family: str | None = None,
 ) -> List[str]:
-    """Copy shared style PPTX/PDF templates into ``<pack>/references/style/`` when missing.
+    """Copy family style shells into ``<pack>/references/style/`` when missing.
 
-    Copies every ``*.pptx`` / ``*.pdf`` from :func:`template_references_root`.
-    Filenames are preserved and need not follow a fixed naming convention.
+    Copies every supported style file from :func:`template_references_root`
+    (resolved for ``template_family``). Filenames are preserved.
     Does not overwrite creator-edited files. Returns relative paths that were copied.
     """
     from .pack_content import ensure_nested_references, style_dir
@@ -1105,18 +1228,43 @@ def seed_template_references(
     root = ensure_nested_references(pack_id, py_root=py_root)
     dest = style_dir(root)
 
-    src_root = Path(template_root) if template_root else template_references_root(py_root)
+    if template_root is not None:
+        src_root = Path(template_root)
+    else:
+        src_root = template_references_root(py_root, template_family=template_family)
     if src_root is None or not src_root.is_dir():
         return []
 
+    # If caller passed the style parent, dive into the family subfolder.
+    family = normalize_style_family(template_family)
+    if family and not _folder_has_style_templates(src_root):
+        nested = src_root / family
+        if _folder_has_style_templates(nested):
+            src_root = nested
+        else:
+            nested = src_root / "style" / family
+            if _folder_has_style_templates(nested):
+                src_root = nested
+
     copied: List[str] = []
-    for pattern in ("*.pptx", "*.pdf"):
-        for src in sorted(src_root.glob(pattern)):
+    for suffix in STYLE_TEMPLATE_SUFFIXES:
+        for src in sorted(src_root.glob(f"*{suffix}")):
             target = dest / src.name
             if target.is_file():
                 continue
             shutil.copy2(src, target)
             copied.append(f"references/style/{src.name}")
+
+    # Brand config + optional logo (never overwrite creator edits).
+    for name in (*STYLE_BRAND_FILES, *STYLE_LOGO_GLOBS):
+        src = src_root / name
+        if not src.is_file():
+            continue
+        target = dest / name
+        if target.is_file():
+            continue
+        shutil.copy2(src, target)
+        copied.append(f"references/style/{name}")
 
     # Register PPTX decks in pptx_outline.yaml when present.
     outline_path = root / "pptx_outline.yaml"
@@ -1227,8 +1375,12 @@ def ensure_creator_pack_assets(
     *,
     py_root: Path | None = None,
     equipment_system: str = "",
+    template_family: str | None = None,
 ) -> Tuple[List[str], List[str]]:
     """Repair draft YAML shapes, nest references/, and seed style templates.
+
+    Style shells are chosen by ``template_family`` (e.g. ``equipment_evaluator``,
+    ``equipment_sizing``) from ``knowledge/_templates/references/style/<family>/``.
 
     Returns ``(repaired_files, seeded_reference_paths)``.
     """
@@ -1244,5 +1396,7 @@ def ensure_creator_pack_assets(
     if align_pack_meta_with_scenarios(pack_id, py_root=py_root):
         if "pack.yaml" not in repaired:
             repaired.append("pack.yaml")
-    seeded = seed_template_references(pack_id, py_root=py_root)
+    seeded = seed_template_references(
+        pack_id, py_root=py_root, template_family=template_family
+    )
     return repaired, seeded

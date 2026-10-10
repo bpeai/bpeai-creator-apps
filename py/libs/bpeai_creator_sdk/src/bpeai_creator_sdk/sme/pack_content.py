@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Creator technical content under ``references/content/`` (lightweight RAG).
 
-Style shells live in ``references/style/``. Source PDFs/docs are hashed, extracted,
+Style shells live in ``references/style/`` (seeded per ``template_family``). Source PDFs/docs are hashed, extracted,
 chunked, and stored in ``references/content_index.yaml`` so portal uploads can ship
 text without binaries. Retrieval is keyword overlap — a supplement to Serper, not a
 replacement.
@@ -70,7 +70,8 @@ CONTENT_FOLDER_PROMPT = (
     "re-run so they are indexed as supplemental LLM context. Sizing packs: "
     "first `local_chat` also drafts `methods.md`, `assumptions.md`, and "
     "`basis.csv` in that folder for SME review (existing files are not "
-    "overwritten). Style PPTX/PDF shells belong in `references/style/`. "
+    "overwritten). Style shells (PPTX/PDF/DOCX/XLSX) belong in `references/style/` "
+    "(seeded from `knowledge/_templates/references/style/<template_family>/`). "
     "At the local_chat prompt enter system name and application/domain, "
     "for example: CIP return pump, biopharmaceutical."
 )

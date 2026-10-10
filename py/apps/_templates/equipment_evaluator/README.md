@@ -87,8 +87,16 @@ Artifacts (markdown + Word `.docx` + optional PPTX) write under `./artifacts/` (
 
 ## Reference PPTX and creator content
 
-Shared style shells live in `py/knowledge/_templates/references/` (any `*.pptx` /
-`*.pdf` name). Bootstrap copies them into each new pack’s `references/style/`.
+Shared style shells live in
+`py/knowledge/_templates/references/style/equipment_evaluator/` (and
+`…/equipment_sizing/` for sizing apps). Bootstrap copies that family’s
+`.pptx` / `.pdf` / `.docx` / `.xlsx` plus `brand.yaml` into each new pack’s
+`references/style/` (never overwriting creator edits).
+
+**Company branding:** edit the pack’s `references/style/brand.yaml` (colors/fonts)
+and optionally drop `logo.png` (or `.jpg` / `.jpeg` / `.webp`). Generated
+DOCX/PPTX/XLSX read those at render time. Office shells are visual examples only.
+
 Optional SME PDFs and notes go in `references/content/` — they are indexed and
 used as **supplemental** LLM context next to Serper web search (they do not replace it).
 

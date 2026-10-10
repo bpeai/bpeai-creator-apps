@@ -519,15 +519,31 @@ def _write_markdown_artifact(result: Dict[str, Any], *, py_root: Path) -> Path |
     return target
 
 
-def _write_docx_artifact(result: Dict[str, Any]) -> Path | None:
+def _write_docx_artifact(
+    result: Dict[str, Any],
+    *,
+    pack: Any = None,
+    template_family: str = "equipment_sizing",
+) -> Path | None:
     md = (result.get("datasheet_markdown") or "").strip()
     if not md and not result.get("selected_model") and not result.get("key_specs"):
         return None
     target = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(result)}.docx"
-    return build_sizing_docx(result, output_path=target)
+    return build_sizing_docx(
+        result,
+        output_path=target,
+        pack_path=getattr(pack, "path", None),
+        template_family=template_family,
+        outline=getattr(pack, "pptx_outline", None),
+    )
 
 
-def _write_xlsx_artifact(result: Dict[str, Any]) -> Path | None:
+def _write_xlsx_artifact(
+    result: Dict[str, Any],
+    *,
+    pack: Any = None,
+    template_family: str = "equipment_sizing",
+) -> Path | None:
     if not (
         result.get("calculation_workbook")
         or result.get("excel_ready_table")
@@ -537,24 +553,37 @@ def _write_xlsx_artifact(result: Dict[str, Any]) -> Path | None:
     ):
         return None
     target = Path.cwd() / "artifacts" / f"{_sizing_artifact_basename(result)}.xlsx"
-    return build_sizing_xlsx(result, output_path=target)
+    return build_sizing_xlsx(
+        result,
+        output_path=target,
+        pack_path=getattr(pack, "path", None),
+        template_family=template_family,
+        outline=getattr(pack, "pptx_outline", None),
+    )
 
 
-def _attach_sizing_file_artifacts(agent: Any, result: Dict[str, Any], *, py_root: Path) -> Dict[str, Any]:
+def _attach_sizing_file_artifacts(
+    agent: Any,
+    result: Dict[str, Any],
+    *,
+    py_root: Path,
+    pack: Any = None,
+) -> Dict[str, Any]:
+    family = str(getattr(agent, "template_family", "") or "equipment_sizing")
     md_path = _write_markdown_artifact(result, py_root=py_root)
     artifacts = dict(result.get("artifacts") or {})
     if md_path:
         artifacts["markdown_path"] = str(md_path)
     try:
         agent.status("Writing sizing Word report…")
-        docx_path = _write_docx_artifact(result)
+        docx_path = _write_docx_artifact(result, pack=pack, template_family=family)
         if docx_path:
             artifacts["docx_path"] = str(docx_path.resolve())
     except Exception as exc:
         agent.status(f"DOCX export skipped ({exc})")
     try:
         agent.status("Writing sizing Excel workbook…")
-        xlsx_path = _write_xlsx_artifact(result)
+        xlsx_path = _write_xlsx_artifact(result, pack=pack, template_family=family)
         if xlsx_path:
             artifacts["xlsx_path"] = str(xlsx_path.resolve())
     except Exception as exc:
@@ -733,7 +762,9 @@ class EquipmentSizingAgent(CreatorAppBase):
                 reuse_inherited_dir=True,
             )
             if result.get("phase") == "evaluation":
-                result = _attach_sizing_file_artifacts(self, result, py_root=py_root)
+                result = _attach_sizing_file_artifacts(
+                    self, result, py_root=py_root, pack=pack
+                )
             result.setdefault("template_family", getattr(self, "template_family", "equipment_sizing"))
             return result
 
@@ -826,7 +857,9 @@ class EquipmentSizingAgent(CreatorAppBase):
             equipment_tag=str(inputs.get("equipment_tag") or "").strip(),
         )
         if result.get("phase") == "evaluation":
-            result = _attach_sizing_file_artifacts(self, result, py_root=py_root)
+            result = _attach_sizing_file_artifacts(
+                self, result, py_root=py_root, pack=pack
+            )
         return result
 
     def _ensure_knowledge_pack(
@@ -841,12 +874,13 @@ class EquipmentSizingAgent(CreatorAppBase):
         """Load pack; LLM-create any missing YAML/README as draft-for-approval.
 
         Creator-owned pack content is drafted locally (not copied from website packs).
-        Style PPTX/PDF shells seed into ``references/style/``. Optional SME documents
-        go in ``references/content/`` and are indexed as supplemental LLM context.
+        Style shells seed into ``references/style/`` from the sizing family stub.
+        Optional SME documents go in ``references/content/`` and are indexed as
+        supplemental LLM context.
         """
         notes: List[str] = []
         app_id = str(getattr(self, "app_id", "") or pack_id).strip() or pack_id
-        family = str(getattr(self, "template_family", "") or "").strip()
+        family = str(getattr(self, "template_family", "") or "equipment_sizing").strip()
         align_id = f"{family}/{app_id}" if family and family not in app_id else app_id
         aligned = align_pack_to_app(align_id, py_root=py_root, pack_id=pack_id)
         pack_id = aligned.pack_id
@@ -858,7 +892,7 @@ class EquipmentSizingAgent(CreatorAppBase):
 
         eq = (equipment_system or getattr(self, "equipment_system", "") or pack_id).strip() or pack_id
         repaired, seeded = ensure_creator_pack_assets(
-            pack_id, py_root=py_root, equipment_system=eq
+            pack_id, py_root=py_root, equipment_system=eq, template_family=family
         )
         if repaired:
             notes.append(
@@ -929,7 +963,7 @@ class EquipmentSizingAgent(CreatorAppBase):
                 )
 
             _, seeded_after = ensure_creator_pack_assets(
-                pack_id, py_root=py_root, equipment_system=eq
+                pack_id, py_root=py_root, equipment_system=eq, template_family=family
             )
             if seeded_after:
                 notes.append(
@@ -2099,6 +2133,9 @@ class EquipmentSizingAgent(CreatorAppBase):
             slide_pack=slide_pack,
             pack_path=pack.path,
             knowledge_pack=pack,
+            template_family=str(
+                getattr(self, "template_family", "") or "equipment_sizing"
+            ),
         )
         result = dict(evaluation)
         artifacts = dict(result.get("artifacts") or {})

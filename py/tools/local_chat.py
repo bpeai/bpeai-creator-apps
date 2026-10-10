@@ -91,7 +91,7 @@ def _print_run_instructions(app_id: str) -> None:
     print(
         "Optional SME files (.pdf / .md / .txt / .csv — not .docx): copy into "
         f"{content} if needed, then re-run this command to index them. "
-        "Style PPTX/PDF shells go in references/style/. "
+        "Style shells go in references/style/ (seeded per template_family). "
         "Empty content/ is valid; first run also LLM-bootstraps a draft pack "
         "with your .env keys when YAML is missing.",
         file=sys.stderr,

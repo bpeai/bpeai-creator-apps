@@ -1,9 +1,10 @@
 """SME/creator helpers for managing knowledge-pack reference PPTX decks.
 
 Style decks live under ``py/knowledge/<pack>/references/style/`` (legacy files
-may still sit directly in ``references/``). The evaluator renderer recreates that
-look in code; replacing a reference PPTX lets SMEs update the target visual
-system and keep pack docs in sync.
+may still sit directly in ``references/``). Shared shells are seeded per
+``template_family`` from ``knowledge/_templates/references/style/<family>/``.
+The evaluator/sizing renderers recreate that look in code; replacing a reference
+PPTX lets SMEs update the target visual system and keep pack docs in sync.
 """
 
 from __future__ import annotations
@@ -25,12 +26,15 @@ def list_reference_decks(
     pack_path: Path | str,
     *,
     outline: Mapping[str, Any] | None = None,
+    template_family: str | None = None,
+    py_root: Path | str | None = None,
 ) -> List[Dict[str, Any]]:
     """List reference PPTX files for a knowledge pack.
 
     Prefer ``pptx_outline.yaml`` ``reference_decks`` entries when present; also
     include any extra ``*.pptx`` found under ``references/style/`` and legacy
-    ``references/*.pptx``.
+    ``references/*.pptx``. When the pack has no decks and ``template_family`` is
+    set, include the shared stub deck for that family (not copied yet).
     """
     root = Path(pack_path)
     ref_root = references_dir(root)
@@ -44,14 +48,14 @@ def list_reference_decks(
     seen: set[str] = set()
     out: List[Dict[str, Any]] = []
 
-    def _add(rel: str, *, declared_entry: bool) -> None:
+    def _add(rel: str, *, declared_entry: bool, path_override: Path | None = None) -> None:
         key = rel.replace("\\", "/").lower()
         if key in seen:
             return
         seen.add(key)
-        path = root / rel if not Path(rel).is_absolute() else Path(rel)
+        path = path_override or (root / rel if not Path(rel).is_absolute() else Path(rel))
         # Allow "references/foo.pptx" or bare "foo.pptx"
-        if not path.is_file() and not rel.startswith("references/"):
+        if path_override is None and not path.is_file() and not rel.startswith("references/"):
             for folder in (style_root, ref_root):
                 alt = folder / Path(rel).name
                 if alt.is_file():
@@ -78,6 +82,24 @@ def list_reference_decks(
         for pptx in sorted(ref_root.glob("*.pptx")):
             _add(f"references/{pptx.name}", declared_entry=False)
 
+    if not out and template_family:
+        try:
+            from bpeai_creator_sdk.sme.pack_bootstrap import template_references_root
+
+            stub = template_references_root(
+                Path(py_root) if py_root is not None else None,
+                template_family=template_family,
+            )
+        except Exception:
+            stub = None
+        if stub is not None and stub.is_dir():
+            for pptx in sorted(stub.glob("*.pptx")):
+                _add(
+                    f"references/style/{pptx.name}",
+                    declared_entry=False,
+                    path_override=pptx,
+                )
+
     return out
 
 
@@ -86,12 +108,19 @@ def resolve_reference_deck(
     name_or_path: str,
     *,
     outline: Mapping[str, Any] | None = None,
+    template_family: str | None = None,
+    py_root: Path | str | None = None,
 ) -> Path:
     """Resolve a reference deck by file name or relative path."""
     needle = (name_or_path or "").strip().replace("\\", "/")
     if not needle:
         raise ValueError("name_or_path is required")
-    for entry in list_reference_decks(pack_path, outline=outline):
+    for entry in list_reference_decks(
+        pack_path,
+        outline=outline,
+        template_family=template_family,
+        py_root=py_root,
+    ):
         if entry["name"].lower() == Path(needle).name.lower():
             path = Path(entry["path"])
             if path.is_file():
@@ -107,6 +136,20 @@ def resolve_reference_deck(
     legacy = references_dir(pack_path) / Path(needle).name
     if legacy.is_file():
         return legacy.resolve()
+    if template_family:
+        try:
+            from bpeai_creator_sdk.sme.pack_bootstrap import template_references_root
+
+            stub = template_references_root(
+                Path(py_root) if py_root is not None else None,
+                template_family=template_family,
+            )
+        except Exception:
+            stub = None
+        if stub is not None:
+            direct = stub / Path(needle).name
+            if direct.is_file():
+                return direct.resolve()
     raise FileNotFoundError(f"Reference PPTX not found: {name_or_path}")
 
 

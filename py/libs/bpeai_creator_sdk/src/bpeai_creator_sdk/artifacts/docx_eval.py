@@ -33,14 +33,31 @@ from .report_content import (
     _synthesize_markdown,
 )
 
-NAVY = "1F4E79"
+from .theme import ReportTheme, load_report_theme
+
+# Defaults align with family style shells; rebound per build from ReportTheme.
+NAVY = "17324D"
 WHITE = "FFFFFF"
 MUTED = "5B6770"
-BODY = "222222"
-HEADER_BG = "1F4E79"
+BODY = "1F2937"
+HEADER_BG = "17324D"
 ROW_ALT = "F5F8FC"
 CALLOUT_BG = "E8EFF7"
 GRID = "C5CDD4"
+DOCX_FONT = "Calibri"
+
+
+def _bind_theme(theme: ReportTheme) -> None:
+    global NAVY, WHITE, MUTED, BODY, HEADER_BG, ROW_ALT, CALLOUT_BG, GRID, DOCX_FONT
+    NAVY = theme.navy
+    WHITE = theme.white
+    MUTED = theme.muted
+    BODY = theme.body
+    HEADER_BG = theme.header_bg or theme.navy
+    ROW_ALT = theme.row_alt
+    CALLOUT_BG = theme.callout_bg
+    GRID = theme.grid
+    DOCX_FONT = theme.docx_font or "Calibri"
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
@@ -91,7 +108,7 @@ def _set_run(run, *, size_pt: float, bold: bool = False, color: str = BODY) -> N
     run.bold = bold
     run.font.size = Pt(size_pt)
     run.font.color.rgb = _rgb(color)
-    run.font.name = "Calibri"
+    run.font.name = DOCX_FONT
 
 
 def _add_paragraph(
@@ -212,12 +229,21 @@ def _add_md_table_or(
         _add_table(doc, headers, rows)
 
 
-def _set_header_footer(doc, header_title: str) -> None:
+def _set_header_footer(doc, header_title: str, *, logo_path: Path | None = None) -> None:
+    from docx.shared import Inches
+
     section = doc.sections[0]
     header = section.header
     header.is_linked_to_previous = False
     hp = header.paragraphs[0]
     hp.text = ""
+    if logo_path is not None and Path(logo_path).is_file():
+        try:
+            run = hp.add_run()
+            run.add_picture(str(logo_path), height=Inches(0.28))
+            hp.add_run("  ")
+        except Exception:
+            pass
     run = hp.add_run(header_title[:160])
     _set_run(run, size_pt=8, color=MUTED)
     footer = section.footer
@@ -569,95 +595,123 @@ def write_evaluation_report_docx(
     output_path: Path | str,
     *,
     title: str | None = None,
+    pack_path: Path | str | None = None,
+    template_family: str | None = None,
+    outline: Mapping[str, Any] | None = None,
 ) -> Path:
     """Render the evaluation as an editable Word report."""
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.shared import Inches, Pt, RGBColor
 
-    out = Path(output_path)
-    if out.suffix.lower() != ".docx":
-        out = out.with_suffix(".docx")
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    markdown = (result.get("datasheet_markdown") or "").strip() or _synthesize_markdown(result)
-    display_title = _display_title(result, title)
-    system = display_title
-    dir_code = str(result.get("dir_code") or "").strip()
-    application = str(result.get("application") or "").strip()
-    item_noun = _item_noun(result)
-    if str(result.get("schema_version") or "") == "equipment_sizing_v1":
-        subtitle = f"Preliminary {item_noun} sizing and recommended basis of design"
-    else:
-        subtitle = f"Preliminary {item_noun}-system option evaluation and recommended basis of design"
-    header_title = display_title
-    if dir_code:
-        header_title += f" • Basis: user DIR code {dir_code}"
-    recommendation = _extract_recommendation(result, markdown)
-
-    doc = Document()
-    section = doc.sections[0]
-    section.page_width = Inches(8.5)
-    section.page_height = Inches(11)
-    section.left_margin = Inches(0.7)
-    section.right_margin = Inches(0.7)
-    section.top_margin = Inches(0.85)
-    section.bottom_margin = Inches(0.7)
-    _set_header_footer(doc, header_title)
-
-    style = doc.styles["Normal"]
-    style.font.name = "Calibri"
-    style.font.size = Pt(10)
-    style.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
-
-    title_p = doc.add_paragraph()
-    title_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    title_run = title_p.add_run(display_title)
-    _set_run(title_run, size_pt=20, bold=True, color=NAVY)
-    title_p.paragraph_format.space_after = Pt(2)
-
-    _add_paragraph(doc, subtitle, size_pt=10, color=MUTED, space_after=8)
-
-    attr_pairs = _key_spec_pairs(result)
-    if attr_pairs:
-        chips = doc.add_table(rows=2, cols=len(attr_pairs))
-        chips.style = "Table Grid"
-        for i, (label, value) in enumerate(attr_pairs):
-            _set_cell_text(chips.rows[0].cells[i], label, header=True)
-            _set_cell_text(chips.rows[1].cells[i], value)
-
-    meta = [c for c in (
-        f"Validated DIR: {dir_code}" if dir_code else "",
-        f"Application assumption: {application}" if application else "",
-    ) if c]
-    if meta:
-        meta_table = doc.add_table(rows=1, cols=len(meta))
-        meta_table.style = "Table Grid"
-        for i, cell_text in enumerate(meta):
-            _shade(meta_table.rows[0].cells[i], CALLOUT_BG)
-            _set_cell_text(meta_table.rows[0].cells[i], cell_text)
-            _shade(meta_table.rows[0].cells[i], CALLOUT_BG)
-            if meta_table.rows[0].cells[i].paragraphs[0].runs:
-                _set_run(meta_table.rows[0].cells[i].paragraphs[0].runs[0], size_pt=9, bold=True, color=NAVY)
-        doc.add_paragraph("")
-
-    if recommendation:
-        _add_callout(doc, "Recommendation in one line", recommendation)
-
-    if _has_structured_eval(result):
-        _append_structured_report(doc, result, markdown)
-    else:
-        _append_unstructured_markdown(doc, markdown, system, display_title)
-
+    theme = load_report_theme(
+        pack_path,
+        template_family=template_family
+        or str(result.get("template_family") or "")
+        or None,
+        outline=outline,
+    )
+    previous = ReportTheme(
+        navy=NAVY,
+        white=WHITE,
+        muted=MUTED,
+        body=BODY,
+        header_bg=HEADER_BG,
+        row_alt=ROW_ALT,
+        callout_bg=CALLOUT_BG,
+        grid=GRID,
+        docx_font=DOCX_FONT,
+    )
+    _bind_theme(theme)
     try:
-        doc.save(str(out))
-        return out
-    except PermissionError:
-        from datetime import datetime
+        out = Path(output_path)
+        if out.suffix.lower() != ".docx":
+            out = out.with_suffix(".docx")
+        out.parent.mkdir(parents=True, exist_ok=True)
 
-        stamped = out.with_name(f"{out.stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{out.suffix}")
-        doc.save(str(stamped))
-        return stamped
+        markdown = (result.get("datasheet_markdown") or "").strip() or _synthesize_markdown(result)
+        display_title = _display_title(result, title)
+        system = display_title
+        dir_code = str(result.get("dir_code") or "").strip()
+        application = str(result.get("application") or "").strip()
+        item_noun = _item_noun(result)
+        if str(result.get("schema_version") or "") == "equipment_sizing_v1":
+            subtitle = f"Preliminary {item_noun} sizing and recommended basis of design"
+        else:
+            subtitle = f"Preliminary {item_noun}-system option evaluation and recommended basis of design"
+        header_title = display_title
+        if dir_code:
+            header_title += f" • Basis: user DIR code {dir_code}"
+        recommendation = _extract_recommendation(result, markdown)
+
+        doc = Document()
+        section = doc.sections[0]
+        section.page_width = Inches(8.5)
+        section.page_height = Inches(11)
+        section.left_margin = Inches(0.7)
+        section.right_margin = Inches(0.7)
+        section.top_margin = Inches(0.85)
+        section.bottom_margin = Inches(0.7)
+        _set_header_footer(doc, header_title, logo_path=theme.logo_path)
+
+        style = doc.styles["Normal"]
+        style.font.name = DOCX_FONT
+        style.font.size = Pt(10)
+        body_hex = BODY
+        style.font.color.rgb = RGBColor(
+            int(body_hex[0:2], 16), int(body_hex[2:4], 16), int(body_hex[4:6], 16)
+        )
+
+        title_p = doc.add_paragraph()
+        title_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        title_run = title_p.add_run(display_title)
+        _set_run(title_run, size_pt=20, bold=True, color=NAVY)
+        title_p.paragraph_format.space_after = Pt(2)
+
+        _add_paragraph(doc, subtitle, size_pt=10, color=MUTED, space_after=8)
+
+        attr_pairs = _key_spec_pairs(result)
+        if attr_pairs:
+            chips = doc.add_table(rows=2, cols=len(attr_pairs))
+            chips.style = "Table Grid"
+            for i, (label, value) in enumerate(attr_pairs):
+                _set_cell_text(chips.rows[0].cells[i], label, header=True)
+                _set_cell_text(chips.rows[1].cells[i], value)
+
+        meta = [c for c in (
+            f"Validated DIR: {dir_code}" if dir_code else "",
+            f"Application assumption: {application}" if application else "",
+        ) if c]
+        if meta:
+            meta_table = doc.add_table(rows=1, cols=len(meta))
+            meta_table.style = "Table Grid"
+            for i, cell_text in enumerate(meta):
+                _shade(meta_table.rows[0].cells[i], CALLOUT_BG)
+                _set_cell_text(meta_table.rows[0].cells[i], cell_text)
+                _shade(meta_table.rows[0].cells[i], CALLOUT_BG)
+                if meta_table.rows[0].cells[i].paragraphs[0].runs:
+                    _set_run(meta_table.rows[0].cells[i].paragraphs[0].runs[0], size_pt=9, bold=True, color=NAVY)
+            doc.add_paragraph("")
+
+        if recommendation:
+            _add_callout(doc, "Recommendation in one line", recommendation)
+
+        if _has_structured_eval(result):
+            _append_structured_report(doc, result, markdown)
+        else:
+            _append_unstructured_markdown(doc, markdown, system, display_title)
+
+        try:
+            doc.save(str(out))
+            return out
+        except PermissionError:
+            from datetime import datetime
+
+            stamped = out.with_name(f"{out.stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{out.suffix}")
+            doc.save(str(stamped))
+            return stamped
+    finally:
+        _bind_theme(previous)
 
 
 def build_evaluation_docx(
@@ -665,9 +719,19 @@ def build_evaluation_docx(
     *,
     output_path: Path | str,
     title: str | None = None,
+    pack_path: Path | str | None = None,
+    template_family: str | None = None,
+    outline: Mapping[str, Any] | None = None,
 ) -> Path:
     """Public SDK entry used by evaluator and sizing templates."""
-    return write_evaluation_report_docx(result, output_path, title=title)
+    return write_evaluation_report_docx(
+        result,
+        output_path,
+        title=title,
+        pack_path=pack_path,
+        template_family=template_family,
+        outline=outline,
+    )
 
 
 def evaluation_docx_text(path: Path | str) -> str:

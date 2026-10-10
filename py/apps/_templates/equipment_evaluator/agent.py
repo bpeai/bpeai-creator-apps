@@ -411,12 +411,23 @@ def _write_markdown_artifact(result: Dict[str, Any], *, py_root: Path) -> Path |
     return target
 
 
-def _write_docx_artifact(result: Dict[str, Any]) -> Path | None:
+def _write_docx_artifact(
+    result: Dict[str, Any],
+    *,
+    pack: Any = None,
+    template_family: str = "equipment_evaluator",
+) -> Path | None:
     md = (result.get("datasheet_markdown") or "").strip()
     if not md and not result.get("selected_model"):
         return None
     target = Path.cwd() / "artifacts" / f"{_artifact_stem(result)}.docx"
-    return build_evaluation_docx(result, output_path=target)
+    return build_evaluation_docx(
+        result,
+        output_path=target,
+        pack_path=getattr(pack, "path", None),
+        template_family=template_family,
+        outline=getattr(pack, "pptx_outline", None),
+    )
 
 
 class EquipmentEvaluatorAgent(CreatorAppBase):
@@ -431,6 +442,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
     # HANDSHAKE: manifest.id / python_entrypoint / hub routing must match these ids.
     app_id = "equipment_evaluator"
     knowledge_pack_id = "equipment_evaluator"
+    template_family = "equipment_evaluator"
     # Hint for pack bootstrap when the pack folder does not exist yet.
     equipment_system = "mixing"
     creator_display_name = "Your Name"
@@ -622,7 +634,13 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             try:
                 # HANDSHAKE: self.status(...) → SSE event "status" (progress line).
                 self.status("Writing Word evaluation report…")
-                docx_path = _write_docx_artifact(result)
+                docx_path = _write_docx_artifact(
+                    result,
+                    pack=pack,
+                    template_family=str(
+                        getattr(self, "template_family", "") or "equipment_evaluator"
+                    ),
+                )
                 if docx_path:
                     artifacts["docx_path"] = str(docx_path.resolve())
             except Exception as exc:
@@ -643,11 +661,13 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         """Load pack; LLM-create any missing YAML/README as draft-for-approval.
 
         Creator-owned pack content is drafted locally (not copied from website packs).
-        Style PPTX/PDF shells seed into ``references/style/``. Optional SME documents
-        go in ``references/content/`` and are indexed as supplemental LLM context.
+        Style shells seed into ``references/style/`` from the evaluator family stub.
+        Optional SME documents go in ``references/content/`` and are indexed as
+        supplemental LLM context.
         """
         notes: List[str] = []
         app_id = str(getattr(self, "app_id", "") or pack_id).strip() or pack_id
+        family = str(getattr(self, "template_family", "") or "equipment_evaluator").strip()
         aligned = align_pack_to_app(app_id, py_root=py_root, pack_id=pack_id)
         pack_id = aligned.pack_id
         notes.extend(aligned.notes)
@@ -658,7 +678,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
 
         eq = (equipment_system or getattr(self, "equipment_system", "") or pack_id).strip() or pack_id
         repaired, seeded = ensure_creator_pack_assets(
-            pack_id, py_root=py_root, equipment_system=eq
+            pack_id, py_root=py_root, equipment_system=eq, template_family=family
         )
         if repaired:
             notes.append(
@@ -707,7 +727,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
                 )
 
             _, seeded_after = ensure_creator_pack_assets(
-                pack_id, py_root=py_root, equipment_system=eq
+                pack_id, py_root=py_root, equipment_system=eq, template_family=family
             )
             if seeded_after:
                 notes.append(
@@ -1594,6 +1614,9 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             slide_pack=slide_pack,
             pack_path=pack.path,
             knowledge_pack=pack,
+            template_family=str(
+                getattr(self, "template_family", "") or "equipment_evaluator"
+            ),
         )
         result = dict(evaluation)
         artifacts = dict(result.get("artifacts") or {})

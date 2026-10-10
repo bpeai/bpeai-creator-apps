@@ -17,11 +17,12 @@ from .report_content import _is_table_divider, _split_table_row
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _CALC_CELL = re.compile(r"\bC\d+\b")
 
-_HEADER = "17365D"
+_HEADER = "17324D"
 _SECTION = "D9EAF7"
 _YELLOW = "FFF2CC"
 _BLUE = "EAF3F8"
 _WHITE = "FFFFFF"
+_XLSX_FONT = "Calibri"
 
 
 def parse_markdown_table(markdown: str) -> tuple[list[str], list[list[str]]]:
@@ -48,6 +49,9 @@ def build_sizing_xlsx(
     result: Mapping[str, Any],
     *,
     output_path: Path | str,
+    pack_path: Path | str | None = None,
+    template_family: str | None = None,
+    outline: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write a four-sheet workbook whose result cells are Excel formulas."""
     try:
@@ -56,6 +60,19 @@ def build_sizing_xlsx(
         from openpyxl.utils import get_column_letter
     except ImportError as exc:  # pragma: no cover - optional local dep
         raise RuntimeError("openpyxl is required to write the sizing workbook") from exc
+
+    from .theme import load_report_theme
+
+    theme = load_report_theme(
+        pack_path,
+        template_family=template_family
+        or str(result.get("template_family") or "equipment_sizing")
+        or "equipment_sizing",
+        outline=outline,
+    )
+    header_hex = theme.header_bg or theme.navy or _HEADER
+    white_hex = theme.white or _WHITE
+    font_name = theme.xlsx_font or _XLSX_FONT
 
     spec = result.get("calculation_workbook")
     if not isinstance(spec, Mapping):
@@ -85,9 +102,9 @@ def build_sizing_xlsx(
         out = out.with_suffix(".xlsx")
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    header_fill = PatternFill("solid", fgColor=_HEADER)
-    header_font = Font(color=_WHITE, bold=True, name="Calibri")
-    title_font = Font(bold=True, size=14, color=_HEADER, name="Calibri")
+    header_fill = PatternFill("solid", fgColor=header_hex)
+    header_font = Font(color=white_hex, bold=True, name=font_name)
+    title_font = Font(bold=True, size=14, color=header_hex, name=font_name)
     section_fill = PatternFill("solid", fgColor=_SECTION)
     yellow = PatternFill("solid", fgColor=_YELLOW)
     blue = PatternFill("solid", fgColor=_BLUE)

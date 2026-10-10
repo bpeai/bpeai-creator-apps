@@ -1,7 +1,8 @@
-"""Build 7-slide mixing evaluation decks matching the Life Science Mixing Systems Expert style.
+"""Build 7-slide evaluation / sizing decks matching the family style references.
 
-Visual system derived from:
-``py/knowledge/mixing/references/chromatography_resin_slurry_tank_agitator_evaluation.pptx``
+Visual system defaults match
+``py/knowledge/_templates/references/style/<family>/`` shells. Pack
+``references/style/brand.yaml`` + optional ``logo.*`` override colors/fonts/logo.
 """
 
 from __future__ import annotations
@@ -11,8 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping
 
 from .names import deliverable_title_lines
+from .theme import ReportTheme, load_report_theme
 
-# Palette (reference deck)
+# Palette (reference deck) — rebound per build from ReportTheme
 NAVY = "17324D"
 TEAL = "00A398"
 BLUE = "2962A3"
@@ -26,6 +28,46 @@ PANEL_RIGHT = "F7FAFC"
 
 FONT_DISPLAY = "Aptos Display"
 FONT_BODY = "Aptos"
+
+
+def _bind_theme(theme: ReportTheme) -> None:
+    """Point module color/font aliases at the active pack theme for this build."""
+    global NAVY, TEAL, BLUE, GRAY, BODY, WHITE, CARD_FILL
+    global CHIP_BLUE_FILL, CHIP_TEAL_FILL, PANEL_RIGHT, FONT_DISPLAY, FONT_BODY
+    NAVY = theme.navy
+    TEAL = theme.teal
+    BLUE = theme.blue
+    GRAY = theme.gray
+    BODY = theme.body
+    WHITE = theme.white
+    CARD_FILL = theme.card_fill
+    CHIP_BLUE_FILL = theme.chip_blue_fill
+    CHIP_TEAL_FILL = theme.chip_teal_fill
+    PANEL_RIGHT = theme.panel_right
+    FONT_DISPLAY = theme.display_font
+    FONT_BODY = theme.body_font
+
+
+def _add_brand_logo(slide, logo_path: Path | None, *, left: int, top: int, max_w: int, max_h: int) -> None:
+    """Place an optional pack logo (contain, never stretch). Fail soft if unreadable."""
+    if logo_path is None or not Path(logo_path).is_file():
+        return
+    try:
+        from PIL import Image
+        from pptx.util import Emu
+
+        with Image.open(logo_path) as image:
+            scale = min(max_w / image.width, max_h / image.height)
+            w, h = max(1, round(image.width * scale)), max(1, round(image.height * scale))
+        slide.shapes.add_picture(
+            str(logo_path),
+            Emu(left),
+            Emu(top),
+            width=Emu(w),
+            height=Emu(h),
+        )
+    except Exception:
+        return
 
 # python-pptx default insets are 0.1" per side and clip small card boxes.
 _TF_MARGIN_LR = 27432  # 0.03"
@@ -268,10 +310,14 @@ def _add_line(slide, left, top, width):
     return shape
 
 
-def _footer(slide, *, slide_no: int, dir_code: str) -> None:
+def _footer(slide, *, slide_no: int, dir_code: str, logo_path: Path | None = None) -> None:
     from pptx.enum.text import PP_ALIGN
 
-    left = _add_textbox(slide, 502920, 6510528, 3657600, 182880)
+    text_left = 502920
+    if logo_path is not None:
+        _add_brand_logo(slide, logo_path, left=502920, top=6451600, max_w=320000, max_h=220000)
+        text_left = 860000
+    left = _add_textbox(slide, text_left, 6510528, 3657600, 182880)
     p = left.text_frame.paragraphs[0]
     _set_run(p, f"Project-team summary • Slide {slide_no}", size_pt=8.5, bold=False, color=GRAY, font_name=FONT_BODY)
     right = _add_textbox(slide, 8046720, 6510528, 3657600, 182880)
@@ -295,15 +341,19 @@ def _eyebrow_and_title(slide, eyebrow: str, title: str) -> None:
     _add_line(slide, 502920, 1060704, 11155680)
 
 
-def default_reference_path(pack_path: Path | None = None) -> Path | None:
+def default_reference_path(
+    pack_path: Path | None = None,
+    *,
+    template_family: str | None = None,
+    py_root: Path | None = None,
+) -> Path | None:
     """Resolve a style-reference PPTX. Names are not required to be standardized.
 
     Preference:
       1. First ``*.pptx`` under ``<pack>/references/style/`` (sorted)
       2. Legacy ``*.pptx`` directly under ``<pack>/references/``
-      3. Historical mixing example names under the pack (if present)
-      4. Committed ``py/knowledge/_templates/references/*.pptx``
-      5. Legacy ``knowledge/mixing/references`` fallbacks
+      3. Shared stub ``knowledge/_templates/references/style/<template_family>/``
+      4. Legacy flat ``_templates/references/*.pptx`` / mixing pack fallbacks
     """
     candidates: list[Path] = []
     if pack_path is not None:
@@ -318,9 +368,47 @@ def default_reference_path(pack_path: Path | None = None) -> Path | None:
         candidates.append(style_root / "media_preparation_vessel_mixing_evaluation.pptx")
         candidates.append(ref_root / "chromatography_resin_slurry_tank_agitator_evaluation.pptx")
         candidates.append(ref_root / "media_preparation_vessel_mixing_evaluation.pptx")
+
+    try:
+        from bpeai_creator_sdk.sme.pack_bootstrap import (
+            normalize_style_family,
+            template_references_root,
+        )
+
+        family = normalize_style_family(template_family) or "equipment_evaluator"
+        stub_root = None
+        if py_root is not None:
+            stub_root = template_references_root(py_root, template_family=family)
+        if stub_root is None:
+            here = Path(__file__).resolve()
+            for root in here.parents:
+                if (root / "knowledge" / "_templates" / "references" / "style").is_dir():
+                    stub_root = template_references_root(root, template_family=family)
+                    if stub_root is not None:
+                        break
+        if stub_root is not None and stub_root.is_dir():
+            candidates.extend(sorted(stub_root.glob("*.pptx")))
+    except Exception:
+        pass
+
     here = Path(__file__).resolve()
     for root in here.parents:
         shared = root / "knowledge" / "_templates" / "references"
+        style_shared = shared / "style"
+        if style_shared.is_dir():
+            # Prefer family folder when known; otherwise any family pptx.
+            family = None
+            try:
+                from bpeai_creator_sdk.sme.pack_bootstrap import normalize_style_family
+
+                family = normalize_style_family(template_family)
+            except Exception:
+                family = None
+            if family and (style_shared / family).is_dir():
+                candidates.extend(sorted((style_shared / family).glob("*.pptx")))
+            else:
+                for sub in sorted(p for p in style_shared.iterdir() if p.is_dir()):
+                    candidates.extend(sorted(sub.glob("*.pptx")))
         if shared.is_dir():
             candidates.extend(sorted(shared.glob("*.pptx")))
         mixing = root / "knowledge" / "mixing" / "references"
@@ -515,17 +603,71 @@ def build_evaluation_pptx(
     template_path: Path | str | None = None,
     pack_path: Path | str | None = None,
     knowledge_pack: Any = None,
+    template_family: str | None = None,
 ) -> Path:
     """Build a styled 7-slide evaluation deck.
 
     Prefer ``slide_pack`` from the LLM. Falls back to deterministic packing from ``result``.
-    ``template_path`` is retained for compatibility (style is recreated to match reference).
+    Colors/fonts/logo come from pack ``references/style/brand.yaml`` (via ``pack_path``)
+    and optional ``pptx_outline.yaml`` ``style:``. ``template_path`` is retained for
+    compatibility (geometry is recreated to match the reference shells).
     """
     from pptx import Presentation
     from pptx.enum.text import PP_ALIGN
     from pptx.util import Inches
 
-    _ = outline, template_path  # style is coded from the reference geometry
+    theme = load_report_theme(
+        pack_path,
+        template_family=template_family
+        or str(result.get("template_family") or "")
+        or None,
+        outline=outline,
+    )
+    previous = ReportTheme(
+        navy=NAVY,
+        teal=TEAL,
+        blue=BLUE,
+        gray=GRAY,
+        body=BODY,
+        white=WHITE,
+        card_fill=CARD_FILL,
+        chip_blue_fill=CHIP_BLUE_FILL,
+        chip_teal_fill=CHIP_TEAL_FILL,
+        panel_right=PANEL_RIGHT,
+        display_font=FONT_DISPLAY,
+        body_font=FONT_BODY,
+    )
+    _bind_theme(theme)
+    # Keep template_path resolvable for docs/SME tooling; geometry stays code-driven.
+    if template_path is None and pack_path is not None:
+        template_path = default_reference_path(
+            Path(pack_path), template_family=template_family
+        )
+    _ = template_path
+
+    try:
+        return _build_evaluation_pptx_with_theme(
+            result,
+            output_path=output_path,
+            slide_pack=slide_pack,
+            knowledge_pack=knowledge_pack,
+            theme=theme,
+        )
+    finally:
+        _bind_theme(previous)
+
+
+def _build_evaluation_pptx_with_theme(
+    result: Mapping[str, Any],
+    *,
+    output_path: Path | str,
+    slide_pack: Mapping[str, Any] | None,
+    knowledge_pack: Any,
+    theme: ReportTheme,
+) -> Path:
+    from pptx import Presentation
+    from pptx.enum.text import PP_ALIGN
+    from pptx.util import Inches
 
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -556,6 +698,7 @@ def build_evaluation_pptx(
     # --- Slide 1: Title ---
     s1 = prs.slides.add_slide(prs.slide_layouts[6])
     t1 = slides[0] if isinstance(slides[0], Mapping) else {}
+    _add_brand_logo(s1, theme.logo_path, left=502920, top=228600, max_w=1400000, max_h=500000)
     # right panel
     _add_rect(s1, 7589520, 0, 4599432, 6858000, PANEL_RIGHT, line=False)
     from .hero_image import attach_title_hero_image
@@ -682,7 +825,7 @@ def build_evaluation_pptx(
         color=BODY,
         font_name=FONT_BODY,
     )
-    _footer(s2, slide_no=2, dir_code=dir_code)
+    _footer(s2, slide_no=2, dir_code=dir_code, logo_path=theme.logo_path)
 
     # --- Slide 3: Objectives / failure modes ---
     s3 = prs.slides.add_slide(prs.slide_layouts[6])
@@ -779,7 +922,7 @@ def build_evaluation_pptx(
         font_name=FONT_BODY,
         center=True,
     )
-    _footer(s3, slide_no=3, dir_code=dir_code)
+    _footer(s3, slide_no=3, dir_code=dir_code, logo_path=theme.logo_path)
 
     # --- Slide 4: Options shortlist ---
     s4 = prs.slides.add_slide(prs.slide_layouts[6])
@@ -849,7 +992,7 @@ def build_evaluation_pptx(
         color=NAVY,
         font_name=FONT_BODY,
     )
-    _footer(s4, slide_no=4, dir_code=dir_code)
+    _footer(s4, slide_no=4, dir_code=dir_code, logo_path=theme.logo_path)
 
     # --- Slide 5: Matrix ---
     s5 = prs.slides.add_slide(prs.slide_layouts[6])
@@ -910,7 +1053,7 @@ def build_evaluation_pptx(
         color=BODY,
         font_name=FONT_BODY,
     )
-    _footer(s5, slide_no=5, dir_code=dir_code)
+    _footer(s5, slide_no=5, dir_code=dir_code, logo_path=theme.logo_path)
 
     # --- Slide 6: Recommendation ---
     s6 = prs.slides.add_slide(prs.slide_layouts[6])
@@ -994,7 +1137,7 @@ def build_evaluation_pptx(
         max_items=4,
         char_cap=64,
     )
-    _footer(s6, slide_no=6, dir_code=dir_code)
+    _footer(s6, slide_no=6, dir_code=dir_code, logo_path=theme.logo_path)
 
     # --- Slide 7: Specs / vendors ---
     s7 = prs.slides.add_slide(prs.slide_layouts[6])
@@ -1056,7 +1199,7 @@ def build_evaluation_pptx(
         max_items=5,
         char_cap=58,
     )
-    _footer(s7, slide_no=7, dir_code=dir_code)
+    _footer(s7, slide_no=7, dir_code=dir_code, logo_path=theme.logo_path)
 
     # Save with lock-safe fallback (Windows PermissionError if PPTX is open).
     try:

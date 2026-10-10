@@ -94,7 +94,7 @@ This authoring repo only ships **example stubs**: [`py/knowledge/_examples/`](..
 | `search_queries.yaml` | Serper query templates / static domain queries (optional; see [EI_AI_HANDSHAKES.md](./EI_AI_HANDSHAKES.md)) |
 | `report_outline.yaml` / `pptx_outline.yaml` | Report / slide outlines |
 | `references/content/*` | Optional creator SME PDFs/md/txt (LLM input; indexed to `content_index.yaml`) |
-| `references/style/*.pptx` / `*.pdf` | Style shells (seeded from `py/knowledge/_templates/references/`) |
+| `references/style/*.{pptx,pdf,docx,xlsx}` + `brand.yaml` / `logo.*` | Style shells + runtime brand (seeded from `py/knowledge/_templates/references/style/<template_family>/`) |
 
 Creators manage private packs on the portal. If a pack is missing locally, the
 `equipment_evaluator` template may LLM-bootstrap a draft under `py/knowledge/<id>/`

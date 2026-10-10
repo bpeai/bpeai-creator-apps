@@ -47,6 +47,13 @@ Filenames: `{system} {sized_item} Sizing.{md,docx,xlsx,pptx}` — set `sized_ite
 `sizing_report` writes `datasheet_markdown`, `key_specs`, and optional
 `excel_ready_table`. Domain math stays in the pack / LLM table, not in template Python.
 
+## Branding
+
+Bootstrap seeds `references/style/` from
+`py/knowledge/_templates/references/style/equipment_sizing/` (shells + `brand.yaml`).
+Edit the pack’s `brand.yaml` and optional `logo.png` for company colors/logo;
+generated DOCX/PPTX/XLSX honor them. Reseed does not overwrite those files.
+
 ## Reference
 
 - Design: `docs/EI_APP_TEMPLATE_DESIGN.md`

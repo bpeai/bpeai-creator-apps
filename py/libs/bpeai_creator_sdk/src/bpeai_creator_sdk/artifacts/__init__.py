@@ -25,6 +25,7 @@ from .reference_decks import (
     replace_reference_deck,
     resolve_reference_deck,
 )
+from .theme import ReportTheme, default_brand_yaml_dict, load_report_theme, resolve_style_logo
 
 __all__ = [
     "attach_evaluation_artifact_name",
@@ -48,7 +49,11 @@ __all__ = [
     "build_evaluation_pptx",
     "build_slide_pack_from_evaluation",
     "list_reference_decks",
+    "load_report_theme",
     "render_title_hero",
     "replace_reference_deck",
     "resolve_reference_deck",
+    "resolve_style_logo",
+    "ReportTheme",
+    "default_brand_yaml_dict",
 ]

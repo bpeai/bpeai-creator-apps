@@ -1,0 +1,29 @@
+# Shared style shells (by template family)
+
+Canonical visual references for creator pack bootstrap. Each EI template family
+has its own folder; bootstrap copies that family's files into the pack's
+`references/style/` (never overwriting creator edits).
+
+```
+style/
+  equipment_evaluator/   # evaluation DOCX / PPTX shells + brand.yaml
+  equipment_sizing/      # sizing DOCX / PPTX / XLSX shells + brand.yaml
+  <future_family>/       # add a folder named for the template_family id
+```
+
+Supported seed suffixes: `.pptx`, `.pdf`, `.docx`, `.xlsx`, plus `brand.yaml`
+and optional `logo.png` / `.jpg` / `.jpeg` / `.webp`.
+
+## Creator branding
+
+Runtime colors/fonts/logo come from the **pack** copy of:
+
+- `references/style/brand.yaml` — company colors and fonts
+- `references/style/logo.png` (optional) — header/cover mark
+
+Office shells remain visual examples; edit `brand.yaml` (and drop a logo) to
+distinguish your deliverables. Reseed never overwrites those files once present.
+
+Staging copies also live under `website/references/<family> style/` for local
+editing; prefer committing updates here so creator-apps can seed without a
+website checkout.
