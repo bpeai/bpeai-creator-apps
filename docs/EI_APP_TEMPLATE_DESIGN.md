@@ -30,8 +30,8 @@ Day-to-day edits for templates/SDK/seeds land first in **bpeai-creator-apps**, t
 ### Ownership (locked)
 
 - **Creator packs are private** to that creator’s EI apps only (not a marketplace).
-- **Creator apps are 1:1 with a private pack of the same leaf name** (`py/apps/<family>/<id>/` ↔ `py/knowledge/<family>/<id>/`).
-- **Platform seeds** (e.g. `mixing`) are BPEAI-owned; first-party apps may share them. Creators **do not** bind seeds — they bootstrap a private pack named after the app.
+- **Creator apps are 1:1 with a private pack** bound on the portal. Local disk may use any convenience folder (`py/apps/<family>/<folder>/` ↔ `py/knowledge/<family>/<folder>/`); after upload the platform **App ID** (opaque 5–6 mixed-case letters) is the global identity and pack `pack_id` aligns to it.
+- **Platform seeds** (e.g. `mixing`) are BPEAI-owned; first-party apps may share them. Creators **do not** bind seeds — they bootstrap a private pack (local folder name is convenience only).
 - **Python agent code** ships via **portal zip upload** / `upload_creator_bundle.py` (primary). See [EI_HANDSHAKE.md](./EI_HANDSHAKE.md).
 
 ---
@@ -40,7 +40,7 @@ Day-to-day edits for templates/SDK/seeds land first in **bpeai-creator-apps**, t
 
 | Asset | Transfer |
 |-------|----------|
-| Python agent (`py/apps/<id>/`) | Portal zip / CLI → S3 + `creator_runtime` → `vendor_api` load by `app_id` |
+| Python agent (`py/apps/<folder>/`) | Portal zip / CLI → S3 + `creator_runtime` → `vendor_api` load by platform-assigned `app_id` |
 | SDK + templates + platform seed YAML | git mirror creator-apps → bpeai (BPEAI deploy) |
 | Creator knowledge pack + DIR menus | Upload zip / Portal API → Postgres (+ versioned S3 YAML snapshot) |
 | Shared vocab | `bpeai_taxonomy` in bpeai (git) |
@@ -166,7 +166,8 @@ Manifest:
 
 - optional `template_family` — deliverable contract family; legacy manifests default to `equipment_evaluator`
 - `equipment_system` — portal / hub enum (taxonomy; not the pack name)
-- `knowledge_pack` — must match `id` / `app_id` for creator apps
+- `id` / `app_id` — platform-assigned opaque App ID after mint (leave empty on first upload); public URL is `/engineering/app/<id>`
+- `knowledge_pack` — bound 1:1 on portal; after mint/align equals the App ID
 - `input_ports[]` / `output_ports[]` — typed workflow connections (`id`, `label`,
   `schema_ref`, short compatibility `data_type`, `required`, `cardinality`, `kind`)
 - `required_inputs` remains supported; the SDK derives value input ports for old
