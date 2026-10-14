@@ -51,6 +51,7 @@ from typing import Any, Dict, List
 from pydantic import ValidationError
 
 from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate_output
+from bpeai_creator_sdk.deliverables import resolve_generate_flags
 from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
     attach_sizing_artifact_name,
@@ -568,28 +569,33 @@ def _attach_sizing_file_artifacts(
     *,
     py_root: Path,
     pack: Any = None,
+    generate: Dict[str, bool] | None = None,
 ) -> Dict[str, Any]:
+    flags = generate or {"docx": True, "pptx": True, "xlsx": True}
     family = str(getattr(agent, "template_family", "") or "equipment_sizing")
     md_path = _write_markdown_artifact(result, py_root=py_root)
     artifacts = dict(result.get("artifacts") or {})
     if md_path:
         artifacts["markdown_path"] = str(md_path)
-    try:
-        agent.status("Writing sizing Word report…")
-        docx_path = _write_docx_artifact(result, pack=pack, template_family=family)
-        if docx_path:
-            artifacts["docx_path"] = str(docx_path.resolve())
-    except Exception as exc:
-        agent.status(f"DOCX export skipped ({exc})")
-    try:
-        agent.status("Writing sizing Excel workbook…")
-        xlsx_path = _write_xlsx_artifact(result, pack=pack, template_family=family)
-        if xlsx_path:
-            artifacts["xlsx_path"] = str(xlsx_path.resolve())
-    except Exception as exc:
-        agent.status(f"Excel export skipped ({exc})")
+    if flags.get("docx", True):
+        try:
+            agent.status("Writing sizing Word report…")
+            docx_path = _write_docx_artifact(result, pack=pack, template_family=family)
+            if docx_path:
+                artifacts["docx_path"] = str(docx_path.resolve())
+        except Exception as exc:
+            agent.status(f"DOCX export skipped ({exc})")
+    if flags.get("xlsx", True):
+        try:
+            agent.status("Writing sizing Excel workbook…")
+            xlsx_path = _write_xlsx_artifact(result, pack=pack, template_family=family)
+            if xlsx_path:
+                artifacts["xlsx_path"] = str(xlsx_path.resolve())
+        except Exception as exc:
+            agent.status(f"Excel export skipped ({exc})")
     result["artifacts"] = artifacts
-    result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
+    if flags.get("pptx", True):
+        result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
     return result
 
 
@@ -685,6 +691,11 @@ class EquipmentSizingAgent(CreatorAppBase):
         # HANDSHAKE: phase dispatch — dir | evaluate | pptx | generate_dir
         phase = str(inputs.get("phase") or "").strip().lower()
         deliverable = str(inputs.get("deliverable") or "evaluation").strip().lower()
+        generate = resolve_generate_flags(
+            inputs,
+            template_family=str(getattr(self, "template_family", "") or "equipment_sizing"),
+            manifest_path=Path(__file__).resolve().parent / "manifest.json",
+        )
 
         pack_id = str(
             inputs.get("knowledge_pack")
@@ -719,7 +730,12 @@ class EquipmentSizingAgent(CreatorAppBase):
         )
 
         force_generate = phase in {"generate_dir"} or bool(inputs.get("force_generate_dir"))
-        want_pptx = deliverable == "pptx" or phase == "pptx"
+        want_pptx = (deliverable == "pptx" or phase == "pptx") and generate["pptx"]
+        if (deliverable == "pptx" or phase == "pptx") and not generate["pptx"]:
+            return {
+                "phase": "pptx_error",
+                "message": "PPTX generation is turned off for this run.",
+            }
         if want_pptx:
             prior = inputs.get("evaluation_result")
             if isinstance(prior, dict) and (
@@ -763,7 +779,7 @@ class EquipmentSizingAgent(CreatorAppBase):
             )
             if result.get("phase") == "evaluation":
                 result = _attach_sizing_file_artifacts(
-                    self, result, py_root=py_root, pack=pack
+                    self, result, py_root=py_root, pack=pack, generate=generate
                 )
             result.setdefault("template_family", getattr(self, "template_family", "equipment_sizing"))
             return result
@@ -858,7 +874,7 @@ class EquipmentSizingAgent(CreatorAppBase):
         )
         if result.get("phase") == "evaluation":
             result = _attach_sizing_file_artifacts(
-                self, result, py_root=py_root, pack=pack
+                self, result, py_root=py_root, pack=pack, generate=generate
             )
         return result
 

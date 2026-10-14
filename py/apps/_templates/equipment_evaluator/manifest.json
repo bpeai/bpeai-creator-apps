@@ -97,6 +97,11 @@
     "inputs_summary": ["Process or equipment system description"],
     "outputs_summary": ["Technology recommendation", "Engineering evaluation report"]
   },
+  "deliverables": {
+    "docx": true,
+    "pptx": true,
+    "xlsx": false
+  },
   "route": "/engineering/app/equipment-evaluator/run",
   "runtime": "server",
   "min_tier": "INDIVIDUAL",

@@ -50,6 +50,7 @@ from typing import Any, Dict, List
 from pydantic import ValidationError
 
 from bpeai_creator_sdk import CreatorAppBase, coerce_string_list_items, validate_output
+from bpeai_creator_sdk.deliverables import resolve_generate_flags
 from bpeai_creator_sdk.output import apply_user_identity
 from bpeai_creator_sdk.artifacts import (
     attach_evaluation_artifact_name,
@@ -515,6 +516,11 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
         # HANDSHAKE: phase dispatch — dir | evaluate | pptx | generate_dir
         phase = str(inputs.get("phase") or "").strip().lower()
         deliverable = str(inputs.get("deliverable") or "evaluation").strip().lower()
+        generate = resolve_generate_flags(
+            inputs,
+            template_family=str(getattr(self, "template_family", "") or "equipment_evaluator"),
+            manifest_path=Path(__file__).resolve().parent / "manifest.json",
+        )
 
         pack_id = str(
             inputs.get("knowledge_pack")
@@ -587,6 +593,11 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
 
         # PPTX from a prior evaluation payload
         if deliverable == "pptx" or phase == "pptx":
+            if not generate["pptx"]:
+                return {
+                    "phase": "pptx_error",
+                    "message": "PPTX generation is turned off for this run.",
+                }
             prior = inputs.get("evaluation_result")
             if isinstance(prior, dict) and prior.get("selected_model"):
                 return self._attach_pptx(pack, prior, py_root=py_root)
@@ -631,22 +642,24 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             artifacts = dict(result.get("artifacts") or {})
             if md_path:
                 artifacts["markdown_path"] = str(md_path)
-            try:
-                # HANDSHAKE: self.status(...) → SSE event "status" (progress line).
-                self.status("Writing Word evaluation report…")
-                docx_path = _write_docx_artifact(
-                    result,
-                    pack=pack,
-                    template_family=str(
-                        getattr(self, "template_family", "") or "equipment_evaluator"
-                    ),
-                )
-                if docx_path:
-                    artifacts["docx_path"] = str(docx_path.resolve())
-            except Exception as exc:
-                self.status(f"DOCX export skipped ({exc})")
+            if generate["docx"]:
+                try:
+                    # HANDSHAKE: self.status(...) → SSE event "status" (progress line).
+                    self.status("Writing Word evaluation report…")
+                    docx_path = _write_docx_artifact(
+                        result,
+                        pack=pack,
+                        template_family=str(
+                            getattr(self, "template_family", "") or "equipment_evaluator"
+                        ),
+                    )
+                    if docx_path:
+                        artifacts["docx_path"] = str(docx_path.resolve())
+                except Exception as exc:
+                    self.status(f"DOCX export skipped ({exc})")
             result["artifacts"] = artifacts
-            result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
+            if generate["pptx"]:
+                result["pptx_prompt"] = "Would you like a presentation-ready PPTX file? Reply pptx or y."
         return result
 
     def _ensure_knowledge_pack(

@@ -178,3 +178,27 @@ Bare `equipment_selector_v1` results remain valid. SDK adapters
    platform before dual-write is removed.
 4. Closed `equipment_system` enum expands only via platform release (document
    new values in schema + TS).
+
+---
+
+## Deliverable files (`generate_docx`, `generate_pptx`, `generate_xlsx`)
+
+The on-screen evaluation is always produced. Word, Excel, and PowerPoint are
+optional file builds.
+
+| Input | Meaning |
+|-------|---------|
+| `generate_docx` | Build the DOCX when true. Mostly local document work, not an extra model call. |
+| `generate_xlsx` | Build the XLSX when true. Sizing templates only, by default. |
+| `generate_pptx` | Allow the separate PPTX step. That step is the extra model call. |
+
+The creator allow-list lives in Creator Portal settings and in `manifest.json`
+`deliverables` for local runs. The platform injects the intersection of that
+allow-list and the signed-in user's per-run checkboxes before `agent.run`.
+Templates must honor the flags. An agent that ignores them can still be blocked
+from download, but it will not save the PPTX model call until it checks
+`generate_pptx`.
+
+`platform_mode=demo` is set only by the public demo route. It forces all three
+flags off, skips S3 upload, run history, and credit finalize. The on-screen
+result is the same evaluation payload.

@@ -32,7 +32,12 @@ so the hub stays compatible.
 | `evaluate_search` | Valid DIR → evaluate | Industrial references | Serper | `search_queries.yaml` → `evaluate.*` |
 | `evaluate` | Valid DIR → evaluate | Full `equipment_selector_v1` | LLM | `fragments.*` (system) + `calls.evaluate.user_instructions` |
 | `evaluate_repair` | Thin/missing report headings after evaluate | Deepen `datasheet_markdown` | LLM | Same system as evaluate + `calls.evaluate_repair.instructions` |
-| `pptx` | `deliverable=pptx` / phase pptx | Slide pack JSON | LLM | `calls.pptx.system_extra` + `calls.pptx.instructions` (+ `fragments.role` fallback) |
+| `pptx` | `deliverable=pptx` / phase pptx, and `generate_pptx` is true | Slide pack JSON | LLM | `calls.pptx.system_extra` + `calls.pptx.instructions` (+ `fragments.role` fallback) |
+
+`generate_docx` / `generate_xlsx` / `generate_pptx` skip the matching file build.
+DOCX and XLSX are Python document builds after the on-screen result exists.
+PPTX is the extra model call. See `EI_HANDSHAKE.md`. Custom agents that ignore
+these inputs still spend the PPTX call; the platform can only block the download.
 | `sizing_plan` | Valid DIR, before sizing LLMs | Decide capacity/connection inputs vs DIR | LLM | `calls.sizing_plan.*` |
 | `sizing_search` | After plan, when sizing proceeds | Vendor/catalog envelope references | Serper | `search_queries.yaml` → `sizing.*` (falls back to `evaluate.*`) |
 | `sizing_capacity` | After plan | Capacity JSON | LLM | `calls.sizing_capacity.*` |

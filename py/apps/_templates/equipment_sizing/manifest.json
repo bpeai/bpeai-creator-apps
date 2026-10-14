@@ -97,6 +97,11 @@
     "inputs_summary": ["Process or equipment system description", "Optional prior evaluation"],
     "outputs_summary": ["Capacity", "Connection sizes", "Envelope dimensions", "Engineering sizing report"]
   },
+  "deliverables": {
+    "docx": true,
+    "pptx": true,
+    "xlsx": true
+  },
   "route": "/engineering/app/equipment-sizing/run",
   "runtime": "server",
   "min_tier": "INDIVIDUAL",
