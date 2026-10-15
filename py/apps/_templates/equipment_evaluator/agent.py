@@ -378,6 +378,21 @@ Requirements (depth bar — do not produce thin one-line sections):
 """
 
 
+def _tag_key(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _equipment_tag_or_default(current: Any, *, app_id: str, supplied: Any = "") -> str:
+    """Use a real equipment tag. The EI App id is not a tag; otherwise F-101."""
+    given = str(supplied or "").strip()
+    if given and _tag_key(given) != _tag_key(app_id):
+        return given
+    existing = str(current or "").strip()
+    if existing and _tag_key(existing) != _tag_key(app_id):
+        return existing
+    return "F-101"
+
+
 def _suggest_tag(system_name: str, equipment_system: str) -> str:
     words = re.findall(r"[A-Za-z]+", system_name.upper())
     if words:
@@ -1218,12 +1233,7 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             "requirements": requirements,
             "common_codes": codes,
             "common_code_details": entries,
-            "message": (
-                f"For {system_name} — {menu.label} "
-                f"({menu.industry} / {menu.equipment_system_variant} / scenario={menu.scenario_id}), "
-                f"I’ll assume {application} unless you specify otherwise. "
-                f"Reply with a hyphen-separated DIR code (e.g. {example})."
-            ),
+            "message": f"Reply with a hyphen-separated DIR code (e.g. {example}).",
             "dir_alignments": [],
         }
         if warning:
@@ -1231,7 +1241,6 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             align_bits = [w.strip() for w in warning.split(" | ") if w.strip()]
             if align_bits:
                 out["dir_alignments"] = align_bits
-                out["message"] = " ".join(align_bits) + " " + out["message"]
             if not validation_error and "DIR generation failed" in warning:
                 validation_error = warning
         if validation_error:
@@ -1512,13 +1521,17 @@ class EquipmentEvaluatorAgent(CreatorAppBase):
             {"display_name": self.creator_display_name, "app_id": self.app_id},
         )
         apply_user_identity(raw, getattr(self, "_identity_inputs", None))
-        if not raw.get("equipment_tag"):
-            raw["equipment_tag"] = _suggest_tag(system_name, pack.equipment_system)
         if not raw.get("equipment_name"):
             raw["equipment_name"] = (
                 f"{system_name} — {raw.get('selected_model', pack.meta.get('label', 'Equipment'))}"
             )
         apply_user_identity(raw, getattr(self, "_identity_inputs", None))
+        identity = getattr(self, "_identity_inputs", None)
+        raw["equipment_tag"] = _equipment_tag_or_default(
+            raw.get("equipment_tag"),
+            app_id=str(getattr(self, "app_id", "") or ""),
+            supplied=identity.get("equipment_tag") if isinstance(identity, dict) else "",
+        )
         if not raw.get("rationale") and raw.get("recommended_basis"):
             raw["rationale"] = str(raw["recommended_basis"])
         if not raw.get("selected_model") and raw.get("recommended_basis"):

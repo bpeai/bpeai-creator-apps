@@ -486,6 +486,21 @@ Requirements (depth bar — do not produce thin one-line sections):
 """
 
 
+def _tag_key(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _equipment_tag_or_default(current: Any, *, app_id: str, supplied: Any = "") -> str:
+    """Use a real equipment tag. The EI App id is not a tag; otherwise F-101."""
+    given = str(supplied or "").strip()
+    if given and _tag_key(given) != _tag_key(app_id):
+        return given
+    existing = str(current or "").strip()
+    if existing and _tag_key(existing) != _tag_key(app_id):
+        return existing
+    return "F-101"
+
+
 def _suggest_tag(system_name: str, equipment_system: str) -> str:
     words = re.findall(r"[A-Za-z]+", system_name.upper())
     if words:
@@ -1616,9 +1631,6 @@ class EquipmentSizingAgent(CreatorAppBase):
         example = prior_code or (codes[0] if codes else "-".join("1" for _ in (residual or requirements or [1])))
         if residual:
             message = (
-                f"For {system_name} — {menu.label} "
-                f"({menu.industry} / {menu.equipment_system_variant} / scenario={menu.scenario_id}), "
-                f"I’ll assume {application} unless you specify otherwise. "
                 "Questions already answered by evaluation are inherited. "
                 f"Reply with a hyphen-separated DIR code (e.g. {example})."
             )
@@ -1629,12 +1641,7 @@ class EquipmentSizingAgent(CreatorAppBase):
                 "or a new code if you want to change the basis."
             )
         else:
-            message = (
-                f"For {system_name} — {menu.label} "
-                f"({menu.industry} / {menu.equipment_system_variant} / scenario={menu.scenario_id}), "
-                f"I’ll assume {application} unless you specify otherwise. "
-                f"Reply with a hyphen-separated DIR code (e.g. {example})."
-            )
+            message = f"Reply with a hyphen-separated DIR code (e.g. {example})."
         # HANDSHAKE: phase=dir_requirements payload fields the generic UI renders.
         out: Dict[str, Any] = {
             "phase": "dir_requirements",
@@ -1659,7 +1666,6 @@ class EquipmentSizingAgent(CreatorAppBase):
             align_bits = [w.strip() for w in warning.split(" | ") if w.strip()]
             if align_bits:
                 out["dir_alignments"] = align_bits
-                out["message"] = " ".join(align_bits) + " " + out["message"]
             if not validation_error and "DIR generation failed" in warning:
                 validation_error = warning
         if validation_error:
@@ -1735,12 +1741,13 @@ class EquipmentSizingAgent(CreatorAppBase):
             decoded = list(dir_check.decoded or [])
             menu_scenario = menu.scenario_id
         prior = prior_eval or {}
-        tag = equipment_tag or str(prior.get("equipment_tag") or "").strip()
-        if not tag:
-            tag = _suggest_tag(system_name, pack.equipment_system)
         identity_inputs = getattr(self, "_identity_inputs", None)
-        if isinstance(identity_inputs, dict) and str(identity_inputs.get("equipment_tag") or "").strip():
-            tag = str(identity_inputs.get("equipment_tag") or "").strip()
+        supplied = identity_inputs.get("equipment_tag") if isinstance(identity_inputs, dict) else ""
+        tag = _equipment_tag_or_default(
+            equipment_tag or prior.get("equipment_tag"),
+            app_id=str(getattr(self, "app_id", "") or ""),
+            supplied=supplied,
+        )
 
         creator_block = self._creator_content_block(
             pack, system_name, application, pack.equipment_system, dir_code
